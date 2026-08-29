@@ -11,7 +11,7 @@ from merisor.domain import (
     MLDTableSource,
 )
 from merisor.ui.main_window import MainWindow
-from merisor.ui.mld_view import MLDView
+from merisor.ui.mld_view import MLDTableGraphicsItem, MLDView
 from merisor.ui.sql_dialog import SQLPreviewDialog
 
 
@@ -124,4 +124,20 @@ def test_mld_graphics_view_supports_zoom_controls(qapp) -> None:  # type: ignore
     assert view.zoom_in_button.isEnabled()
     assert view.zoom_out_button.isEnabled()
     assert view.reset_zoom_button.isEnabled()
+    view.close()
+
+
+def test_mld_table_selection_displays_properties(qapp) -> None:  # type: ignore[no-untyped-def]
+    view = MLDView()
+    view.set_model(preview_model())
+    selected: list[object] = []
+    view.graphics_view.table_selected.connect(selected.append)
+    item = next(
+        graphics_item
+        for graphics_item in view.graphics_view.mld_scene.items()
+        if isinstance(graphics_item, MLDTableGraphicsItem)
+    )
+    item.setSelected(True)
+    qapp.processEvents()
+    assert selected and selected[-1].name == "PILOTE"
     view.close()

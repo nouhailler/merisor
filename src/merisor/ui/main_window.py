@@ -26,6 +26,7 @@ from merisor.domain import MLDModel
 from merisor.persistence import PersistenceError
 from merisor.ui.canvas import DiagramScene, DiagramView, ToolMode
 from merisor.ui.mld_view import MLDView
+from merisor.ui.mld_properties_panel import MLDPropertiesPanel
 from merisor.ui.properties_panel import PropertiesPanel
 from merisor.ui.sql_dialog import SQLPreviewDialog
 from merisor.ui.validation_dialog import ValidationDialog
@@ -45,6 +46,7 @@ class MainWindow(QMainWindow):
         self.view = DiagramView(self.scene, self)
         self.controller = DiagramController(self.scene, self)
         self.mld_view = MLDView(self)
+        self.mld_properties_panel = MLDPropertiesPanel(self)
         self.workspace_tabs = QTabWidget(self)
         self.workspace_tabs.addTab(self.view, "MCD")
         self.workspace_tabs.addTab(self.mld_view, "MLD")
@@ -52,6 +54,7 @@ class MainWindow(QMainWindow):
 
         self.properties_panel = PropertiesPanel(self.controller)
         properties_dock = QDockWidget("Propriétés", self)
+        self.properties_dock = properties_dock
         properties_dock.setObjectName("propertiesDock")
         properties_dock.setWidget(self.properties_panel)
         properties_dock.setMinimumWidth(340)
@@ -61,6 +64,7 @@ class MainWindow(QMainWindow):
         self._create_menus()
         self._create_toolbar()
         self._connect_signals()
+        self.workspace_tabs.currentChanged.connect(self._workspace_changed)
         self.statusBar().showMessage("Prêt — utilisez les outils pour commencer.")
         self._update_title()
 
@@ -186,6 +190,9 @@ class MainWindow(QMainWindow):
         self.controller.document_path_changed.connect(self._update_title)
         self.controller.mld_changed.connect(self._display_mld)
         self.controller.mld_stale_changed.connect(self._set_mld_stale)
+        self.mld_view.graphics_view.table_selected.connect(
+            self.mld_properties_panel.display
+        )
         self.view.zoom_changed.connect(
             lambda factor: self.statusBar().showMessage(
                 f"Zoom : {factor * 100:.0f} %", 1800
@@ -196,6 +203,12 @@ class MainWindow(QMainWindow):
         mode = action.data()
         if isinstance(mode, ToolMode):
             self.scene.set_mode(mode)
+
+    def _workspace_changed(self, index: int) -> None:
+        if index == self.workspace_tabs.indexOf(self.mld_view):
+            self.properties_dock.setWidget(self.mld_properties_panel)
+        else:
+            self.properties_dock.setWidget(self.properties_panel)
 
     def _request_entity(self, position: QPointF) -> None:
         name, accepted = QInputDialog.getText(

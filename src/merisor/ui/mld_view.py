@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
@@ -40,6 +40,7 @@ class MLDTableGraphicsItem(QGraphicsItem):
         super().__init__()
         self.model = model
         self.table = table
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setZValue(5)
 
     @property
@@ -173,13 +174,27 @@ class MLDTableGraphicsItem(QGraphicsItem):
 
 class MLDGraphicsView(QGraphicsView):
     ZOOM_FACTOR = 1.25
+    table_selected = Signal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        self.mld_scene = QGraphicsScene(parent)
-        super().__init__(self.mld_scene, parent)
+        super().__init__(parent)
+        self.mld_scene = QGraphicsScene(self)
+        self.setScene(self.mld_scene)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setBackgroundBrush(QBrush(QColor("#f5f7fa")))
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.mld_scene.selectionChanged.connect(self._selection_changed)
+
+    def _selection_changed(self) -> None:
+        try:
+            selected = [
+                item
+                for item in self.mld_scene.selectedItems()
+                if isinstance(item, MLDTableGraphicsItem)
+            ]
+        except RuntimeError:
+            return
+        self.table_selected.emit(selected[0].table if len(selected) == 1 else None)
 
     def zoom_in(self) -> None:
         self.scale(self.ZOOM_FACTOR, self.ZOOM_FACTOR)
