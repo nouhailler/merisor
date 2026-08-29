@@ -16,6 +16,9 @@ dependencies = [
 test = [
     "pytest>=8,<9",
 ]
+ai = [
+    "keyring>=25,<26",
+]
 
 [project.gui-scripts]
 merisor = "merisor.__main__:main"

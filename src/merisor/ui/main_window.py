@@ -27,6 +27,7 @@ from merisor.persistence import PersistenceError
 from merisor.ui.canvas import DiagramScene, DiagramView, ToolMode
 from merisor.ui.mld_view import MLDView
 from merisor.ui.mld_properties_panel import MLDPropertiesPanel
+from merisor.ui.openrouter_settings_dialog import OpenRouterSettingsDialog
 from merisor.ui.properties_panel import PropertiesPanel
 from merisor.ui.sql_dialog import SQLPreviewDialog
 from merisor.ui.validation_dialog import ValidationDialog
@@ -79,6 +80,7 @@ class MainWindow(QMainWindow):
         self.save_as_action.setShortcut(QKeySequence.StandardKey.SaveAs)
         self.quit_action = QAction("Quitter", self)
         self.quit_action.setShortcut(QKeySequence.StandardKey.Quit)
+        self.openrouter_settings_action = QAction("Paramètres OpenRouter…", self)
 
         self.undo_action = self.controller.undo_stack.createUndoAction(self, "Annuler")
         self.undo_action.setShortcut(QKeySequence.StandardKey.Undo)
@@ -131,6 +133,9 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         file_menu.addAction(self.quit_action)
 
+        settings_menu = self.menuBar().addMenu("Paramètres")
+        settings_menu.addAction(self.openrouter_settings_action)
+
         edit_menu = self.menuBar().addMenu("Édition")
         edit_menu.addAction(self.undo_action)
         edit_menu.addAction(self.redo_action)
@@ -171,6 +176,7 @@ class MainWindow(QMainWindow):
         self.save_action.triggered.connect(self.save_document)
         self.save_as_action.triggered.connect(self.save_document_as)
         self.quit_action.triggered.connect(self.close)
+        self.openrouter_settings_action.triggered.connect(self.show_openrouter_settings)
         self.delete_action.triggered.connect(self.controller.delete_selected)
         self.zoom_in_action.triggered.connect(self.view.zoom_in)
         self.zoom_out_action.triggered.connect(self.view.zoom_out)
@@ -203,6 +209,9 @@ class MainWindow(QMainWindow):
         mode = action.data()
         if isinstance(mode, ToolMode):
             self.scene.set_mode(mode)
+
+    def show_openrouter_settings(self, _checked: bool = False) -> None:
+        OpenRouterSettingsDialog(self).exec()
 
     def _workspace_changed(self, index: int) -> None:
         if index == self.workspace_tabs.indexOf(self.mld_view):

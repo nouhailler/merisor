@@ -25,6 +25,15 @@ python -m pip install -e ".[test]"
 
 Le fichier `requirements.txt` peut aussi être utilisé directement.
 
+## Paramètres OpenRouter (préparation IA)
+
+Le menu **Paramètres → Paramètres OpenRouter…** permet d'enregistrer une clé
+API pour la future génération assistée de MCD. La clé n'est jamais écrite dans
+les fichiers de projet JSON. Lorsque le paquet optionnel `keyring` est installé
+(`python -m pip install -e ".[ai]"`), elle est conservée dans le trousseau du
+système ; sinon MERISOR utilise un repli local QSettings explicitement signalé
+comme non chiffré. Aucun appel réseau n'est effectué dans cette première étape.
+
 ## Lancement
 
 ```bash
