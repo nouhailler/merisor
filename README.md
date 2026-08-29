@@ -35,6 +35,24 @@ python -m merisor
 Après une installation éditable, la commande `merisor` est également
 disponible.
 
+### Installation Debian
+
+Les releases GitHub fournissent un paquet `merisor_<version>_amd64.deb`.
+Installez-le avec :
+
+```bash
+sudo apt install ./merisor_0.4.0_amd64.deb
+```
+
+Le paquet installe le lanceur `/usr/bin/merisor` et une entrée dans le menu
+des applications. Il dépend des modules Debian PySide6 (`python3-pyside6.qtcore`,
+`python3-pyside6.qtgui` et `python3-pyside6.qtwidgets`). Pour reconstruire le
+paquet depuis les sources :
+
+```bash
+./packaging/build_deb.sh
+```
+
 ## Édition du MCD
 
 La barre d'outils permet de créer, sélectionner, déplacer et supprimer des

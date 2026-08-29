@@ -1,0 +1,10 @@
+Package: merisor
+Version: 0.4.0
+Section: graphics
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.10), python3-pyside6.qtcore, python3-pyside6.qtgui, python3-pyside6.qtwidgets
+Maintainer: Nouhailler <patrick.nouhailler@gmail.com>
+Description: Editeur graphique de modeles MERISE
+ MERISOR permet de construire un MCD, de generer un MLD et de produire
+ des scripts SQL PostgreSQL, SQLite et MariaDB/MySQL.

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=MERISOR
+Comment=Éditeur graphique de modèles MERISE
+Exec=merisor
+Terminal=false
+Categories=Development;Office;
