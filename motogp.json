@@ -1,0 +1,81 @@
+{
+    "format_version": 2,
+    "entities": [
+      {
+        "id": "entity_pilote",
+        "name": "PILOTE",
+        "position": { "x": 100, "y": 100 },
+        "attributes": [
+          {
+            "id": "attr_pilote_id",
+            "name": "id_pilote",
+            "identifier": true
+          },
+          {
+            "id": "attr_pilote_nom",
+            "name": "nom",
+            "identifier": false
+          }
+        ]
+      },
+      {
+        "id": "entity_equipe",
+        "name": "EQUIPE",
+        "position": { "x": 500, "y": 100 },
+        "attributes": [
+          {
+            "id": "attr_equipe_id",
+            "name": "id_equipe",
+            "identifier": true
+          },
+          {
+            "id": "attr_equipe_nom",
+            "name": "nom",
+            "identifier": false
+          }
+        ]
+      }
+    ],
+    "associations": [
+      {
+        "id": "association_engager",
+        "name": "ENGAGER",
+        "position": { "x": 300, "y": 300 },
+        "is_historized": true,
+        "materialization_strategy": "AUTO",
+        "attributes": [
+          {
+            "id": "attr_engager_debut",
+            "name": "date_debut",
+            "identifier": false
+          },
+          {
+            "id": "attr_engager_fin",
+            "name": "date_fin",
+            "identifier": false
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "id": "relation_pilote_engager",
+        "entity_id": "entity_pilote",
+        "association_id": "association_engager",
+        "cardinality": {
+          "minimum": "0",
+          "maximum": "N"
+        }
+      },
+      {
+        "id": "relation_equipe_engager",
+        "entity_id": "entity_equipe",
+        "association_id": "association_engager",
+        "cardinality": {
+          "minimum": "1",
+          "maximum": "1"
+        }
+      }
+    ]
+  }
+
