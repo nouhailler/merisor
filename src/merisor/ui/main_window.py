@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QPointF, QSettings, Qt
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
     QInputDialog,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QTabWidget,
     QToolBar,
@@ -31,10 +32,14 @@ from merisor.ui.validation_dialog import ValidationDialog
 
 
 class MainWindow(QMainWindow):
+    MAX_RECENT_FILES = 10
+
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("mainWindow")
         self.resize(1280, 800)
+        self._settings = QSettings("MERISOR", "MERISOR")
+        self.recent_menu: QMenu | None = None
 
         self.scene = DiagramScene(self)
         self.view = DiagramView(self.scene, self)
@@ -114,6 +119,8 @@ class MainWindow(QMainWindow):
         file_menu = self.menuBar().addMenu("Fichier")
         file_menu.addAction(self.new_action)
         file_menu.addAction(self.open_action)
+        self.recent_menu = file_menu.addMenu("Ouvrir récent")
+        self._refresh_recent_menu()
         file_menu.addSeparator()
         file_menu.addAction(self.save_action)
         file_menu.addAction(self.save_as_action)
@@ -287,6 +294,7 @@ class MainWindow(QMainWindow):
             return
         try:
             self.controller.load(filename)
+            self._add_recent_file(filename)
             self.select_action.setChecked(True)
         except PersistenceError as error:
             QMessageBox.critical(self, "Ouverture impossible", str(error))
@@ -312,6 +320,7 @@ class MainWindow(QMainWindow):
             return self.save_document_as(skip_validation=True)
         try:
             self.controller.save()
+            self._add_recent_file(self.controller.document_path)
             return True
         except PersistenceError as error:
             QMessageBox.critical(self, "Enregistrement impossible", str(error))
@@ -335,6 +344,7 @@ class MainWindow(QMainWindow):
             path = path.with_suffix(".json")
         try:
             self.controller.save(path)
+            self._add_recent_file(path)
             return True
         except PersistenceError as error:
             QMessageBox.critical(self, "Enregistrement impossible", str(error))
@@ -344,6 +354,59 @@ class MainWindow(QMainWindow):
         if self.controller.document_path is not None:
             return self.controller.document_path.parent
         return Path.home()
+
+    def _recent_files(self) -> list[str]:
+        values = self._settings.value("recent_files", [])
+        if isinstance(values, str):
+            values = [values]
+        if not isinstance(values, list):
+            return []
+        return [value for value in values if isinstance(value, str) and value]
+
+    def _add_recent_file(self, path: str | Path | None) -> None:
+        if path is None:
+            return
+        filename = str(Path(path).expanduser().resolve())
+        files = [item for item in self._recent_files() if item != filename]
+        files.insert(0, filename)
+        self._settings.setValue("recent_files", files[: self.MAX_RECENT_FILES])
+        self._refresh_recent_menu()
+
+    def _refresh_recent_menu(self) -> None:
+        if self.recent_menu is None:
+            return
+        self.recent_menu.clear()
+        existing: list[str] = []
+        for filename in self._recent_files():
+            path = Path(filename)
+            if not path.is_file():
+                continue
+            existing.append(filename)
+            action = QAction(path.name, self)
+            action.setToolTip(filename)
+            action.triggered.connect(
+                lambda _checked=False, selected=filename: self._open_recent_file(
+                    selected
+                )
+            )
+            self.recent_menu.addAction(action)
+        if existing != self._recent_files():
+            self._settings.setValue("recent_files", existing)
+        if not existing:
+            empty_action = QAction("(Aucun fichier récent)", self)
+            empty_action.setEnabled(False)
+            self.recent_menu.addAction(empty_action)
+
+    def _open_recent_file(self, filename: str) -> None:
+        if not self._maybe_save():
+            return
+        try:
+            self.controller.load(filename)
+            self._add_recent_file(filename)
+            self.select_action.setChecked(True)
+        except PersistenceError as error:
+            self._refresh_recent_menu()
+            QMessageBox.critical(self, "Ouverture impossible", str(error))
 
     def _maybe_save(self) -> bool:
         if not self.controller.is_dirty:

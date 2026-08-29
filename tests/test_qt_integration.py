@@ -1,10 +1,12 @@
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QPointF, QSettings, Qt
 from PySide6.QtWidgets import QToolBar
 
 from merisor.application import DiagramController
 from merisor.domain import Cardinality, MaterializationStrategy, Position
 from merisor.ui.canvas import DiagramScene
 from merisor.ui.main_window import MainWindow
+from merisor.persistence import JsonDiagramRepository
+from merisor.domain import MCDModel
 
 
 def test_relation_graphic_follows_a_moved_node(qapp) -> None:  # type: ignore[no-untyped-def]
@@ -71,6 +73,27 @@ def test_main_window_starts_offscreen(qapp) -> None:  # type: ignore[no-untyped-
     window.controller.undo_stack.setClean()
 
     window.close()
+    qapp.processEvents()
+
+
+def test_recent_files_menu_persists_and_opens_existing_models(qapp, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    settings = QSettings("MERISOR", "MERISOR")
+    settings.remove("recent_files")
+    path = tmp_path / "recent.json"
+    JsonDiagramRepository().save(MCDModel(), path)
+
+    window = MainWindow()
+    window._add_recent_file(path)
+    assert window.recent_menu is not None
+    actions = window.recent_menu.actions()
+    assert actions[0].text() == path.name
+    assert actions[0].toolTip() == str(path.resolve())
+
+    actions[0].trigger()
+    assert window.controller.document_path == path
+    assert window._recent_files()[0] == str(path.resolve())
+    window.close()
+    settings.remove("recent_files")
     qapp.processEvents()
 
 
