@@ -11,6 +11,7 @@ from merisor.domain import (
     MLDTableSource,
 )
 from merisor.ui.main_window import MainWindow
+from merisor.ui.mld_view import MLDView
 from merisor.ui.sql_dialog import SQLPreviewDialog
 
 
@@ -105,3 +106,22 @@ def test_generate_sql_action_tracks_current_mld_and_uses_only_it(
     window.controller.undo_stack.setClean()
     window.close()
     qapp.processEvents()
+
+
+def test_mld_graphics_view_supports_zoom_controls(qapp) -> None:  # type: ignore[no-untyped-def]
+    view = MLDView()
+    view.set_model(preview_model())
+    graphics = view.graphics_view
+    initial = graphics.transform().m11()
+
+    graphics.zoom_in()
+    assert graphics.transform().m11() > initial
+    graphics.zoom_out()
+    assert abs(graphics.transform().m11() - initial) < 1e-9
+    graphics.reset_zoom()
+    assert graphics.sceneRect().isValid()
+
+    assert view.zoom_in_button.isEnabled()
+    assert view.zoom_out_button.isEnabled()
+    assert view.reset_zoom_button.isEnabled()
+    view.close()

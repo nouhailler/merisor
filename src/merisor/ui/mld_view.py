@@ -172,12 +172,36 @@ class MLDTableGraphicsItem(QGraphicsItem):
 
 
 class MLDGraphicsView(QGraphicsView):
+    ZOOM_FACTOR = 1.25
+
     def __init__(self, parent: QWidget | None = None) -> None:
         self.mld_scene = QGraphicsScene(parent)
         super().__init__(self.mld_scene, parent)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setBackgroundBrush(QBrush(QColor("#f5f7fa")))
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+
+    def zoom_in(self) -> None:
+        self.scale(self.ZOOM_FACTOR, self.ZOOM_FACTOR)
+
+    def zoom_out(self) -> None:
+        self.scale(1 / self.ZOOM_FACTOR, 1 / self.ZOOM_FACTOR)
+
+    def reset_zoom(self) -> None:
+        if self.mld_scene.items():
+            self.fitInView(
+                self.mld_scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio
+            )
+
+    def wheelEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            if event.angleDelta().y() > 0:
+                self.zoom_in()
+            elif event.angleDelta().y() < 0:
+                self.zoom_out()
+            event.accept()
+            return
+        super().wheelEvent(event)
 
     def set_model(self, model: MLDModel) -> None:
         self.mld_scene.clear()
@@ -212,9 +236,7 @@ class MLDGraphicsView(QGraphicsView):
             self.mld_scene.itemsBoundingRect().adjusted(-40, -40, 40, 40)
         )
         if model.tables:
-            self.fitInView(
-                self.mld_scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio
-            )
+            self.reset_zoom()
 
 
 class MLDView(QWidget):
@@ -231,6 +253,18 @@ class MLDView(QWidget):
         self.status_label.setFont(font)
         header.addWidget(self.status_label)
         header.addStretch(1)
+        self.zoom_out_button = QPushButton("−")
+        self.zoom_out_button.setToolTip("Réduire le graphe")
+        self.zoom_out_button.setAccessibleName("Zoom arrière MLD")
+        self.zoom_in_button = QPushButton("+")
+        self.zoom_in_button.setToolTip("Agrandir le graphe")
+        self.zoom_in_button.setAccessibleName("Zoom avant MLD")
+        self.reset_zoom_button = QPushButton("Adapter")
+        self.reset_zoom_button.setToolTip("Recentrer le graphe")
+        self.reset_zoom_button.setAccessibleName("Réinitialiser le zoom MLD")
+        header.addWidget(self.zoom_out_button)
+        header.addWidget(self.zoom_in_button)
+        header.addWidget(self.reset_zoom_button)
         self.copy_button = QPushButton("Copier le texte")
         self.export_button = QPushButton("Exporter…")
         self.copy_button.setEnabled(False)
@@ -252,6 +286,9 @@ class MLDView(QWidget):
 
         self.copy_button.clicked.connect(self.copy_text)
         self.export_button.clicked.connect(self._choose_export_path)
+        self.zoom_in_button.clicked.connect(self.graphics_view.zoom_in)
+        self.zoom_out_button.clicked.connect(self.graphics_view.zoom_out)
+        self.reset_zoom_button.clicked.connect(self.graphics_view.reset_zoom)
 
     @property
     def text(self) -> str:

@@ -104,6 +104,8 @@ d'outils. L'application :
 La vue MLD permet de consulter les colonnes, PK, FK, nullabilités et contraintes
 UNIQUE. Le bouton **Copier le texte** place la représentation dans le
 presse-papiers ; **Exporter…** écrit un fichier texte qui n'est pas du SQL.
+Dans la vue graphique, les boutons `+`, `−` et **Adapter** contrôlent le zoom ;
+`Ctrl` + molette permet également d'agrandir ou de réduire le diagramme.
 
 ### État à jour ou obsolète
 
