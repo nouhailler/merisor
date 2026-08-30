@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QToolBar,
 )
 
+from merisor import __version__
 from merisor.application import (
     DiagramController,
     MLDGenerationBlocked,
@@ -472,7 +473,7 @@ class MainWindow(QMainWindow):
             else "Sans titre"
         )
         dirty_marker = " *" if self.controller.is_dirty else ""
-        self.setWindowTitle(f"{name}{dirty_marker} — MERISOR 0.4")
+        self.setWindowTitle(f"{name}{dirty_marker} — MERISOR {__version__}")
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._maybe_save():

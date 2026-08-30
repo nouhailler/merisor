@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from merisor import __version__
 
 class OpenRouterError(RuntimeError):
     """Erreur réseau ou réponse OpenRouter inexploitable."""
@@ -42,7 +43,7 @@ class OpenRouterClient:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "MERISOR/0.4",
+                "User-Agent": f"MERISOR/{__version__}",
             },
         )
         try:
@@ -69,7 +70,7 @@ class OpenRouterClient:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
-                "User-Agent": "MERISOR/0.4",
+                "User-Agent": f"MERISOR/{__version__}",
                 "HTTP-Referer": "https://github.com/nouhailler/merisor",
                 "X-Title": "MERISOR",
             },

@@ -1,6 +1,6 @@
 # MERISOR — éditeur MCD, générateur MLD et SQL
 
-MERISOR 0.4 est une application de bureau Python/PySide6 pour construire un
+MERISOR 0.5 est une application de bureau Python/PySide6 pour construire un
 modèle conceptuel de données MERISE, le valider et générer automatiquement son
 modèle logique de données puis un script SQL exportable.
 
@@ -67,7 +67,7 @@ Les releases GitHub fournissent un paquet `merisor_<version>_amd64.deb`.
 Installez-le avec :
 
 ```bash
-sudo apt install ./merisor_0.4.0_amd64.deb
+sudo apt install ./merisor_0.5.0_amd64.deb
 ```
 
 Le paquet installe le lanceur `/usr/bin/merisor` et une entrée dans le menu
