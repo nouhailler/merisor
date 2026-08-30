@@ -25,14 +25,17 @@ python -m pip install -e ".[test]"
 
 Le fichier `requirements.txt` peut aussi être utilisé directement.
 
-## Paramètres OpenRouter (préparation IA)
+## Paramètres OpenRouter (phase 1 IA)
 
 Le menu **Paramètres → Paramètres OpenRouter…** permet d'enregistrer une clé
-API pour la future génération assistée de MCD. La clé n'est jamais écrite dans
-les fichiers de projet JSON. Lorsque le paquet optionnel `keyring` est installé
-(`python -m pip install -e ".[ai]"`), elle est conservée dans le trousseau du
-système ; sinon MERISOR utilise un repli local QSettings explicitement signalé
-comme non chiffré. Aucun appel réseau n'est effectué dans cette première étape.
+API, de la tester et de récupérer la liste des modèles texte gratuits. Le modèle
+choisi et l'activation de l'IA sont conservés dans les paramètres locaux ; ils
+ne sont jamais écrits dans les fichiers de projet JSON. Lorsque le paquet
+optionnel `keyring` est installé (`python -m pip install -e ".[ai]"`), la clé
+est conservée dans le trousseau du système ; sinon MERISOR utilise un repli
+local QSettings explicitement signalé comme non chiffré. La génération et
+l'import du JSON MCD restent les étapes suivantes et ne sont pas déclenchés par
+ce dialogue.
 
 ## Lancement
 

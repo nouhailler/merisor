@@ -4,15 +4,15 @@
 
 La prochaine fois que le projet est démarré, poursuivre l'intégration de
 l'assistance IA OpenRouter. L'étape 1 est terminée : le menu Paramètres permet
-d'enregistrer une clé OpenRouter localement, avec `keyring` lorsque le trousseau
-système est disponible.
+d'enregistrer et tester une clé OpenRouter, de récupérer les modèles gratuits,
+d'en sélectionner un et d'activer/désactiver l'IA. Le stockage utilise `keyring`
+lorsque le trousseau système est disponible.
 
-Les trois étapes restantes sont à terminer dans cet ordre :
+Les deux étapes restantes sont à terminer dans cet ordre :
 
-1. **Récupération et sélection des modèles gratuits** OpenRouter.
-2. **Génération d'un JSON MCD avec validation**, sans modifier le modèle
+1. **Génération d'un JSON MCD avec validation**, sans modifier le modèle
    courant.
-3. **Aperçu et import confirmé** du MCD généré dans l'éditeur.
+2. **Aperçu et import confirmé** du MCD généré dans l'éditeur.
 
 ## Contraintes à conserver
 

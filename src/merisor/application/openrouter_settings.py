@@ -15,6 +15,8 @@ class OpenRouterKeyStore:
     SERVICE = "merisor"
     USER = "openrouter"
     FALLBACK_KEY = "openrouter/api_key"
+    MODEL_KEY = "openrouter/model"
+    ENABLED_KEY = "openrouter/enabled"
 
     def __init__(self, settings: QSettings | None = None) -> None:
         self.settings = settings or QSettings("MERISOR", "MERISOR")
@@ -64,3 +66,14 @@ class OpenRouterKeyStore:
                 pass
         self.settings.setValue(self.FALLBACK_KEY, value)
 
+    def get_model(self) -> str:
+        return str(self.settings.value(self.MODEL_KEY, "") or "")
+
+    def set_model(self, model_id: str) -> None:
+        self.settings.setValue(self.MODEL_KEY, model_id.strip())
+
+    def is_enabled(self) -> bool:
+        return bool(self.settings.value(self.ENABLED_KEY, False, type=bool))
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.settings.setValue(self.ENABLED_KEY, bool(enabled))

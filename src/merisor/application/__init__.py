@@ -9,6 +9,11 @@ from merisor.application.mld_transformer import (
     mcd_logical_fingerprint,
 )
 from merisor.application.openrouter_settings import OpenRouterKeyStore
+from merisor.application.openrouter_client import (
+    OpenRouterClient,
+    OpenRouterError,
+    OpenRouterModel,
+)
 from merisor.application.sql_generator import (
     MLDSQLValidator,
     MySQLDialect,
@@ -32,6 +37,9 @@ __all__ = [
     "MLDTransformationError",
     "McdToMldTransformer",
     "OpenRouterKeyStore",
+    "OpenRouterClient",
+    "OpenRouterError",
+    "OpenRouterModel",
     "MLDSQLValidator",
     "MySQLDialect",
     "PostgreSQLDialect",
