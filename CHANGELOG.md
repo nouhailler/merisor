@@ -2,6 +2,15 @@
 
 Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
+## [Non publié]
+
+### Ajouté
+
+- disposition automatique déterministe du MCD ;
+- réorganisation automatique après import d'un MCD généré par l'IA ;
+- commande **Modèle → Réorganiser automatiquement le MCD** annulable ;
+- résolution des chevauchements tenant compte de la taille des objets.
+
 ## [0.5.0] - 2026-08-30
 
 ### Ajouté

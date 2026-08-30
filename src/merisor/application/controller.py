@@ -27,6 +27,7 @@ from merisor.application.mld_transformer import (
     McdToMldTransformer,
     mcd_logical_fingerprint,
 )
+from merisor.application.mcd_layout import McdAutoLayout
 from merisor.domain import (
     Association,
     Attribute,
@@ -79,6 +80,7 @@ class DiagramController(QObject):
         self.model = MCDModel()
         self.repository = JsonDiagramRepository()
         self.mld_transformer = McdToMldTransformer()
+        self.mcd_layout = McdAutoLayout()
         self.mld_model: MLDModel | None = None
         self.undo_stack = QUndoStack(self)
         self.document_path: Path | None = None
@@ -317,6 +319,27 @@ class DiagramController(QObject):
         self._replace_model(model, None)
         self.undo_stack.resetClean()
         self.message.emit("MCD généré par l'IA importé ; enregistrez le document.")
+
+    def auto_layout(self) -> None:
+        positions = self.mcd_layout.calculate(self.model)
+        changes = [
+            (node_id, self.model.node(node_id).position, position)
+            for node_id, position in positions.items()
+            if self.model.node(node_id).position != position
+        ]
+        if not changes:
+            self.message.emit("Le MCD est déjà organisé.")
+            return
+        self.undo_stack.beginMacro("Réorganiser automatiquement le MCD")
+        try:
+            for node_id, old_position, new_position in changes:
+                self.undo_stack.push(
+                    MoveNodeCommand(self, node_id, old_position, new_position)
+                )
+        finally:
+            self.undo_stack.endMacro()
+        self.scene.setSceneRect(self.scene.itemsBoundingRect().adjusted(-100, -100, 100, 100))
+        self.message.emit("Disposition automatique du MCD appliquée.")
 
     def save(self, path: str | Path | None = None) -> Path:
         target = Path(path) if path is not None else self.document_path

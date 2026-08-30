@@ -7,6 +7,7 @@ from merisor.application.ai_mcd_service import (
     AiMcdValidationError,
 )
 from merisor.application.mld_text import render_mld_text
+from merisor.application.mcd_layout import McdAutoLayout
 from merisor.application.mld_transformer import (
     MLDNamePolicy,
     MLDTransformationError,
@@ -44,6 +45,7 @@ __all__ = [
     "MLDNamePolicy",
     "MLDTransformationError",
     "McdToMldTransformer",
+    "McdAutoLayout",
     "OpenRouterKeyStore",
     "OpenRouterClient",
     "OpenRouterError",

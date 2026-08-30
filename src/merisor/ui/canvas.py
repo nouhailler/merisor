@@ -146,6 +146,22 @@ class DiagramView(QGraphicsView):
         self._zoom = 1.0
         self.zoom_changed.emit(self._zoom)
 
+    def fit_scene(self) -> None:
+        rectangle = self.scene().itemsBoundingRect().adjusted(-80, -80, 80, 80)
+        if rectangle.isEmpty():
+            self.reset_zoom()
+            return
+        self.resetTransform()
+        self.fitInView(rectangle, Qt.AspectRatioMode.KeepAspectRatio)
+        factor = self.transform().m11()
+        if factor < self.MIN_ZOOM or factor > self.MAX_ZOOM:
+            self.resetTransform()
+            bounded = max(self.MIN_ZOOM, min(self.MAX_ZOOM, factor))
+            self.scale(bounded, bounded)
+            factor = bounded
+        self._zoom = factor
+        self.zoom_changed.emit(self._zoom)
+
     def wheelEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         if event.angleDelta().y() > 0:
             self.zoom_in()
@@ -180,4 +196,3 @@ class DiagramView(QGraphicsView):
             event.accept()
             return
         super().mouseReleaseEvent(event)
-

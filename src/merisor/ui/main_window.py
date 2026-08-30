@@ -109,6 +109,8 @@ class MainWindow(QMainWindow):
         self.generate_sql_action.setShortcut(QKeySequence("Ctrl+Alt+S"))
         self.generate_sql_action.setEnabled(False)
         self.generate_ai_mcd_action = QAction("Générer un MCD avec l'IA…", self)
+        self.auto_layout_action = QAction("Réorganiser automatiquement le MCD", self)
+        self.auto_layout_action.setShortcut(QKeySequence("Ctrl+Shift+L"))
 
         self.tool_group = QActionGroup(self)
         self.tool_group.setExclusive(True)
@@ -153,6 +155,7 @@ class MainWindow(QMainWindow):
         model_menu.addAction(self.generate_sql_action)
         model_menu.addSeparator()
         model_menu.addAction(self.generate_ai_mcd_action)
+        model_menu.addAction(self.auto_layout_action)
 
         view_menu = self.menuBar().addMenu("Affichage")
         view_menu.addAction(self.zoom_in_action)
@@ -191,6 +194,7 @@ class MainWindow(QMainWindow):
         self.generate_mld_action.triggered.connect(self.generate_mld)
         self.generate_sql_action.triggered.connect(self.generate_sql)
         self.generate_ai_mcd_action.triggered.connect(self.generate_ai_mcd)
+        self.auto_layout_action.triggered.connect(self.auto_layout_mcd)
         self.tool_group.triggered.connect(self._tool_triggered)
 
         self.scene.entity_creation_requested.connect(self._request_entity)
@@ -315,8 +319,15 @@ class MainWindow(QMainWindow):
         if not self._maybe_save():
             return
         self.controller.import_generated_model(candidate.model)
+        self.controller.auto_layout()
         self.workspace_tabs.setCurrentWidget(self.view)
         self.select_action.setChecked(True)
+        self.view.fit_scene()
+
+    def auto_layout_mcd(self, _checked: bool = False) -> None:
+        self.controller.auto_layout()
+        self.workspace_tabs.setCurrentWidget(self.view)
+        self.view.fit_scene()
 
     def new_document(self, _checked: bool = False) -> None:
         if self._maybe_save():

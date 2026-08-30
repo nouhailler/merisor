@@ -51,6 +51,13 @@ avertissements. Le JSON reste éditable et peut être revalidé ; le bouton
 Après confirmation, les modifications courantes peuvent être sauvegardées avant
 le remplacement et le MCD importé est marqué comme non enregistré.
 
+Après un import IA, MERISOR applique automatiquement une disposition du graphe :
+les objets liés sont rapprochés, les objets se repoussent et les chevauchements
+sont résolus en tenant compte de la taille des entités et associations. La même
+fonction reste disponible à tout moment avec **Modèle → Réorganiser
+automatiquement le MCD** (`Ctrl+Shift+L`). L'opération manuelle est annulable en
+une seule fois.
+
 ## Lancement
 
 ```bash
