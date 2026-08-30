@@ -3,5 +3,6 @@ Type=Application
 Name=MERISOR
 Comment=Éditeur graphique de modèles MERISE
 Exec=merisor
+Icon=merisor
 Terminal=false
 Categories=Development;Office;

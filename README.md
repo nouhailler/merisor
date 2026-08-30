@@ -1,534 +1,545 @@
-# MERISOR — éditeur MCD, générateur MLD et SQL
+<p align="center">
+  <img src="src/merisor/assets/merisor.png" alt="Logo MERISOR" width="190">
+</p>
 
-MERISOR 0.5 est une application de bureau Python/PySide6 pour construire un
-modèle conceptuel de données MERISE, le valider et générer automatiquement son
-modèle logique de données puis un script SQL exportable.
+<h1 align="center">MERISOR</h1>
 
-Le MCD et le MLD sont de véritables modèles métier distincts. Le MCD reste la
-source de vérité ; le MLD est un résultat déterministe et régénérable. Le SQL
-est toujours produit depuis ce MLD, jamais directement depuis le MCD. Aucun
-script n'est exécuté et aucune connexion à une base n'est ouverte.
+<p align="center">
+  <strong>Du modèle métier au script SQL, dans une application de bureau libre.</strong>
+</p>
 
-## Prérequis et installation
+<p align="center">
+  <a href="https://github.com/nouhailler/merisor/releases/latest"><img alt="Dernière release" src="https://img.shields.io/github/v/release/nouhailler/merisor?display_name=tag&sort=semver"></a>
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
+  <img alt="PySide6" src="https://img.shields.io/badge/Interface-PySide6-41CD52?logo=qt&logoColor=white">
+  <img alt="Tests pytest" src="https://img.shields.io/badge/Tests-pytest-0A9EDC?logo=pytest&logoColor=white">
+  <a href="LICENSE"><img alt="Licence MIT" src="https://img.shields.io/badge/Licence-MIT-blue.svg"></a>
+</p>
 
-- Debian ou une distribution Linux équivalente avec environnement graphique ;
-- Python 3.10 ou ultérieur ;
-- `python3-venv` si le module `venv` n'est pas déjà installé ;
-- les bibliothèques système usuelles de Qt/X11 ou Wayland.
+MERISOR est un éditeur graphique MERISE pour Linux. Il permet de dessiner un
+MCD, de contrôler sa cohérence, de produire un MLD structuré puis de générer un
+script SQL pour PostgreSQL, SQLite ou MariaDB/MySQL. Le modèle peut aussi être
+préparé par une IA via OpenRouter, avec validation et confirmation avant import.
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e ".[test]"
+> [!IMPORTANT]
+> MERISOR génère du SQL, mais ne se connecte à aucune base de données et
+> n’exécute jamais le script. Le MCD reste toujours la source de vérité.
+
+## 📸 Aperçu
+
+### Édition d’un MCD
+
+![Fenêtre principale de MERISOR avec un MCD MotoGP et le panneau de propriétés](docs/images/mcd-editor.png)
+
+<table>
+  <tr>
+    <td width="50%"><strong>MLD graphique et propriétés</strong></td>
+    <td width="50%"><strong>Aperçu SQL avant export</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/mld-view.png" alt="Vue graphique du MLD dans MERISOR"></td>
+    <td><img src="docs/images/sql-preview.png" alt="Aperçu d’un script PostgreSQL généré par MERISOR"></td>
+  </tr>
+</table>
+
+### Import d’un MCD proposé par l’IA
+
+![Aperçu et validation d’un MCD généré par IA avant import](docs/images/ai-preview.png)
+
+## 🧭 MERISE en trente secondes
+
+Vous découvrez MERISE ? Voici les trois niveaux manipulés par l’application :
+
+| Niveau | Rôle | Exemple |
+|---|---|---|
+| **MCD** — Modèle Conceptuel de Données | Décrit les objets métier et leurs liens, sans dépendre d’une base | `PILOTE participe à COURSE` |
+| **MLD** — Modèle Logique de Données | Transforme le MCD en tables, colonnes, PK et FK | `PARTICIPER(id_pilote, id_course)` |
+| **SQL** | Traduit le MLD dans le dialecte d’un SGBD | `CREATE TABLE ...` |
+
+Le flux est volontairement unidirectionnel :
+
+```mermaid
+flowchart LR
+    A[🧩 MCD] -->|Valider| B[✅ MCD cohérent]
+    B -->|Générer le MLD| C[🗂️ MLD]
+    C -->|Générer SQL| D[(PostgreSQL)]
+    C -->|Générer SQL| E[(SQLite)]
+    C -->|Générer SQL| F[(MariaDB / MySQL)]
 ```
 
-Le fichier `requirements.txt` peut aussi être utilisé directement.
+## ✨ Fonctionnalités
 
-## Paramètres OpenRouter (phase 1 IA)
+### 🧩 Modélisation MCD
 
-Le menu **Paramètres → Paramètres OpenRouter…** permet d'enregistrer une clé
-API, de la tester et de récupérer la liste des modèles texte gratuits. Le modèle
-choisi et l'activation de l'IA sont conservés dans les paramètres locaux ; ils
-ne sont jamais écrits dans les fichiers de projet JSON. Lorsque le paquet
-optionnel `keyring` est installé (`python -m pip install -e ".[ai]"`), la clé
-est conservée dans le trousseau du système ; sinon MERISOR utilise un repli
-local QSettings explicitement signalé comme non chiffré. La génération et
-l'import du JSON MCD se lancent depuis **Modèle → Générer un MCD avec l'IA…**.
+- création, sélection, déplacement et suppression d’entités et d’associations ;
+- relations attachées aux objets : les lignes et cardinalités suivent les
+  déplacements ;
+- attributs d’entités et d’associations ;
+- identifiants simples ou composés, repérés par `#` ;
+- cardinalités `(0,1)`, `(0,N)`, `(1,1)` et `(1,N)` ;
+- associations historisées ;
+- stratégies `AUTO`, `FORCE_TABLE` et `FORCE_FK` ;
+- annuler/rétablir pour les principales opérations ;
+- zoom, déplacement du canvas et disposition automatique du graphe ;
+- sauvegarde JSON versionnée, chargement V1/V2 et fichiers récents.
 
-### Génération assistée d'un MCD
+### ✅ Validation MERISE
 
-La fenêtre IA affiche le modèle OpenRouter sélectionné, une zone de description
-et un rappel des éventuels quotas des modèles gratuits. MERISOR impose au modèle
-le format JSON version 2 avec identifiants internes, attributs identifiants,
-cardinalités, historisation et stratégie de matérialisation.
+- noms manquants ou dupliqués ;
+- entités sans identifiant ;
+- attributs dupliqués ;
+- associations reliées à moins de deux entités ;
+- relations incomplètes, cardinalités invalides et liaisons dupliquées ;
+- incompatibilités entre historisation, `FORCE_FK` et N:N ;
+- rapport distinguant erreurs bloquantes et avertissements.
 
-La réponse ne remplace jamais immédiatement le document courant. Elle est
-d'abord chargée par `JsonDiagramRepository`, puis analysée par le validateur
-MERISE. L'aperçu présente les entités, associations, relations, erreurs et
-avertissements. Le JSON reste éditable et peut être revalidé ; le bouton
-**Importer dans l'éditeur** demeure désactivé tant qu'une erreur bloque le MCD.
-Après confirmation, les modifications courantes peuvent être sauvegardées avant
-le remplacement et le MCD importé est marqué comme non enregistré.
+### 🗂️ Génération du MLD
 
-Après un import IA, MERISOR applique automatiquement une disposition du graphe :
-les objets liés sont rapprochés, les objets se repoussent et les chevauchements
-sont résolus en tenant compte de la taille des entités et associations. La même
-fonction reste disponible à tout moment avec **Modèle → Réorganiser
-automatiquement le MCD** (`Ctrl+Shift+L`). L'opération manuelle est annulable en
-une seule fois.
+- tables et colonnes issues du MCD ;
+- PK et FK simples ou composées ;
+- nullabilité et contraintes UNIQUE nécessaires aux relations 1:1 ;
+- matérialisation des associations N:N et des associations historisées ;
+- PK technique déterministe pour une association historisée sans identifiant ;
+- conservation de la provenance MCD → MLD ;
+- vues graphique et textuelle, zoom, copie et export ;
+- indicateur **à jour / obsolète** après modification du MCD.
 
-## Lancement
+### 🛢️ Génération SQL
 
-```bash
-source .venv/bin/activate
-python -m merisor
-```
+- PostgreSQL, SQLite et MariaDB/MySQL ;
+- PK, FK, UNIQUE, CHECK et index explicites ;
+- `NULL` / `NOT NULL` et identifiants auto-incrémentés ;
+- ordre de création selon les dépendances et prise en charge des cycles ;
+- échappement des identifiants et avertissement pour les mots réservés ;
+- aperçu, copie et export en `.sql` ;
+- aucune connexion et aucune exécution automatique.
 
-Après une installation éditable, la commande `merisor` est également
-disponible.
+### ✨ Génération assistée par IA
 
-### Installation Debian
+- clé OpenRouter stockée hors des projets ;
+- test de la clé et récupération des modèles texte gratuits ;
+- choix du modèle et activation explicite de l’IA ;
+- génération d’un JSON MERISOR V2 depuis une description métier ;
+- aperçu, JSON éditable et double validation avant import ;
+- aucune modification du document courant sans confirmation ;
+- organisation automatique du graphe après import.
 
-Les releases GitHub fournissent un paquet `merisor_<version>_amd64.deb`.
-Installez-le avec :
+## 🚀 Installation
+
+### Option A — paquet Debian recommandé
+
+1. Téléchargez le fichier `.deb` depuis la page
+   [Releases](https://github.com/nouhailler/merisor/releases/latest).
+2. Ouvrez un terminal dans le dossier de téléchargement.
+3. Installez le paquet :
 
 ```bash
 sudo apt install ./merisor_0.5.0_amd64.deb
 ```
 
-Le paquet installe le lanceur `/usr/bin/merisor` et une entrée dans le menu
-des applications. Il dépend des modules Debian PySide6 (`python3-pyside6.qtcore`,
-`python3-pyside6.qtgui` et `python3-pyside6.qtwidgets`). Pour reconstruire le
-paquet depuis les sources :
+Adaptez le nom au fichier téléchargé. MERISOR apparaît ensuite dans le menu des
+applications et peut aussi être lancé avec :
 
 ```bash
-./packaging/build_deb.sh
+merisor
 ```
 
-## Édition du MCD
+### Option B — installation depuis les sources
 
-La barre d'outils permet de créer, sélectionner, déplacer et supprimer des
-entités, associations et relations.
+Prérequis : Debian ou Linux équivalent, Python 3.10 ou plus récent, Git et le
+module `venv`.
 
-Lorsqu'une entité est sélectionnée, le panneau **Propriétés** permet de :
-
-- modifier son nom ;
-- ajouter, renommer ou supprimer ses attributs ;
-- cocher plusieurs attributs pour créer un identifiant composé.
-
-Les identifiants sont marqués par `#` dans le diagramme. Une association peut
-porter ses propres attributs. Une relation expose les cardinalités `(0,1)`,
-`(0,N)`, `(1,1)` et `(1,N)`.
-Les attributs d'une association peuvent également être cochés comme
-identifiants lorsqu'une matérialisation doit utiliser une PK conceptuelle.
-
-Lorsqu'une association est sélectionnée, la section **Transformation MLD**
-expose aussi deux décisions conceptuelles :
-
-- **Historisée** (`is_historized`) indique explicitement que plusieurs
-  occurrences indépendantes doivent pouvoir être conservées dans le temps ;
-- **Stratégie de matérialisation** (`materialization_strategy`) accepte
-  `AUTO`, `FORCE_TABLE` ou `FORCE_FK`.
-
-L'historisation n'est jamais déduite du nom des attributs : la présence de
-`date`, `date_debut` ou `annee` ne modifie pas automatiquement l'association.
-Par exemple, pour `PILOTE ── ENGAGER ── EQUIPE`, l'utilisateur peut choisir
-**Historisée : Oui** et **Matérialisation : Automatique**.
-
-Le transformateur applique la priorité suivante : `FORCE_TABLE`, puis
-l'historisation en mode `AUTO`, puis les règles classiques. `FORCE_FK` demande
-explicitement ces règles classiques et n'est accepté que lorsque les
-cardinalités le permettent. La combinaison « historisée + `FORCE_FK` » est une
-erreur plutôt qu'un choix implicite.
-
-La pile **Annuler/Rétablir** couvre les créations, suppressions, déplacements,
-renommages, attributs, identifiants et cardinalités.
-
-## Validation
-
-**Modèle → Valider le MCD** (`Ctrl+Shift+V`) vérifie notamment :
-
-- les noms et identifiants des entités ;
-- l'unicité des attributs d'un même propriétaire ;
-- le nom et le degré minimal des associations ;
-- l'incompatibilité de `FORCE_FK` avec une association binaire N:N ;
-- la contradiction entre historisation et `FORCE_FK` ;
-- les extrémités, cardinalités et doublons de relations ;
-- les doublons de noms entre objets d'un même type.
-
-Les erreurs sont bloquantes pour la génération du MLD. Les avertissements sont
-signalés mais n'empêchent pas la transformation. Un MCD incomplet peut toujours
-être sauvegardé après confirmation.
-
-## Génération du MLD
-
-Utiliser **Modèle → Générer le MLD** (`Ctrl+Shift+M`) ou le bouton de la barre
-d'outils. L'application :
-
-1. valide le MCD ;
-2. refuse la génération si des erreurs sont présentes ;
-3. applique les règles MCD→MLD ;
-4. construit un `MLDModel` autonome ;
-5. affiche les tables dans les vues graphique et textuelle.
-
-La vue MLD permet de consulter les colonnes, PK, FK, nullabilités et contraintes
-UNIQUE. Le bouton **Copier le texte** place la représentation dans le
-presse-papiers ; **Exporter…** écrit un fichier texte qui n'est pas du SQL.
-Dans la vue graphique, les boutons `+`, `−` et **Adapter** contrôlent le zoom ;
-`Ctrl` + molette permet également d'agrandir ou de réduire le diagramme.
-
-### État à jour ou obsolète
-
-Une empreinte logique relie le MLD à l'état du MCD qui l'a produit :
-
-- `✓ MLD à jour` : l'empreinte correspond ;
-- `⚠ MLD obsolète` : noms, attributs, identifiants, associations,
-  propriétés de matérialisation ou cardinalités ont changé ;
-- `MLD non généré` : aucun résultat n'est disponible.
-
-Un déplacement graphique ne change pas l'empreinte et ne rend donc pas le MLD
-obsolète. Une annulation ramenant exactement le MCD à son état généré remet le
-MLD à jour.
-
-## V0.4 — Génération SQL
-
-Le bouton **Générer SQL** est disponible après la génération d'un MLD valide et
-à jour. Il ouvre un aperçu permettant de choisir :
-
-- PostgreSQL ;
-- SQLite ;
-- MariaDB / MySQL.
-
-L'utilisateur peut examiner le script, changer de cible, le copier dans le
-presse-papiers ou l'enregistrer dans un fichier `.sql`. Si le MCD change, le
-MLD devient obsolète et le bouton SQL est désactivé jusqu'à sa régénération.
-
-Le workflow reste strictement :
-
-```text
-MCD → McdToMldTransformer → MLDModel → SQLGenerator → script SQL
+```bash
+sudo apt install git python3 python3-venv python3-pip
+git clone https://github.com/nouhailler/merisor.git
+cd merisor
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools
+python -m pip install -e ".[test,ai]"
+python -m merisor
 ```
 
-Le générateur SQL reçoit uniquement un `MLDModel`. Il ne relit ni les entités,
-ni les associations, ni les cardinalités du MCD.
+L’extra `ai` installe `keyring`, recommandé pour protéger la clé OpenRouter.
+Sans fonctionnalité IA, `python -m pip install -e ".[test]"` suffit.
 
-### Différences entre dialectes
+<details>
+<summary><strong>Résoudre les problèmes d’affichage Qt sous Linux</strong></summary>
 
-- PostgreSQL utilise `INTEGER`, `DOUBLE PRECISION`, `TIMESTAMP` et
-  `GENERATED BY DEFAULT AS IDENTITY` ;
-- SQLite utilise ses affinités `INTEGER`, `REAL`, `NUMERIC` et `TEXT`, active
-  les FK avec `PRAGMA foreign_keys = ON` et rend une PK technique sous la forme
-  `INTEGER PRIMARY KEY AUTOINCREMENT` ;
-- MariaDB / MySQL utilise notamment `INT`, `DOUBLE`, `DATETIME`, les quotes
-  inverses et `AUTO_INCREMENT`.
+Sur une machine sans écran, les tests doivent utiliser le greffon Qt
+hors-écran :
 
-Les identifiants sont systématiquement cités afin de préserver exactement les
-noms du MLD et de protéger les mots réservés comme `USER`, `ORDER` ou `GROUP`.
-Un avertissement est affiché lorsqu'un tel mot est rencontré.
-
-### Types logiques initiaux
-
-Le MLD expose les types indépendants du SGBD suivants :
-
-```text
-INTEGER, BIGINT, DECIMAL, FLOAT, BOOLEAN, VARCHAR(n), TEXT,
-DATE, TIME, DATETIME, TIMESTAMP
+```bash
+QT_QPA_PLATFORM=offscreen pytest
 ```
 
-Comme la V0.2 ne stocke pas encore le type des attributs MCD, la politique de
-compatibilité initiale est : identifiant conceptuel → `INTEGER`, attribut
-ordinaire → `VARCHAR(100)`, FK → copie exacte du type référencé. Aucun type de
-date n'est déduit du nom d'un attribut. Une PK technique générée par la V0.3 est
-un `INTEGER` explicitement auto-incrémenté dans le MLD.
+Dans une session graphique classique, vérifiez que `DISPLAY` ou
+`WAYLAND_DISPLAY` est défini. Avec une installation par `pip`, PySide6 fournit
+Qt. Le paquet Debian dépend pour sa part des modules PySide6 de Debian.
 
-### Contraintes et dépendances
+</details>
 
-Le générateur traduit directement depuis le MLD :
+## 🖱️ Prise en main
 
-- PK simples et composées ;
-- FK simples et composées ;
-- `NULL` / `NOT NULL` ;
-- contraintes UNIQUE et CHECK ;
-- index explicites uniquement ;
-- actions `ON DELETE` et `ON UPDATE` lorsqu'elles sont définies.
+### 1. Construire le MCD
 
-Il n'invente aucun index de FK, aucune action CASCADE et aucune contrainte
-UNIQUE. Les tables sont triées par dépendances. En cas de cycle, PostgreSQL et
-MariaDB/MySQL reçoivent les FK cycliques par `ALTER TABLE` après création des
-tables. SQLite conserve ces FK dans les `CREATE TABLE`, car son `ALTER TABLE`
-ne permet pas d'ajouter ensuite une contrainte.
+1. Cliquez sur **Entité**, puis dans le canvas.
+2. Sélectionnez l’entité pour ajouter ses attributs dans **Propriétés**.
+3. Cochez au moins un attribut comme identifiant.
+4. Créez une **Association**.
+5. Choisissez **Relation**, puis cliquez sur une entité et une association.
+6. Sélectionnez la relation pour régler sa cardinalité.
+7. Déplacez les objets librement ou utilisez
+   **Modèle → Réorganiser automatiquement le MCD**.
 
-### Validation avant génération
+La touche `Suppr` enlève la sélection. Supprimer une entité ou une association
+supprime aussi ses relations afin d’éviter les références orphelines.
 
-La génération est bloquée notamment pour une table sans PK, une FK orpheline,
-une colonne référencée absente, des types de FK incompatibles, un type inconnu
-ou un auto-incrément non entier. Les mots réservés sont des avertissements et
-n'empêchent pas la génération, puisque les identifiants sont échappés.
+### 2. Valider et enregistrer
 
-## Modèle interne MLD
+Utilisez **Modèle → Valider le MCD**. Un modèle incomplet peut être sauvegardé
+pour reprendre le travail plus tard ; MERISOR demande simplement confirmation
+si des erreurs sont présentes.
 
-```text
-MLDModel
-└── MLDTable[]
-    ├── source_element_id
-    ├── is_historized
-    ├── MLDColumn[]
-    │   ├── data_type
-    │   ├── nullable
-    │   └── auto_increment
-    ├── primary_key: column_ids[]
-    ├── MLDForeignKey[]
-    │   ├── column_ids[]
-    │   ├── referenced_table_id
-    │   ├── referenced_column_ids[]
-    │   ├── source_relation_id
-    │   └── source_cardinality
-    ├── MLDUniqueConstraint[]
-    ├── MLDCheckConstraint[]
-    └── MLDIndex[]
-```
+Les commandes **Fichier → Ouvrir récent**, **Enregistrer** et **Enregistrer
+sous…** manipulent des fichiers JSON lisibles et versionnés.
 
-Les contraintes utilisent des identifiants de colonnes plutôt que de simples
-noms. Une FK composée est ainsi représentée par une seule contrainte logique,
-avec des listes de colonnes locales et référencées de même longueur.
+### 3. Générer le MLD
 
-Les tables d'association conservent l'identifiant de leur association MCD.
-Les FK conservent aussi leur relation et cardinalité sources ; les colonnes
-natives ou migrées référencent déjà leurs attributs et éléments MCD d'origine.
+Cliquez sur **Générer le MLD**. Si le MCD contient une erreur bloquante, le
+rapport indique précisément ce qui doit être corrigé. Sinon, l’onglet **MLD**
+présente :
 
-`MLDColumn.nullable` vaut `True` ou `False` lorsqu'une règle MERISE permet de le
-déterminer. Il reste `None` pour un attribut ordinaire du MCD, car la V0.2 ne
-stocke pas sa nullabilité et la V0.3 n'invente pas cette information.
+- une vue graphique avec tables et FK ;
+- une vue textuelle copiable ou exportable ;
+- le panneau de propriétés de la table sélectionnée.
 
-## Règles MCD → MLD implémentées
+Après une modification logique du MCD, le MLD passe à l’état **obsolète** et
+doit être régénéré. Déplacer seulement un objet ne le rend pas obsolète.
 
-### Entités
+### 4. Générer le SQL
 
-- chaque entité produit une table portant le même nom ;
-- chaque attribut produit une colonne portant le même nom ;
-- les attributs identifiants forment la PK simple ou composée.
+Lorsque le MLD est valide et à jour, cliquez sur **Générer SQL**, choisissez le
+SGBD, vérifiez l’aperçu puis utilisez **Copier** ou **Enregistrer sous…**.
 
-### Associations N:N
+### 5. Générer un MCD avec OpenRouter
 
-- une table portant le nom de l'association est créée ;
-- les PK des deux entités deviennent deux FK, simples ou composées ;
-- toutes les colonnes de ces FK forment la PK composée de l'association ;
-- les attributs de l'association restent dans cette table.
+1. Ouvrez **Paramètres → Paramètres OpenRouter…**.
+2. Saisissez votre clé, testez-la puis actualisez les modèles gratuits.
+3. Choisissez un modèle et activez la génération IA.
+4. Ouvrez **Modèle → Générer un MCD avec l’IA…**.
+5. Décrivez les objets métier, leurs identifiants et leurs relations.
+6. Vérifiez l’aperçu et les messages de validation.
+7. Corrigez ou régénérez si nécessaire, puis confirmez l’import.
 
-`FORCE_TABLE` et l'historisation ne changent pas inutilement cette structure.
-Si l'association porte explicitement un ou plusieurs attributs identifiants,
-ceux-ci forment toutefois sa PK à la place du couple de FK.
+> [!TIP]
+> Une bonne description cite les objets métier, les informations attendues,
+> les identifiants, les cardinalités et les besoins d’historisation. Les
+> modèles gratuits OpenRouter peuvent être soumis à des quotas.
 
-### Associations 1:N
+## ⌨️ Raccourcis utiles
 
-Les exemples normatifs du cahier des charges placent la FK dans la table de
-l'entité dont le maximum vaut `1`, en référence à l'entité dont le maximum vaut
-`N`. C'est la règle appliquée.
+| Action | Raccourci |
+|---|---|
+| Nouveau / Ouvrir / Enregistrer | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` |
+| Annuler / Rétablir | `Ctrl+Z` / `Ctrl+Shift+Z` |
+| Supprimer la sélection | `Suppr` |
+| Zoom avant / arrière / initial | `Ctrl++` / `Ctrl+-` / `Ctrl+0` |
+| Valider le MCD | `Ctrl+Shift+V` |
+| Réorganiser le MCD | `Ctrl+Shift+L` |
+| Générer le MLD | `Ctrl+Shift+M` |
+| Générer SQL | `Ctrl+Alt+S` |
+| Zoom MLD | `Ctrl` + molette ou boutons `+` / `−` |
 
-- le minimum du côté `N` vaut `0` : la FK est nullable ;
-- le minimum du côté `N` vaut `1` : la FK est NOT NULL ;
-- les attributs de l'association migrent dans la même table que la FK.
-
-Cette règle correspond à `AUTO` non historisé et à `FORCE_FK`. Une association
-1:N historisée en `AUTO`, ou configurée avec `FORCE_TABLE`, devient au contraire
-une table autonome.
-
-### Associations matérialisées et historisées
-
-Pour une association non-N:N matérialisée :
-
-- ses attributs identifiants explicites forment sa PK ;
-- à défaut, une PK technique stable `id_<nom_association_en_minuscules>` est
-  créée, par exemple `id_engager` ;
-- les identifiants des deux entités deviennent des FK dans cette table ;
-- un minimum `0` produit une FK nullable et un minimum `1` une FK NOT NULL ;
-- tous les attributs de l'association restent dans cette table ;
-- aucune contrainte UNIQUE n'est ajoutée sur le couple de FK.
-
-Ainsi plusieurs occurrences historisées peuvent relier le même couple
-d'entités. Aucune colonne de date n'est inventée : `date_debut` ou `date_fin`
-doivent être définies explicitement dans le MCD.
-
-La vue graphique et la vue textuelle signalent ces tables avec la mention
-**Association historisée**.
-
-Résumé des décisions :
-
-```text
-1:N + AUTO                 → FK classique
-1:N + AUTO + historisée    → table indépendante
-N:N                        → table d'association
-FORCE_TABLE                → table indépendante, sauf structure N:N conservée
-FORCE_FK compatible        → transformation FK classique
-N:N + FORCE_FK             → erreur
-Historisée + FORCE_FK      → erreur
-```
-
-### Associations 1:1
-
-- `(1,1)` face à `(0,1)` : le côté `(1,1)` porte la FK NOT NULL UNIQUE ;
-- deux côtés de même minimum : la table porteuse est choisie par
-  `(nom insensible à la casse, identifiant interne)` ;
-- `(1,1)/(1,1)` produit une FK NOT NULL UNIQUE ;
-- `(0,1)/(0,1)` produit une FK NULL UNIQUE ;
-- la contrainte UNIQUE est un objet explicite, y compris pour une FK composée.
-
-### Ordre et nommage
-
-Les tables et associations sont traitées par `(nom insensible à la casse,
-identifiant interne)`. Les positions du canvas n'interviennent jamais.
-
-Les noms du MCD sont conservés sans normalisation SQL. Si deux migrations
-créent une collision de colonnes, un suffixe stable provenant de l'entité ou de
-l'association source est ajouté. Cette politique est isolée dans
-`MLDNamePolicy` afin qu'une future version puisse gérer les règles d'un SGBD.
-
-## Exemple MotoGP
+## 🧪 Exemple MotoGP
 
 ```text
 PILOTE (0,N) ── PARTICIPER ── (1,N) COURSE
 
 PILOTE                       COURSE
 # id_pilote                  # id_course
-nom                          date
+nom                          date_course
 
 PARTICIPER
 position
 points
-temps
 ```
 
-produit logiquement :
+Le MLD produit une table d’association :
 
 ```text
-PILOTE
-------
-PK  id_pilote
-    nom
-
-COURSE
-------
-PK  id_course
-    date
-
 PARTICIPER
-----------
-PK/FK  id_course
-PK/FK  id_pilote
-       position
-       points
-       temps
-FK (id_course) → COURSE(id_course)
-FK (id_pilote) → PILOTE(id_pilote)
+-----------
+PK/FK id_course  → COURSE(id_course)
+PK/FK id_pilote  → PILOTE(id_pilote)
+      position
+      points
 ```
 
-L'ordre des FK est alphabétique par entité source, donc indépendant de l'ordre
-de création et de la disposition graphique.
+Une association `ENGAGER` marquée **Historisée : Oui** devient une table
+indépendante avec une PK technique `id_engager`. Aucune contrainte
+`UNIQUE(id_pilote, id_equipe)` n’est inventée : plusieurs périodes entre le
+même pilote et la même équipe restent donc possibles.
 
-### Engagement historisé
+Le fichier d’exemple [motogp.json](motogp.json) peut être ouvert directement
+avec **Fichier → Ouvrir…**.
+
+## 💾 Format JSON
+
+Le format courant est la version `2`. Les identifiants internes relient les
+objets sans dépendre de leurs noms ni de leur position graphique.
+
+```json
+{
+  "format_version": 2,
+  "entities": [
+    {
+      "id": "entity_pilote",
+      "name": "PILOTE",
+      "position": {"x": 100, "y": 100},
+      "attributes": [
+        {
+          "id": "attr_pilote_id",
+          "name": "id_pilote",
+          "identifier": true
+        }
+      ]
+    }
+  ],
+  "associations": [
+    {
+      "id": "association_participer",
+      "name": "PARTICIPER",
+      "position": {"x": 350, "y": 250},
+      "attributes": [],
+      "is_historized": false,
+      "materialization_strategy": "AUTO"
+    }
+  ],
+  "relations": [
+    {
+      "id": "relation_pilote_participer",
+      "entity_id": "entity_pilote",
+      "association_id": "association_participer",
+      "cardinality": {"minimum": "0", "maximum": "N"}
+    }
+  ]
+}
+```
+
+Compatibilité :
+
+- les fichiers V1 sont migrés en mémoire sans perdre noms, positions ou liens ;
+- une cardinalité absente reste inconnue et doit être complétée ;
+- les propriétés absentes d’une ancienne association valent
+  `is_historized = false` et `materialization_strategy = AUTO` ;
+- le fichier source n’est réécrit que lors d’un enregistrement explicite ;
+- le MLD n’est pas sauvegardé : il est toujours recalculé depuis le MCD.
+
+## 🧠 Règles MCD → MLD
+
+<details>
+<summary><strong>Afficher les règles de transformation</strong></summary>
+
+### Entités
+
+- une entité devient une table ;
+- ses attributs deviennent des colonnes ;
+- ses attributs identifiants forment la PK simple ou composée.
+
+### Associations N:N
+
+- une table portant le nom de l’association est créée ;
+- les PK des entités deviennent des FK ;
+- ces FK forment par défaut la PK composée ;
+- les attributs de l’association restent dans cette table.
+
+### Associations 1:N
+
+- en `AUTO` non historisé, la règle classique migre une FK ;
+- les attributs de l’association migrent avec la FK ;
+- le minimum détermine la nullabilité ;
+- `FORCE_TABLE` ou `AUTO` historisé crée une table indépendante.
+
+### Associations 1:1
+
+- `(1,1)` face à `(0,1)` place une FK `NOT NULL UNIQUE` du côté `(1,1)` ;
+- `(1,1)/(1,1)` produit une FK `NOT NULL UNIQUE` ;
+- `(0,1)/(0,1)` produit une FK `NULL UNIQUE` ;
+- lorsque les deux côtés sont équivalents, un tri stable par nom puis par
+  identifiant choisit la table porteuse.
+
+### Historisation et matérialisation
 
 ```text
-PILOTE (0,N) ── ENGAGER ── (1,1) EQUIPE
-
-ENGAGER
-date_debut
-date_fin
-Historisée : Oui
-Matérialisation : Automatique
+1:N + AUTO                 → FK classique
+1:N + AUTO + historisée    → table indépendante
+N:N                        → table d’association
+FORCE_TABLE                → table indépendante
+FORCE_FK compatible        → transformation FK classique
+N:N + FORCE_FK             → erreur
+Historisée + FORCE_FK      → erreur
 ```
 
-produit une table `ENGAGER` contenant `id_engager` comme PK technique,
-`id_pilote` et `id_equipe` comme FK, puis `date_debut` et `date_fin`. Le couple
-de FK n'est ni PK ni UNIQUE, ce qui autorise plusieurs périodes pour le même
-pilote et la même équipe.
+Une association matérialisée utilise ses attributs identifiants comme PK. À
+défaut, une association non-N:N reçoit une PK technique stable
+`id_<nom_association>`. Aucune date n’est ajoutée automatiquement et aucune
+unicité du couple de FK n’est supposée.
 
-Après génération du MLD, PostgreSQL produit notamment :
+</details>
 
-```sql
-CREATE TABLE "ENGAGER" (
-    "id_engager" INTEGER GENERATED BY DEFAULT AS IDENTITY NOT NULL,
-    "id_equipe" INTEGER NOT NULL,
-    "id_pilote" INTEGER,
-    "date_debut" VARCHAR(100),
-    "date_fin" VARCHAR(100),
-    PRIMARY KEY ("id_engager"),
-    CONSTRAINT "fk_ENGAGER_id_equipe"
-        FOREIGN KEY ("id_equipe") REFERENCES "EQUIPE" ("id_equipe"),
-    CONSTRAINT "fk_ENGAGER_id_pilote"
-        FOREIGN KEY ("id_pilote") REFERENCES "PILOTE" ("id_pilote")
-);
-```
+## 🧱 Architecture
 
-Il n'existe volontairement aucune contrainte UNIQUE sur
-`(id_pilote, id_equipe)` : plusieurs engagements historiques restent possibles.
-
-## Architecture du projet
+La logique métier ne dépend pas de Qt. L’interface représente et modifie les
+modèles par l’intermédiaire du contrôleur.
 
 ```text
 src/merisor/
 ├── domain/
-│   ├── model.py              modèle MCD
-│   ├── validation.py         validation MCD
-│   └── mld.py                modèle MLD autonome
+│   ├── model.py                 objets MCD
+│   ├── validation.py            validation métier
+│   └── mld.py                   objets MLD indépendants
 ├── application/
-│   ├── controller.py         état du document et obsolescence du MLD
-│   ├── commands.py           opérations annulables
-│   ├── mld_transformer.py    règles MCD → MLD et politique de nommage
-│   ├── mld_text.py           rendu textuel indépendant de Qt
-│   └── sql_generator.py      validation, dialectes et génération MLD → SQL
+│   ├── controller.py            orchestration document/scène
+│   ├── commands.py              annuler/rétablir
+│   ├── mcd_layout.py            disposition automatique
+│   ├── mld_transformer.py       transformation MCD → MLD
+│   ├── sql_generator.py         validation et dialectes SQL
+│   ├── ai_mcd_service.py        schéma/prompt/validation IA
+│   ├── openrouter_client.py     appels HTTP OpenRouter
+│   └── openrouter_settings.py   préférences et clé locale
 ├── persistence/
-│   └── json_repository.py    JSON MCD V2 et migration V1
+│   └── json_repository.py       JSON V2 et migration V1
 ├── ui/
-│   ├── canvas.py             canvas MCD
-│   ├── items.py              objets graphiques MCD
-│   ├── properties_panel.py   édition contextuelle
-│   ├── validation_dialog.py  rapport de validation
-│   ├── mld_view.py           vues MLD graphique et textuelle
-│   ├── sql_dialog.py         choix cible, aperçu, copie et export SQL
-│   └── main_window.py        fenêtre et actions
-└── __main__.py
+│   ├── canvas.py, items.py      scène et objets graphiques MCD
+│   ├── properties_panel.py      édition contextuelle
+│   ├── mld_view.py              MLD graphique et textuel
+│   ├── sql_dialog.py            aperçu et export SQL
+│   ├── ai_mcd_dialog.py         génération/aperçu/import IA
+│   └── main_window.py           fenêtre principale
+└── assets/
+    └── merisor.png              icône de l’application
 ```
 
-Le flux de dépendances reste explicite :
+Le découplage principal est le suivant :
 
 ```text
-MCD → McdToMldTransformer → MLDModel → vues MLD
-                                      ↓
-                                  SQLGenerator
-                              ┌───────┼────────┐
-                              ↓       ↓        ↓
-                         PostgreSQL SQLite  MySQL/MariaDB
+MCDModel ──> McdToMldTransformer ──> MLDModel ──> SQLGenerator
+   │                                      │             │
+   └── JSON + validation                  └── vues       └── dialectes
 ```
 
-Le transformateur et le rendu textuel n'importent jamais Qt.
+Le générateur SQL ne consulte jamais le MCD. Les positions du canvas
+n’influencent ni le MLD ni le SQL.
 
-## Persistance et compatibilité
+## 🗄️ Dialectes et types SQL
 
-Le format JSON reste en version 2. Les fichiers V0.1 et V0.2 restent lisibles.
-Le MLD n'est pas sauvegardé : il est dérivé et recalculé après chargement, ce
-qui évite qu'un résultat généré devienne une seconde source de vérité.
+| Concept MLD | PostgreSQL | SQLite | MariaDB/MySQL |
+|---|---|---|---|
+| Entier | `INTEGER` | `INTEGER` | `INT` |
+| Flottant | `DOUBLE PRECISION` | `REAL` | `DOUBLE` |
+| Date/heure | `TIMESTAMP` | `TEXT` | `DATETIME` |
+| PK technique | `GENERATED BY DEFAULT AS IDENTITY` | `INTEGER PRIMARY KEY AUTOINCREMENT` | `AUTO_INCREMENT` |
+| Identifiants | `"nom"` | `"nom"` | `` `nom` `` |
 
-Chaque association sauvegardée contient désormais les champs suivants :
+Types logiques disponibles : `INTEGER`, `BIGINT`, `DECIMAL`, `FLOAT`,
+`BOOLEAN`, `VARCHAR(n)`, `TEXT`, `DATE`, `TIME`, `DATETIME` et `TIMESTAMP`.
 
-```json
-{
-  "name": "ENGAGER",
-  "is_historized": true,
-  "materialization_strategy": "FORCE_TABLE"
-}
-```
+Les attributs MCD n’ayant pas encore de type configurable, MERISOR utilise par
+compatibilité `INTEGER` pour un identifiant conceptuel et `VARCHAR(100)` pour
+un attribut ordinaire. Une FK reprend le type de la colonne référencée.
 
-Lorsqu'ils sont absents d'un ancien fichier, ils prennent en mémoire les
-valeurs `false` et `AUTO`. Le fichier d'origine n'est pas réécrit au chargement ;
-les champs deviennent explicites uniquement lors d'une sauvegarde ultérieure.
+## 🔐 Confidentialité et sécurité
 
-Une relation migrée depuis la V0.1 conserve une cardinalité inconnue `?,?` et
-doit être complétée avant génération du MLD.
+- la clé OpenRouter n’est jamais écrite dans un fichier MCD, le dépôt Git ou
+  le SQL généré ;
+- avec `keyring`, elle est stockée dans le trousseau du système ;
+- sans `keyring`, QSettings est utilisé avec un avertissement : ce repli n’est
+  pas chiffré ;
+- seule la description envoyée lors d’une génération IA est transmise à
+  OpenRouter et au fournisseur du modèle sélectionné ;
+- le JSON reçu est validé avant de pouvoir remplacer le document courant ;
+- le SQL est seulement affiché ou enregistré localement.
 
-## Limitations V0.4
+Ne placez jamais une clé API dans un fichier JSON, une capture d’écran, un
+ticket GitHub ou un commit.
 
-- les associations ternaires ou de degré supérieur sont détectées et refusées ;
-- les associations réflexives ne sont pas supportées par le modèle V0.2 ;
-- une association 1:1 porteuse d'attributs reste refusée en mode classique ;
-  `FORCE_TABLE` permet de la matérialiser sans perte ;
-- les expressions CHECK et les valeurs DEFAULT sont conservées telles
-  qu'elles figurent dans le MLD, sans langage d'expression abstrait avancé ;
-- aucune connexion, exécution SQL, migration, introspection de base ou ORM
-  n'est réalisé.
-
-## Tests
+## 🧪 Développement et tests
 
 ```bash
+python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install -e ".[test,ai]"
 QT_QPA_PLATFORM=offscreen pytest
 ```
 
-La suite couvre toutes les variantes demandées de N:N, 1:N et 1:1, les PK et
-FK composées, les contraintes UNIQUE, les attributs d'association, le cas
-MotoGP, le déterminisme, l'absence de mutation du MCD, l'obsolescence, la
-régénération, la copie/export, l'historisation, les stratégies de
-matérialisation, les PK techniques, la répétition des couples de FK et les
-non-régressions V0.1/V0.2/V0.3. Elle couvre également les trois dialectes SQL,
-les types, contraintes, index, actions référentielles, dépendances, cycles,
-mots réservés, erreurs MLD, aperçu/export et la chaîne MCD → MLD → SQL.
+La suite couvre le domaine MCD, la validation, la persistance et migration JSON,
+les commandes annulables, l’interface Qt, la disposition automatique, la
+génération IA, toutes les règles MCD → MLD, les trois dialectes SQL, les cycles
+de dépendances, les exports et la chaîne MotoGP complète.
+
+Pour vérifier que l’application démarre sans ouvrir de fenêtre visible :
+
+```bash
+QT_QPA_PLATFORM=offscreen timeout 5s python -m merisor
+```
+
+Le code suit une architecture modulaire et utilise des annotations de types.
+Une contribution doit conserver la compatibilité JSON et ajouter des tests pour
+toute nouvelle règle métier.
+
+## 📦 Construire un paquet Debian
+
+```bash
+./packaging/build_deb.sh
+dpkg-deb --info dist/merisor_*.deb
+```
+
+Le paquet contient l’application Python, le lanceur, l’entrée de menu desktop
+et l’icône. Le workflow GitHub Actions publie automatiquement un `.deb` lors de
+l’envoi d’un tag `v*`.
+
+## ⚠️ Limites connues
+
+- les associations ternaires ou de degré supérieur sont détectées mais leur
+  transformation MLD n’est pas prise en charge ;
+- les associations réflexives ne sont pas encore supportées ;
+- une association 1:1 porteuse d’attributs doit être matérialisée avec
+  `FORCE_TABLE` pour éviter une perte d’information ;
+- les types d’attributs ne sont pas encore éditables dans le MCD ;
+- la génération IA dépend de la disponibilité et des quotas d’OpenRouter ;
+- l’appel OpenRouter est actuellement synchrone ;
+- MERISOR ne gère ni connexion, ni migration, ni reverse engineering de base.
+
+## 🤝 Contribuer et signaler un problème
+
+Les contributions, propositions et rapports de bogues sont bienvenus.
+
+1. Consultez les [issues](https://github.com/nouhailler/merisor/issues).
+2. Créez une branche dédiée.
+3. Ajoutez ou adaptez les tests.
+4. Vérifiez `QT_QPA_PLATFORM=offscreen pytest`.
+5. Ouvrez une pull request en expliquant le comportement attendu.
+
+Pour un problème d’affichage ou de transformation, joignez si possible un petit
+fichier JSON reproductible, la version de MERISOR et votre distribution Linux.
+Retirez toute clé API ou donnée confidentielle avant publication.
+
+## 🗺️ Documentation du projet
+
+- [Journal des modifications](CHANGELOG.md)
+- [Contexte et décisions techniques](CONTEXT.md)
+- [Exemple MotoGP](motogp.json)
+- [Licence MIT](LICENSE)
+- [Releases et paquets Debian](https://github.com/nouhailler/merisor/releases)
+
+## 📄 Licence
+
+MERISOR est distribué sous la [licence MIT](LICENSE). Vous pouvez l’utiliser,
+le modifier et le redistribuer dans les conditions de cette licence.
+
+---
+
+<p align="center">
+  Conçu pour rendre MERISE accessible sans sacrifier la structure du modèle.
+</p>

@@ -1,0 +1,54 @@
+from pathlib import Path
+
+from PySide6.QtGui import QImage
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_application_logo_and_debian_icon_are_valid_png_files() -> None:
+    application_logo = PROJECT_ROOT / "src/merisor/assets/merisor.png"
+    debian_icon = (
+        PROJECT_ROOT
+        / "packaging/deb/usr/share/icons/hicolor/256x256/apps/merisor.png"
+    )
+
+    logo_image = QImage(str(application_logo))
+    icon_image = QImage(str(debian_icon))
+
+    assert not logo_image.isNull()
+    assert logo_image.hasAlphaChannel()
+    assert not icon_image.isNull()
+    assert (icon_image.width(), icon_image.height()) == (256, 256)
+
+
+def test_desktop_entry_uses_the_packaged_icon() -> None:
+    desktop_entry = (
+        PROJECT_ROOT
+        / "packaging/deb/usr/share/applications/merisor.desktop"
+    ).read_text(encoding="utf-8")
+
+    assert "Icon=merisor\n" in desktop_entry
+
+
+def test_readme_screenshots_are_present_and_readable() -> None:
+    readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+
+    for filename in (
+        "mcd-editor.png",
+        "mld-view.png",
+        "sql-preview.png",
+        "ai-preview.png",
+    ):
+        relative_path = f"docs/images/{filename}"
+        image = QImage(str(PROJECT_ROOT / relative_path))
+        assert relative_path in readme
+        assert not image.isNull()
+        assert image.width() >= 900
+
+
+def test_project_is_distributed_under_the_mit_license() -> None:
+    license_text = (PROJECT_ROOT / "LICENSE").read_text(encoding="utf-8")
+
+    assert license_text.startswith("MIT License\n")
+    assert "Copyright (c) 2026 Nouhailler" in license_text

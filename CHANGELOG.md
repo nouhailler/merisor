@@ -9,7 +9,16 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 - disposition automatique déterministe du MCD ;
 - réorganisation automatique après import d'un MCD généré par l'IA ;
 - commande **Modèle → Réorganiser automatiquement le MCD** annulable ;
-- résolution des chevauchements tenant compte de la taille des objets.
+- résolution des chevauchements tenant compte de la taille des objets ;
+- logo MERISOR et icône de bureau installée avec le paquet Debian ;
+- captures d'écran de l'éditeur MCD, du MLD, du SQL et de l'import IA ;
+- licence MIT.
+
+### Modifié
+
+- README entièrement restructuré pour les utilisateurs débutants et les
+  contributeurs, avec guide d'installation, prise en main, architecture,
+  format JSON, sécurité, limites et documentation des transformations.
 
 ## [0.5.0] - 2026-08-30
 
