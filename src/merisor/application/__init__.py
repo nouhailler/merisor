@@ -1,6 +1,11 @@
 """Logique applicative et coordination modèle–interface."""
 
 from merisor.application.controller import DiagramController, MLDGenerationBlocked
+from merisor.application.ai_mcd_service import (
+    AiMcdCandidate,
+    AiMcdService,
+    AiMcdValidationError,
+)
 from merisor.application.mld_text import render_mld_text
 from merisor.application.mld_transformer import (
     MLDNamePolicy,
@@ -32,6 +37,9 @@ from merisor.application.sql_generator import (
 
 __all__ = [
     "DiagramController",
+    "AiMcdCandidate",
+    "AiMcdService",
+    "AiMcdValidationError",
     "MLDGenerationBlocked",
     "MLDNamePolicy",
     "MLDTransformationError",

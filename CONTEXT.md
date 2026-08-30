@@ -1,18 +1,15 @@
 # Contexte de reprise du projet MERISOR
 
-## Prochaine reprise
+## État de l'intégration OpenRouter
 
-La prochaine fois que le projet est démarré, poursuivre l'intégration de
-l'assistance IA OpenRouter. L'étape 1 est terminée : le menu Paramètres permet
-d'enregistrer et tester une clé OpenRouter, de récupérer les modèles gratuits,
-d'en sélectionner un et d'activer/désactiver l'IA. Le stockage utilise `keyring`
-lorsque le trousseau système est disponible.
+Les trois étapes prévues sont terminées :
 
-Les deux étapes restantes sont à terminer dans cet ordre :
+1. récupération et sélection des modèles gratuits OpenRouter ;
+2. génération d'un JSON MCD avec validation, sans modifier le modèle courant ;
+3. aperçu éditable et import confirmé du MCD généré dans l'éditeur.
 
-1. **Génération d'un JSON MCD avec validation**, sans modifier le modèle
-   courant.
-2. **Aperçu et import confirmé** du MCD généré dans l'éditeur.
+La prochaine reprise peut se concentrer sur les retours d'usage, l'amélioration
+des prompts ou le passage des appels réseau dans un traitement asynchrone.
 
 ## Contraintes à conserver
 

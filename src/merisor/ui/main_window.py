@@ -8,6 +8,7 @@ from PySide6.QtCore import QPointF, QSettings, Qt
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
     QDockWidget,
+    QDialog,
     QFileDialog,
     QInputDialog,
     QMainWindow,
@@ -25,6 +26,7 @@ from merisor.application import (
 from merisor.domain import MLDModel
 from merisor.persistence import PersistenceError
 from merisor.ui.canvas import DiagramScene, DiagramView, ToolMode
+from merisor.ui.ai_mcd_dialog import AiMcdDialog
 from merisor.ui.mld_view import MLDView
 from merisor.ui.mld_properties_panel import MLDPropertiesPanel
 from merisor.ui.openrouter_settings_dialog import OpenRouterSettingsDialog
@@ -105,6 +107,7 @@ class MainWindow(QMainWindow):
         self.generate_sql_action = QAction("Générer SQL", self)
         self.generate_sql_action.setShortcut(QKeySequence("Ctrl+Alt+S"))
         self.generate_sql_action.setEnabled(False)
+        self.generate_ai_mcd_action = QAction("Générer un MCD avec l'IA…", self)
 
         self.tool_group = QActionGroup(self)
         self.tool_group.setExclusive(True)
@@ -147,6 +150,8 @@ class MainWindow(QMainWindow):
         model_menu.addSeparator()
         model_menu.addAction(self.generate_mld_action)
         model_menu.addAction(self.generate_sql_action)
+        model_menu.addSeparator()
+        model_menu.addAction(self.generate_ai_mcd_action)
 
         view_menu = self.menuBar().addMenu("Affichage")
         view_menu.addAction(self.zoom_in_action)
@@ -184,6 +189,7 @@ class MainWindow(QMainWindow):
         self.validate_action.triggered.connect(self.show_validation)
         self.generate_mld_action.triggered.connect(self.generate_mld)
         self.generate_sql_action.triggered.connect(self.generate_sql)
+        self.generate_ai_mcd_action.triggered.connect(self.generate_ai_mcd)
         self.tool_group.triggered.connect(self._tool_triggered)
 
         self.scene.entity_creation_requested.connect(self._request_entity)
@@ -297,6 +303,19 @@ class MainWindow(QMainWindow):
             else "Sans titre"
         )
         SQLPreviewDialog(model, project_name, self).exec()
+
+    def generate_ai_mcd(self, _checked: bool = False) -> None:
+        dialog = AiMcdDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        candidate = dialog.imported_candidate
+        if candidate is None or candidate.report.errors:
+            return
+        if not self._maybe_save():
+            return
+        self.controller.import_generated_model(candidate.model)
+        self.workspace_tabs.setCurrentWidget(self.view)
+        self.select_action.setChecked(True)
 
     def new_document(self, _checked: bool = False) -> None:
         if self._maybe_save():

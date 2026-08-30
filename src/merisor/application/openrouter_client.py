@@ -58,6 +58,39 @@ class OpenRouterClient:
             raise OpenRouterError("Réponse OpenRouter invalide.")
         return payload
 
+    def _post(self, path: str, data: dict) -> dict:
+        if not self.api_key:
+            raise OpenRouterError("Aucune clé OpenRouter n'est configurée.")
+        request = Request(
+            f"{self.BASE_URL}{path}",
+            data=json.dumps(data).encode("utf-8"),
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": "MERISOR/0.4",
+                "HTTP-Referer": "https://github.com/nouhailler/merisor",
+                "X-Title": "MERISOR",
+            },
+        )
+        try:
+            with urlopen(request, timeout=self.timeout) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except HTTPError as error:
+            if error.code in {401, 403}:
+                raise OpenRouterError("La clé OpenRouter est refusée.") from error
+            if error.code == 429:
+                raise OpenRouterError(
+                    "Quota ou limite OpenRouter atteint. Réessayez plus tard."
+                ) from error
+            raise OpenRouterError(f"OpenRouter a répondu HTTP {error.code}.") from error
+        except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+            raise OpenRouterError(f"Impossible de contacter OpenRouter : {error}") from error
+        if not isinstance(payload, dict):
+            raise OpenRouterError("Réponse OpenRouter invalide.")
+        return payload
+
     def test_key(self) -> None:
         self._get("/models")
 
@@ -90,3 +123,26 @@ class OpenRouterClient:
                 models.append(model)
         return sorted(models, key=lambda model: (not model.supports_json, model.name.lower()))
 
+    def complete(self, model_id: str, system_prompt: str, user_prompt: str) -> str:
+        if not model_id.strip():
+            raise OpenRouterError("Aucun modèle OpenRouter n'est sélectionné.")
+        payload = self._post(
+            "/chat/completions",
+            {
+                "model": model_id,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.1,
+            },
+        )
+        try:
+            content = payload["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as error:
+            raise OpenRouterError(
+                "La réponse OpenRouter ne contient aucun texte exploitable."
+            ) from error
+        if not isinstance(content, str) or not content.strip():
+            raise OpenRouterError("OpenRouter a renvoyé une réponse vide.")
+        return content.strip()

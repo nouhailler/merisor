@@ -311,6 +311,13 @@ class DiagramController(QObject):
         self._replace_model(model, source)
         self.message.emit(f"Diagramme chargé : {source.name}")
 
+    def import_generated_model(self, model: MCDModel) -> None:
+        """Remplace le document par un candidat validé et le marque à enregistrer."""
+
+        self._replace_model(model, None)
+        self.undo_stack.resetClean()
+        self.message.emit("MCD généré par l'IA importé ; enregistrez le document.")
+
     def save(self, path: str | Path | None = None) -> Path:
         target = Path(path) if path is not None else self.document_path
         if target is None:

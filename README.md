@@ -34,8 +34,22 @@ ne sont jamais écrits dans les fichiers de projet JSON. Lorsque le paquet
 optionnel `keyring` est installé (`python -m pip install -e ".[ai]"`), la clé
 est conservée dans le trousseau du système ; sinon MERISOR utilise un repli
 local QSettings explicitement signalé comme non chiffré. La génération et
-l'import du JSON MCD restent les étapes suivantes et ne sont pas déclenchés par
-ce dialogue.
+l'import du JSON MCD se lancent depuis **Modèle → Générer un MCD avec l'IA…**.
+
+### Génération assistée d'un MCD
+
+La fenêtre IA affiche le modèle OpenRouter sélectionné, une zone de description
+et un rappel des éventuels quotas des modèles gratuits. MERISOR impose au modèle
+le format JSON version 2 avec identifiants internes, attributs identifiants,
+cardinalités, historisation et stratégie de matérialisation.
+
+La réponse ne remplace jamais immédiatement le document courant. Elle est
+d'abord chargée par `JsonDiagramRepository`, puis analysée par le validateur
+MERISE. L'aperçu présente les entités, associations, relations, erreurs et
+avertissements. Le JSON reste éditable et peut être revalidé ; le bouton
+**Importer dans l'éditeur** demeure désactivé tant qu'une erreur bloque le MCD.
+Après confirmation, les modifications courantes peuvent être sauvegardées avant
+le remplacement et le MCD importé est marqué comme non enregistré.
 
 ## Lancement
 
