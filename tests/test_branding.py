@@ -36,6 +36,7 @@ def test_readme_screenshots_are_present_and_readable() -> None:
 
     for filename in (
         "mcd-editor.png",
+        "attribute-types.png",
         "mld-view.png",
         "sql-preview.png",
         "ai-preview.png",

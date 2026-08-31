@@ -11,6 +11,8 @@ from merisor.domain import (
     CardinalityMaximum,
     CardinalityMinimum,
     Entity,
+    Inheritance,
+    InheritanceStrategy,
     MCDModel,
     MLDColumn,
     MLDDataType,
@@ -56,6 +58,13 @@ class MLDNamePolicy:
 
         return f"id_{source_name.strip().casefold()}"
 
+    @staticmethod
+    def role_column_name(source_name: str, role: str) -> str:
+        """Distingue deux migrations issues de la même entité réflexive."""
+
+        role_suffix = "_".join(role.strip().split())
+        return f"{source_name}_{role_suffix}" if role_suffix else source_name
+
     def allocate(
         self,
         preferred: str,
@@ -89,6 +98,16 @@ def mcd_logical_fingerprint(model: MCDModel) -> str:
                 "id": attribute.id,
                 "name": attribute.name,
                 "identifier": attribute.identifier,
+                "data_type": (
+                    None
+                    if attribute.data_type is None
+                    else {
+                        "name": attribute.data_type.name.value,
+                        "length": attribute.data_type.length,
+                        "precision": attribute.data_type.precision,
+                        "scale": attribute.data_type.scale,
+                    }
+                ),
             }
             for attribute in items
         ]
@@ -121,6 +140,7 @@ def mcd_logical_fingerprint(model: MCDModel) -> str:
                 "id": relation.id,
                 "entity_id": relation.entity_id,
                 "association_id": relation.association_id,
+                "role": relation.role,
                 "cardinality": (
                     None
                     if relation.cardinality is None
@@ -132,17 +152,31 @@ def mcd_logical_fingerprint(model: MCDModel) -> str:
             }
             for relation in sorted(model.relations.values(), key=lambda item: item.id)
         ],
+        "inheritances": [
+            {
+                "id": inheritance.id,
+                "parent_entity_id": inheritance.parent_entity_id,
+                "child_entity_ids": inheritance.child_entity_ids,
+                "strategy": inheritance.strategy.value,
+            }
+            for inheritance in sorted(
+                model.inheritances.values(), key=lambda item: item.id
+            )
+        ],
     }
     payload = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 class McdToMldTransformer:
-    """Applique les règles binaires V0.3 sans modifier le MCD source.
+    """Applique les règles MERISE sans modifier le MCD source.
 
     FORCE_TABLE et l'historisation matérialisent les associations non-N:N.
     FORCE_FK conserve les règles classiques lorsqu'elles sont compatibles.
     Une association N:N conserve sa table et sa PK composée historique.
+    Une association n-aire devient toujours une table dont les FK forment la
+    PK, sauf lorsqu'un identifiant d'association explicite est défini.
+    Les rôles distinguent les branches d'une association réflexive.
 
     Décision 1:N : conformément aux exemples normatifs des sections 12, 13 et
     20, la table de l'entité dont le maximum vaut 1 porte la FK vers l'entité
@@ -173,12 +207,8 @@ class McdToMldTransformer:
                 ),
                 key=lambda relation: self._relation_sort_key(model, relation),
             )
-            self._check_binary_association(model, association, relations)
+            self._check_association(model, association, relations)
             # Les cardinalités sont garanties présentes par le contrôle ci-dessus.
-            maxima = [relation.cardinality.maximum for relation in relations]
-            is_many_to_many = all(
-                maximum is CardinalityMaximum.MANY for maximum in maxima
-            )
             if (
                 association.is_historized
                 and association.materialization_strategy
@@ -189,6 +219,27 @@ class McdToMldTransformer:
                     "FORCE_FK. Une association historisée doit être matérialisée "
                     "en table ; utilisez AUTO ou FORCE_TABLE."
                 )
+            if len(relations) >= 3:
+                if (
+                    association.materialization_strategy
+                    is MaterializationStrategy.FORCE_FK
+                ):
+                    raise MLDTransformationError(
+                        f"L'association {association.name} est n-aire "
+                        f"({len(relations)} branches). La stratégie FORCE_FK "
+                        "est incompatible avec une association n-aire."
+                    )
+                generated_tables.append(
+                    self._transform_nary(
+                        model, association, relations, tables_by_entity
+                    )
+                )
+                continue
+
+            maxima = [relation.cardinality.maximum for relation in relations]
+            is_many_to_many = all(
+                maximum is CardinalityMaximum.MANY for maximum in maxima
+            )
             if (
                 is_many_to_many
                 and association.materialization_strategy
@@ -223,6 +274,7 @@ class McdToMldTransformer:
                     model, association, relations, tables_by_entity
                 )
 
+        self._apply_inheritances(model, tables_by_entity, generated_tables)
         generated_tables.sort(
             key=lambda table: (table.name.casefold(), table.id)
         )
@@ -231,15 +283,141 @@ class McdToMldTransformer:
             generated_from_fingerprint=mcd_logical_fingerprint(model),
         )
 
+    def _apply_inheritances(
+        self,
+        model: MCDModel,
+        entity_tables: dict[str, MLDTable],
+        generated_tables: list[MLDTable],
+    ) -> None:
+        for inheritance in sorted(
+            model.inheritances.values(), key=lambda item: item.id
+        ):
+            parent = entity_tables[inheritance.parent_entity_id]
+            children = [entity_tables[item] for item in inheritance.child_entity_ids]
+            if inheritance.strategy is InheritanceStrategy.JOINED:
+                for child in children:
+                    self._join_inheritance(inheritance, parent, child)
+            elif inheritance.strategy is InheritanceStrategy.PARENT_ONLY:
+                if any(
+                    model.connected_relations(child_id)
+                    for child_id in inheritance.child_entity_ids
+                ):
+                    raise MLDTransformationError(
+                        "La stratégie table mère seule ne peut pas encore aplatir "
+                        "une entité fille directement engagée dans une association."
+                    )
+                for child in children:
+                    self._merge_non_key_columns(child, parent, inheritance.id)
+                    if child in generated_tables:
+                        generated_tables.remove(child)
+            else:
+                if model.connected_relations(inheritance.parent_entity_id):
+                    raise MLDTransformationError(
+                        "La stratégie tables filles seules ne peut pas répartir "
+                        "une association portée directement par l'entité mère."
+                    )
+                for child in children:
+                    self._merge_non_key_columns(parent, child, inheritance.id)
+                if parent in generated_tables:
+                    generated_tables.remove(parent)
+
+    def _join_inheritance(
+        self,
+        inheritance: Inheritance,
+        parent: MLDTable,
+        child: MLDTable,
+    ) -> None:
+        parent_columns = parent.primary_key_columns
+        child_pk_columns = child.primary_key_columns
+        compatible = (
+            len(parent_columns) == len(child_pk_columns)
+            and all(
+                parent_column.name.casefold() == child_column.name.casefold()
+                and parent_column.data_type == child_column.data_type
+                for parent_column, child_column in zip(
+                    parent_columns, child_pk_columns, strict=True
+                )
+            )
+        )
+        if compatible:
+            local_ids = child.primary_key
+        else:
+            used_names = {column.name.casefold() for column in child.columns}
+            local_ids_list: list[str] = []
+            for parent_column in parent_columns:
+                column_id = (
+                    f"column:inheritance:{inheritance.id}:{child.id}:"
+                    f"{parent_column.id}"
+                )
+                name = self.name_policy.allocate(
+                    parent_column.name,
+                    used_names,
+                    parent.name,
+                )
+                child.columns.append(
+                    MLDColumn(
+                        id=column_id,
+                        name=name,
+                        nullable=False,
+                        data_type=parent_column.data_type,
+                        source_attribute_id=parent_column.source_attribute_id,
+                        source_element_id=inheritance.parent_entity_id,
+                        generated=True,
+                    )
+                )
+                local_ids_list.append(column_id)
+            local_ids = tuple(local_ids_list)
+            child.primary_key = local_ids
+        child.foreign_keys.append(
+            MLDForeignKey(
+                id=f"fk:inheritance:{inheritance.id}:{child.id}",
+                column_ids=local_ids,
+                referenced_table_id=parent.id,
+                referenced_column_ids=parent.primary_key,
+                source_association_id=inheritance.id,
+                source_inheritance_id=inheritance.id,
+            )
+        )
+
+    def _merge_non_key_columns(
+        self,
+        source: MLDTable,
+        target: MLDTable,
+        inheritance_id: str,
+    ) -> None:
+        used_names = {column.name.casefold() for column in target.columns}
+        for column in source.columns:
+            if column.id in source.primary_key:
+                continue
+            target.columns.append(
+                MLDColumn(
+                    id=f"column:inheritance:{inheritance_id}:{target.id}:{column.id}",
+                    name=self.name_policy.allocate(
+                        column.name, used_names, source.name
+                    ),
+                    nullable=True,
+                    data_type=column.data_type,
+                    default=column.default,
+                    source_attribute_id=column.source_attribute_id,
+                    source_element_id=column.source_element_id,
+                    generated=True,
+                )
+            )
+
     @staticmethod
     def _node_sort_key(node: Entity | Association) -> tuple[str, str]:
         return node.name.casefold(), node.id
 
     def _relation_sort_key(
         self, model: MCDModel, relation: Relation
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, str, str]:
         entity = model.entities[relation.entity_id]
-        return entity.name.casefold(), entity.id
+        return (
+            entity.name.casefold(),
+            entity.id,
+            relation.role.casefold(),
+            relation.id,
+        )
 
     def _entity_table(self, entity: Entity) -> MLDTable:
         if not entity.identifier_attributes:
@@ -270,24 +448,15 @@ class McdToMldTransformer:
             primary_key=primary_key,
         )
 
-    def _check_binary_association(
+    def _check_association(
         self,
         model: MCDModel,
         association: Association,
         relations: list[Relation],
     ) -> None:
-        if len(relations) > 2:
-            raise MLDTransformationError(
-                f"L'association {association.name} implique {len(relations)} entités. "
-                "Les associations ternaires ou de degré supérieur ne sont pas supportées."
-            )
         if len(relations) < 2:
             raise MLDTransformationError(
-                f"L'association {association.name} doit relier exactement deux entités."
-            )
-        if len({relation.entity_id for relation in relations}) != 2:
-            raise MLDTransformationError(
-                f"L'association réflexive {association.name} n'est pas supportée en V0.3."
+                f"L'association {association.name} doit posséder au moins deux branches."
             )
         if any(relation.cardinality is None for relation in relations):
             raise MLDTransformationError(
@@ -297,6 +466,96 @@ class McdToMldTransformer:
             raise MLDTransformationError(
                 f"L'association {association.name} référence une entité inconnue."
             )
+        by_entity: dict[str, list[Relation]] = {}
+        for relation in relations:
+            by_entity.setdefault(relation.entity_id, []).append(relation)
+        for repeated_relations in by_entity.values():
+            if len(repeated_relations) < 2:
+                continue
+            roles = [relation.role.strip() for relation in repeated_relations]
+            if any(not role for role in roles):
+                raise MLDTransformationError(
+                    f"L'association réflexive {association.name} doit définir "
+                    "un rôle sur chaque branche répétée."
+                )
+            if len({role.casefold() for role in roles}) != len(roles):
+                raise MLDTransformationError(
+                    f"L'association réflexive {association.name} utilise des "
+                    "rôles dupliqués."
+                )
+
+    def _transform_nary(
+        self,
+        model: MCDModel,
+        association: Association,
+        relations: list[Relation],
+        entity_tables: dict[str, MLDTable],
+    ) -> MLDTable:
+        """Matérialise une association de degré trois ou supérieur."""
+
+        table = MLDTable(
+            id=self._association_table_id(association.id),
+            name=self.name_policy.table_name(association.name),
+            source_element_id=association.id,
+            source=MLDTableSource.ASSOCIATION,
+            is_historized=association.is_historized,
+        )
+        used_names: set[str] = set()
+        primary_key: list[str] = []
+        has_explicit_identifier = bool(association.identifier_attributes)
+        if has_explicit_identifier:
+            self._append_association_attributes(
+                table,
+                association,
+                used_names,
+                nullable=False,
+                identifier_filter=True,
+            )
+            primary_key.extend(
+                self._attribute_column_id(attribute)
+                for attribute in association.identifier_attributes
+            )
+
+        for relation in relations:
+            source_entity = model.entities[relation.entity_id]
+            referenced_table = entity_tables[source_entity.id]
+            column_ids, referenced_column_ids = self._migrate_primary_key(
+                table,
+                referenced_table,
+                source_entity,
+                association,
+                relation,
+                nullable=False,
+                used_names=used_names,
+            )
+            if not has_explicit_identifier:
+                primary_key.extend(column_ids)
+            table.foreign_keys.append(
+                MLDForeignKey(
+                    id=self._foreign_key_id(
+                        association.id,
+                        association.id,
+                        source_entity.id,
+                        relation.id,
+                    ),
+                    column_ids=column_ids,
+                    referenced_table_id=referenced_table.id,
+                    referenced_column_ids=referenced_column_ids,
+                    source_association_id=association.id,
+                    source_relation_id=relation.id,
+                    source_cardinality=self._source_cardinality(relation),
+                )
+            )
+
+        table.primary_key = tuple(primary_key)
+        self._append_association_attributes(
+            table,
+            association,
+            used_names,
+            nullable=None,
+            identifier_filter=False if has_explicit_identifier else None,
+        )
+        return table
 
     def _transform_many_to_many(
         self,
@@ -344,7 +603,10 @@ class McdToMldTransformer:
             table.foreign_keys.append(
                 MLDForeignKey(
                     id=self._foreign_key_id(
-                        association.id, table.source_element_id, source_entity.id
+                        association.id,
+                        table.source_element_id,
+                        source_entity.id,
+                        relation.id,
                     ),
                     column_ids=column_ids,
                     referenced_table_id=referenced_table.id,
@@ -431,7 +693,10 @@ class McdToMldTransformer:
             table.foreign_keys.append(
                 MLDForeignKey(
                     id=self._foreign_key_id(
-                        association.id, association.id, source_entity.id
+                        association.id,
+                        association.id,
+                        source_entity.id,
+                        relation.id,
                     ),
                     column_ids=column_ids,
                     referenced_table_id=referenced_table.id,
@@ -488,7 +753,10 @@ class McdToMldTransformer:
         holder_table.foreign_keys.append(
             MLDForeignKey(
                 id=self._foreign_key_id(
-                    association.id, holder_entity.id, referenced_entity.id
+                    association.id,
+                    holder_entity.id,
+                    referenced_entity.id,
+                    many_relation.id,
                 ),
                 column_ids=column_ids,
                 referenced_table_id=referenced_table.id,
@@ -535,7 +803,10 @@ class McdToMldTransformer:
         holder_table.foreign_keys.append(
             MLDForeignKey(
                 id=self._foreign_key_id(
-                    association.id, holder_entity.id, referenced_entity.id
+                    association.id,
+                    holder_entity.id,
+                    referenced_entity.id,
+                    holder_relation.id,
                 ),
                 column_ids=column_ids,
                 referenced_table_id=referenced_table.id,
@@ -591,15 +862,18 @@ class McdToMldTransformer:
             referenced_column = referenced_table.column_by_id(
                 referenced_column_id
             )
+            preferred_name = self.name_policy.role_column_name(
+                source_attribute.name, relation.role
+            )
             name = self.name_policy.allocate(
-                source_attribute.name,
+                preferred_name,
                 used_names,
                 referenced_entity.name,
                 association.name,
             )
             column_id = (
                 f"column:fk:{association.id}:{holder_table.source_element_id}:"
-                f"{source_attribute.id}"
+                f"{relation.id}:{source_attribute.id}"
             )
             holder_table.columns.append(
                 MLDColumn(
@@ -652,8 +926,10 @@ class McdToMldTransformer:
 
     @staticmethod
     def _attribute_data_type(attribute: Attribute) -> MLDDataType:
-        """Valeur V0.4 par défaut tant que le MCD ne porte pas de type."""
+        """Conserve le type MCD explicite ou applique le mode automatique."""
 
+        if attribute.data_type is not None:
+            return attribute.data_type
         if attribute.identifier:
             return MLDDataType(MLDDataTypeName.INTEGER)
         return MLDDataType.varchar(100)
@@ -683,6 +959,9 @@ class McdToMldTransformer:
 
     @staticmethod
     def _foreign_key_id(
-        association_id: str, holder_id: str, referenced_id: str
+        association_id: str,
+        holder_id: str,
+        referenced_id: str,
+        relation_id: str,
     ) -> str:
-        return f"fk:{association_id}:{holder_id}:{referenced_id}"
+        return f"fk:{association_id}:{holder_id}:{referenced_id}:{relation_id}"

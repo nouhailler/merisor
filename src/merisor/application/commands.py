@@ -12,6 +12,8 @@ from merisor.domain import (
     Attribute,
     Cardinality,
     Entity,
+    Inheritance,
+    MLDDataType,
     MaterializationStrategy,
     Position,
     Relation,
@@ -25,10 +27,13 @@ class DeletionSnapshot:
     entities: tuple[Entity, ...]
     associations: tuple[Association, ...]
     relations: tuple[Relation, ...]
+    inheritances: tuple[Inheritance, ...] = ()
 
     @property
     def empty(self) -> bool:
-        return not (self.entities or self.associations or self.relations)
+        return not (
+            self.entities or self.associations or self.relations or self.inheritances
+        )
 
 
 class CommandTarget(Protocol):
@@ -39,6 +44,10 @@ class CommandTarget(Protocol):
     def command_insert_relation(self, relation: Relation) -> None: ...
 
     def command_remove_relation(self, relation_id: str) -> None: ...
+
+    def command_insert_inheritance(self, inheritance: Inheritance) -> None: ...
+
+    def command_remove_inheritance(self, inheritance_id: str) -> None: ...
 
     def command_move_node(self, node_id: str, position: Position) -> None: ...
 
@@ -62,9 +71,18 @@ class CommandTarget(Protocol):
         self, owner_id: str, attribute_id: str, identifier: bool
     ) -> None: ...
 
+    def command_set_attribute_data_type(
+        self,
+        owner_id: str,
+        attribute_id: str,
+        data_type: MLDDataType | None,
+    ) -> None: ...
+
     def command_set_cardinality(
         self, relation_id: str, cardinality: Cardinality | None
     ) -> None: ...
+
+    def command_set_relation_role(self, relation_id: str, role: str) -> None: ...
 
     def command_set_association_historized(
         self, association_id: str, is_historized: bool
@@ -104,6 +122,19 @@ class AddRelationCommand(QUndoCommand):
 
     def undo(self) -> None:
         self._target.command_remove_relation(self._relation.id)
+
+
+class AddInheritanceCommand(QUndoCommand):
+    def __init__(self, target: CommandTarget, inheritance: Inheritance) -> None:
+        super().__init__("Ajouter une spécialisation ISA")
+        self._target = target
+        self._inheritance = inheritance
+
+    def redo(self) -> None:
+        self._target.command_insert_inheritance(self._inheritance)
+
+    def undo(self) -> None:
+        self._target.command_remove_inheritance(self._inheritance.id)
 
 
 class MoveNodeCommand(QUndoCommand):
@@ -257,6 +288,33 @@ class SetIdentifierCommand(QUndoCommand):
         )
 
 
+class SetAttributeDataTypeCommand(QUndoCommand):
+    def __init__(
+        self,
+        target: CommandTarget,
+        owner_id: str,
+        attribute_id: str,
+        old_value: MLDDataType | None,
+        new_value: MLDDataType | None,
+    ) -> None:
+        super().__init__("Modifier le type d'un attribut")
+        self._target = target
+        self._owner_id = owner_id
+        self._attribute_id = attribute_id
+        self._old_value = old_value
+        self._new_value = new_value
+
+    def redo(self) -> None:
+        self._target.command_set_attribute_data_type(
+            self._owner_id, self._attribute_id, self._new_value
+        )
+
+    def undo(self) -> None:
+        self._target.command_set_attribute_data_type(
+            self._owner_id, self._attribute_id, self._old_value
+        )
+
+
 class SetCardinalityCommand(QUndoCommand):
     def __init__(
         self,
@@ -276,6 +334,27 @@ class SetCardinalityCommand(QUndoCommand):
 
     def undo(self) -> None:
         self._target.command_set_cardinality(self._relation_id, self._old_value)
+
+
+class SetRelationRoleCommand(QUndoCommand):
+    def __init__(
+        self,
+        target: CommandTarget,
+        relation_id: str,
+        old_value: str,
+        new_value: str,
+    ) -> None:
+        super().__init__("Modifier le rôle d'une relation")
+        self._target = target
+        self._relation_id = relation_id
+        self._old_value = old_value
+        self._new_value = new_value
+
+    def redo(self) -> None:
+        self._target.command_set_relation_role(self._relation_id, self._new_value)
+
+    def undo(self) -> None:
+        self._target.command_set_relation_role(self._relation_id, self._old_value)
 
 
 class SetAssociationHistorizedCommand(QUndoCommand):

@@ -16,6 +16,7 @@ from merisor.domain import (
     Cardinality,
     DiagramModel,
     Entity,
+    InheritanceStrategy,
     MLDCheckConstraint,
     MLDColumn,
     MLDDataType,
@@ -494,3 +495,117 @@ def test_complete_motogp_chain_mcd_to_mld_to_all_sql_dialects() -> None:
         assert sql.count("FOREIGN KEY") == 2
         assert "date_debut" in sql and "date_fin" in sql
         assert "UNIQUE" not in sql
+
+
+@pytest.mark.parametrize(
+    ("target", "quote", "expected_types"),
+    [
+        (
+            SQLTarget.POSTGRESQL,
+            '"',
+            {
+                "id_evenement": "BIGINT",
+                "date_evenement": "DATE",
+                "montant": "DECIMAL(10,2)",
+                "description": "TEXT",
+                "actif": "BOOLEAN",
+                "code": "VARCHAR(40)",
+            },
+        ),
+        (
+            SQLTarget.SQLITE,
+            '"',
+            {
+                "id_evenement": "INTEGER",
+                "date_evenement": "TEXT",
+                "montant": "NUMERIC",
+                "description": "TEXT",
+                "actif": "INTEGER",
+                "code": "TEXT",
+            },
+        ),
+        (
+            SQLTarget.MYSQL,
+            "`",
+            {
+                "id_evenement": "BIGINT",
+                "date_evenement": "DATE",
+                "montant": "DECIMAL(10,2)",
+                "description": "TEXT",
+                "actif": "BOOLEAN",
+                "code": "VARCHAR(40)",
+            },
+        ),
+    ],
+)
+def test_explicit_mcd_types_reach_each_sql_dialect(
+    target: SQLTarget,
+    quote: str,
+    expected_types: dict[str, str],
+) -> None:
+    mcd = DiagramModel()
+    entity = Entity(
+        "EVENEMENT",
+        attributes=[
+            Attribute(
+                "id_evenement",
+                identifier=True,
+                data_type=MLDDataType(MLDDataTypeName.BIGINT),
+            ),
+            Attribute(
+                "date_evenement",
+                data_type=MLDDataType(MLDDataTypeName.DATE),
+            ),
+            Attribute(
+                "montant",
+                data_type=MLDDataType(
+                    MLDDataTypeName.DECIMAL,
+                    precision=10,
+                    scale=2,
+                ),
+            ),
+            Attribute(
+                "description",
+                data_type=MLDDataType(MLDDataTypeName.TEXT),
+            ),
+            Attribute(
+                "actif",
+                data_type=MLDDataType(MLDDataTypeName.BOOLEAN),
+            ),
+            Attribute("code", data_type=MLDDataType.varchar(40)),
+        ],
+    )
+    mcd.add_entity(entity)
+
+    mld = McdToMldTransformer().transform(mcd)
+    sql = SQLGenerator().generate(mld, target)
+
+    for column_name, sql_type in expected_types.items():
+        assert f"{quote}{column_name}{quote} {sql_type}" in sql
+
+
+def test_joined_isa_chain_generates_pk_foreign_key_in_all_dialects() -> None:
+    mcd = DiagramModel()
+    person = Entity(
+        "PERSONNE", attributes=[Attribute("id_personne", identifier=True)]
+    )
+    client = Entity(
+        "CLIENT",
+        attributes=[
+            Attribute("id_client", identifier=True),
+            Attribute("numero_client"),
+        ],
+    )
+    mcd.add_entity(person)
+    mcd.add_entity(client)
+    mcd.create_inheritance(
+        person.id, (client.id,), InheritanceStrategy.JOINED
+    )
+
+    mld = McdToMldTransformer().transform(mcd)
+    for target in SQLTarget:
+        sql = SQLGenerator().generate(mld, target, project_name="ISA")
+        assert sql.count("CREATE TABLE") == 2
+        assert sql.count("FOREIGN KEY") == 1
+        assert "PERSONNE" in sql and "CLIENT" in sql
+        assert "id_personne" in sql

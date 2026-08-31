@@ -43,6 +43,13 @@ class McdAutoLayout:
             if relation.entity_id in coordinates
             and relation.association_id in coordinates
         ]
+        edges.extend(
+            (inheritance.parent_entity_id, child_id)
+            for inheritance in model.inheritances.values()
+            for child_id in inheritance.child_entity_ids
+            if inheritance.parent_entity_id in coordinates
+            and child_id in coordinates
+        )
 
         for iteration in range(self.ITERATIONS):
             forces = {node.id: [0.0, 0.0] for node in nodes}
@@ -194,4 +201,3 @@ class McdAutoLayout:
         for node in nodes:
             coordinates[node.id][0] += shift_x
             coordinates[node.id][1] += shift_y
-

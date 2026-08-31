@@ -12,13 +12,39 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 - résolution des chevauchements tenant compte de la taille des objets ;
 - logo MERISOR et icône de bureau installée avec le paquet Debian ;
 - captures d'écran de l'éditeur MCD, du MLD, du SQL et de l'import IA ;
-- licence MIT.
+- licence MIT ;
+- types logiques configurables sur les attributs MCD : `INTEGER`, `BIGINT`,
+  `DECIMAL`, `FLOAT`, `BOOLEAN`, `VARCHAR`, `TEXT`, `DATE`, `TIME`, `DATETIME`
+  et `TIMESTAMP` ;
+- réglage de la longueur `VARCHAR` et de la précision/échelle `DECIMAL` dans le
+  panneau de propriétés ;
+- propagation des types explicites du JSON au MLD puis aux trois dialectes SQL.
+- associations réflexives avec rôles distincts, affichage parallèle et FK
+  auto-référencées dans le MLD ;
+- associations ternaires et de degré supérieur matérialisées en tables avec PK
+  et FK composées ;
+- héritages/spécialisations ISA, connecteur graphique et stratégies
+  `PARENT_ONLY`, `CHILDREN_ONLY` et `JOINED` ;
+- persistance JSON rétrocompatible des rôles de relation et des héritages.
+- génération OpenRouter non bloquante dans un `QThread`, avec indicateur de
+  progression et verrouillage temporaire des contrôles concernés.
+- import et reverse-engineering de DDL PostgreSQL/SQLite vers un MLD fidèle puis
+  un MCD heuristique, avec aperçu et confirmation avant remplacement ;
+- reconnaissance des tables de jointure, relations 1:N, réflexives et
+  spécialisations ISA jointes depuis les contraintes SQL ;
+- import des PK/FK composées, contraintes UNIQUE/CHECK et index explicites.
+- export visuel du canvas MCD ou MLD actif en PNG haute résolution, SVG
+  vectoriel et PDF A4 paysage ;
+- cadrage automatique du contenu exporté et masquage temporaire de la
+  sélection, sans modifier le diagramme.
 
 ### Modifié
 
 - README entièrement restructuré pour les utilisateurs débutants et les
   contributeurs, avec guide d'installation, prise en main, architecture,
-  format JSON, sécurité, limites et documentation des transformations.
+  format JSON, sécurité, limites et documentation des transformations ;
+- le mode de typage automatique préserve les anciens comportements
+  `INTEGER` pour les identifiants et `VARCHAR(100)` pour les autres attributs.
 
 ## [0.5.0] - 2026-08-30
 

@@ -5,7 +5,7 @@ from PySide6.QtCore import QPointF
 import pytest
 
 from merisor.application import MLDGenerationBlocked
-from merisor.domain import Cardinality, Position
+from merisor.domain import Cardinality, MLDDataType, MLDDataTypeName, Position
 from merisor.ui.canvas import DiagramScene
 from merisor.application import DiagramController
 from merisor.ui.main_window import MainWindow
@@ -116,6 +116,29 @@ def test_association_transformation_change_marks_derived_mld_stale(qapp) -> None
 
     assert controller.mld_is_stale
     controller.undo_stack.undo()
+    assert not controller.mld_is_stale
+
+
+def test_attribute_type_change_marks_mld_stale_and_is_undoable(qapp) -> None:  # type: ignore[no-untyped-def]
+    controller = DiagramController(DiagramScene())
+    build_valid_controller(controller)
+    controller.generate_mld()
+    pilot = next(
+        entity for entity in controller.model.entities.values() if entity.name == "PILOTE"
+    )
+    name_attribute = next(
+        attribute for attribute in pilot.attributes if attribute.name == "nom"
+    )
+
+    controller.set_attribute_data_type(
+        pilot.id,
+        name_attribute.id,
+        MLDDataType(MLDDataTypeName.TEXT),
+    )
+
+    assert controller.mld_is_stale
+    controller.undo_stack.undo()
+    assert name_attribute.data_type is None
     assert not controller.mld_is_stale
 
 

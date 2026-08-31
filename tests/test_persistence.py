@@ -6,6 +6,9 @@ from merisor.domain import (
     Cardinality,
     DiagramModel,
     Entity,
+    InheritanceStrategy,
+    MLDDataType,
+    MLDDataTypeName,
     MaterializationStrategy,
     Position,
 )
@@ -45,6 +48,7 @@ def test_save_writes_versioned_json(tmp_path) -> None:
             "entity_id": entity_id,
             "association_id": association_id,
             "cardinality": {"minimum": "1", "maximum": "N"},
+            "role": "",
         }
     ]
 
@@ -54,6 +58,7 @@ def test_round_trip_preserves_positions_and_relations(tmp_path) -> None:
     association = model.associations[association_id]
     association.is_historized = True
     association.materialization_strategy = MaterializationStrategy.FORCE_TABLE
+    model.relations[relation_id].role = "participant"
     path = tmp_path / "modele.json"
     repository = JsonDiagramRepository()
 
@@ -79,6 +84,61 @@ def test_round_trip_preserves_positions_and_relations(tmp_path) -> None:
     assert loaded.relations[relation_id].entity_id == entity_id
     assert loaded.relations[relation_id].association_id == association_id
     assert loaded.relations[relation_id].cardinality == Cardinality("1", "N")
+    assert loaded.relations[relation_id].role == "participant"
+
+
+def test_round_trip_preserves_explicit_attribute_types(tmp_path) -> None:
+    model = DiagramModel()
+    entity = model.create_entity("FACTURE", Position())
+    identifier = model.create_attribute(
+        entity.id,
+        "id_facture",
+        identifier=True,
+        data_type=MLDDataType(MLDDataTypeName.BIGINT),
+    )
+    amount = model.create_attribute(
+        entity.id,
+        "montant",
+        data_type=MLDDataType(
+            MLDDataTypeName.DECIMAL,
+            precision=12,
+            scale=2,
+        ),
+    )
+    label = model.create_attribute(
+        entity.id,
+        "libelle",
+        data_type=MLDDataType.varchar(180),
+    )
+    path = tmp_path / "types.json"
+
+    repository = JsonDiagramRepository()
+    repository.save(model, path)
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    loaded = repository.load(path)
+
+    raw_attributes = saved["entities"][0]["attributes"]
+    assert raw_attributes[0]["data_type"] == {"name": "BIGINT"}
+    assert raw_attributes[1]["data_type"] == {
+        "name": "DECIMAL",
+        "precision": 12,
+        "scale": 2,
+    }
+    assert raw_attributes[2]["data_type"] == {
+        "name": "VARCHAR",
+        "length": 180,
+    }
+    assert loaded.attribute(entity.id, identifier.id).data_type == MLDDataType(
+        MLDDataTypeName.BIGINT
+    )
+    assert loaded.attribute(entity.id, amount.id).data_type == MLDDataType(
+        MLDDataTypeName.DECIMAL,
+        precision=12,
+        scale=2,
+    )
+    assert loaded.attribute(entity.id, label.id).data_type == MLDDataType.varchar(
+        180
+    )
 
 
 def test_loader_ignores_unknown_fields_for_forward_enrichment() -> None:
@@ -92,6 +152,38 @@ def test_loader_ignores_unknown_fields_for_forward_enrichment() -> None:
 
     assert len(loaded.entities) == 1
     assert len(loaded.relations) == 1
+
+
+def test_round_trip_preserves_entity_inheritance(tmp_path) -> None:
+    model = DiagramModel()
+    parent = model.create_entity("PERSONNE", Position())
+    child = model.create_entity("CLIENT", Position(100, 200))
+    inheritance = model.create_inheritance(
+        parent.id,
+        (child.id,),
+        InheritanceStrategy.PARENT_ONLY,
+    )
+    path = tmp_path / "inheritance.json"
+
+    repository = JsonDiagramRepository()
+    repository.save(model, path)
+    loaded = repository.load(path)
+
+    restored = loaded.inheritances[inheritance.id]
+    assert restored.parent_entity_id == parent.id
+    assert restored.child_entity_ids == (child.id,)
+    assert restored.strategy is InheritanceStrategy.PARENT_ONLY
+
+
+def test_older_v02_without_inheritances_remains_compatible() -> None:
+    data = {
+        "format_version": 2,
+        "entities": [],
+        "associations": [],
+        "relations": [],
+    }
+
+    assert JsonDiagramRepository().from_dict(data).inheritances == {}
 
 
 def test_loader_rejects_orphan_relation() -> None:
@@ -155,6 +247,7 @@ def test_loads_and_migrates_v01_without_losing_structure() -> None:
     )
     assert model.relations["r1"].entity_id == "e1"
     assert model.relations["r1"].cardinality is None
+    assert model.relations["r1"].role == ""
 
 
 def test_migrated_v01_is_saved_as_v02(tmp_path) -> None:
@@ -182,6 +275,7 @@ def test_migrated_v01_is_saved_as_v02(tmp_path) -> None:
     assert saved["associations"][0]["is_historized"] is False
     assert saved["associations"][0]["materialization_strategy"] == "AUTO"
     assert saved["relations"][0]["cardinality"] is None
+    assert saved["relations"][0]["role"] == ""
 
 
 def test_loads_older_v02_association_with_transformation_defaults() -> None:
@@ -203,6 +297,58 @@ def test_loads_older_v02_association_with_transformation_defaults() -> None:
 
     assert association.is_historized is False
     assert association.materialization_strategy is MaterializationStrategy.AUTO
+
+
+def test_loads_older_v02_attribute_in_automatic_type_mode() -> None:
+    legacy_v02 = {
+        "format_version": 2,
+        "entities": [
+            {
+                "id": "e1",
+                "name": "PILOTE",
+                "position": {"x": 0, "y": 0},
+                "attributes": [
+                    {"id": "a1", "name": "id_pilote", "identifier": True}
+                ],
+            }
+        ],
+        "associations": [],
+        "relations": [],
+    }
+
+    attribute = JsonDiagramRepository().from_dict(legacy_v02).attribute("e1", "a1")
+
+    assert attribute.data_type is None
+
+
+def test_loader_rejects_invalid_attribute_type() -> None:
+    data = {
+        "format_version": 2,
+        "entities": [
+            {
+                "id": "e1",
+                "name": "FACTURE",
+                "position": {"x": 0, "y": 0},
+                "attributes": [
+                    {
+                        "id": "a1",
+                        "name": "montant",
+                        "identifier": False,
+                        "data_type": {
+                            "name": "DECIMAL",
+                            "precision": 2,
+                            "scale": 3,
+                        },
+                    }
+                ],
+            }
+        ],
+        "associations": [],
+        "relations": [],
+    }
+
+    with pytest.raises(PersistenceError, match="Type d'attribut invalide"):
+        JsonDiagramRepository().from_dict(data)
 
 
 def test_loader_rejects_unknown_materialization_strategy() -> None:

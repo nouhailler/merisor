@@ -11,8 +11,10 @@ from merisor.domain.model import (
     Cardinality,
     CardinalityMaximum,
     Entity,
+    InheritanceStrategy,
     MaterializationStrategy,
     MCDModel,
+    Relation,
 )
 
 
@@ -61,6 +63,7 @@ def validate_mcd(model: MCDModel) -> ValidationReport:
     for association in model.associations.values():
         _validate_association(model, association, issues)
     _validate_relations(model, issues)
+    _validate_inheritances(model, issues)
     _validate_duplicate_node_names(model, issues)
     return ValidationReport(tuple(issues))
 
@@ -103,26 +106,26 @@ def _validate_association(
                 association.id,
             )
         )
-    entity_ids = {
-        relation.entity_id
-        for relation in model.relations.values()
-        if relation.association_id == association.id
-        and relation.entity_id in model.entities
-    }
-    if len(entity_ids) < 2:
-        issues.append(
-            ValidationIssue(
-                ValidationSeverity.ERROR,
-                "association.too_few_entities",
-                f"Association {label} : elle doit être reliée à au moins deux entités.",
-                association.id,
-            )
-        )
     association_relations = [
         relation
         for relation in model.relations.values()
         if relation.association_id == association.id
     ]
+    valid_relations = [
+        relation.entity_id
+        for relation in association_relations
+        if relation.entity_id in model.entities
+    ]
+    if len(valid_relations) < 2:
+        issues.append(
+            ValidationIssue(
+                ValidationSeverity.ERROR,
+                "association.too_few_entities",
+                f"Association {label} : elle doit posséder au moins deux "
+                "branches vers des entités.",
+                association.id,
+            )
+        )
     if (
         association.is_historized
         and association.materialization_strategy is MaterializationStrategy.FORCE_FK
@@ -134,6 +137,19 @@ def _validate_association(
                 f"Association {label} : elle est déclarée historisée mais sa "
                 "stratégie de matérialisation est FORCE_FK. Utilisez AUTO ou "
                 "FORCE_TABLE.",
+                association.id,
+            )
+        )
+    elif (
+        association.materialization_strategy is MaterializationStrategy.FORCE_FK
+        and len(association_relations) >= 3
+    ):
+        issues.append(
+            ValidationIssue(
+                ValidationSeverity.ERROR,
+                "association.force_fk_nary",
+                f"Association {label} : la stratégie FORCE_FK est incompatible "
+                "avec une association n-aire.",
                 association.id,
             )
         )
@@ -195,7 +211,7 @@ def _validate_attributes(
 
 
 def _validate_relations(model: MCDModel, issues: list[ValidationIssue]) -> None:
-    seen_pairs: set[tuple[str, str]] = set()
+    grouped_relations: dict[tuple[str, str], list[Relation]] = {}
     for relation in model.relations.values():
         entity = model.entities.get(relation.entity_id)
         association = model.associations.get(relation.association_id)
@@ -228,16 +244,109 @@ def _validate_relations(model: MCDModel, issues: list[ValidationIssue]) -> None:
                 )
             )
         pair = (relation.entity_id, relation.association_id)
-        if pair in seen_pairs:
+        grouped_relations.setdefault(pair, []).append(relation)
+
+    for relations in grouped_relations.values():
+        if len(relations) < 2:
+            continue
+        seen_roles: set[str] = set()
+        for relation in relations:
+            clean_role = relation.role.strip()
+            if not clean_role:
+                issues.append(
+                    ValidationIssue(
+                        ValidationSeverity.ERROR,
+                        "relation.role_missing",
+                        "Chaque branche d'une association réflexive doit avoir "
+                        "un rôle distinct.",
+                        relation.id,
+                    )
+                )
+                continue
+            key = clean_role.casefold()
+            if key in seen_roles:
+                issues.append(
+                    ValidationIssue(
+                        ValidationSeverity.ERROR,
+                        "relation.role_duplicate",
+                        f'Le rôle réflexif « {clean_role} » est utilisé plusieurs fois.',
+                        relation.id,
+                    )
+                )
+            seen_roles.add(key)
+
+
+def _validate_inheritances(
+    model: MCDModel, issues: list[ValidationIssue]
+) -> None:
+    child_owner: dict[str, str] = {}
+    adjacency: dict[str, set[str]] = {entity_id: set() for entity_id in model.entities}
+    for inheritance in model.inheritances.values():
+        if inheritance.parent_entity_id not in model.entities:
             issues.append(
                 ValidationIssue(
                     ValidationSeverity.ERROR,
-                    "relation.duplicate",
-                    "Une entité est reliée plusieurs fois à la même association.",
-                    relation.id,
+                    "inheritance.parent_missing",
+                    "Un héritage référence une entité mère absente.",
+                    inheritance.id,
                 )
             )
-        seen_pairs.add(pair)
+            continue
+        if not isinstance(inheritance.strategy, InheritanceStrategy):
+            issues.append(
+                ValidationIssue(
+                    ValidationSeverity.ERROR,
+                    "inheritance.strategy_invalid",
+                    "Un héritage possède une stratégie MLD invalide.",
+                    inheritance.id,
+                )
+            )
+        for child_id in inheritance.child_entity_ids:
+            if child_id not in model.entities:
+                issues.append(
+                    ValidationIssue(
+                        ValidationSeverity.ERROR,
+                        "inheritance.child_missing",
+                        "Un héritage référence une entité fille absente.",
+                        inheritance.id,
+                    )
+                )
+                continue
+            adjacency[inheritance.parent_entity_id].add(child_id)
+            if child_id in child_owner:
+                issues.append(
+                    ValidationIssue(
+                        ValidationSeverity.ERROR,
+                        "inheritance.multiple_parent",
+                        f"L'entité {model.entities[child_id].name} possède plusieurs "
+                        "entités mères ; l'héritage multiple n'est pas supporté.",
+                        inheritance.id,
+                    )
+                )
+            child_owner[child_id] = inheritance.id
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(entity_id: str) -> bool:
+        if entity_id in visiting:
+            return True
+        if entity_id in visited:
+            return False
+        visiting.add(entity_id)
+        cyclic = any(visit(child_id) for child_id in adjacency[entity_id])
+        visiting.remove(entity_id)
+        visited.add(entity_id)
+        return cyclic
+
+    if any(visit(entity_id) for entity_id in sorted(adjacency)):
+        issues.append(
+            ValidationIssue(
+                ValidationSeverity.ERROR,
+                "inheritance.cycle",
+                "Le graphe d'héritage contient un cycle.",
+            )
+        )
 
 
 def _validate_duplicate_node_names(

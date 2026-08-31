@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+from threading import Event
+import time
 
 import pytest
 from PySide6.QtCore import QPointF
+from PySide6.QtWidgets import QDialog
 
 from merisor.application import AiMcdService, AiMcdValidationError, OpenRouterClient
 from merisor.application.controller import DiagramController
-from merisor.ui.ai_mcd_dialog import MCDPreviewDialog
+from merisor.ui.ai_mcd_dialog import AiMcdDialog, MCDPreviewDialog
 from merisor.ui.canvas import DiagramScene
 
 
@@ -118,3 +121,56 @@ def test_controller_import_replaces_only_on_explicit_call_and_marks_dirty(qapp) 
     assert original.id not in controller.model.entities
     assert set(controller.model.entities) == {"pilot", "team"}
     assert controller.is_dirty
+
+
+def test_ai_generation_runs_outside_the_ui_thread(qapp, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    started = Event()
+    release = Event()
+
+    class FakeStore:
+        @staticmethod
+        def get() -> str:
+            return "sk-or-test"
+
+        @staticmethod
+        def get_model() -> str:
+            return "free/model:free"
+
+        @staticmethod
+        def is_enabled() -> bool:
+            return True
+
+    def slow_generate(*_args) -> str:  # type: ignore[no-untyped-def]
+        started.set()
+        release.wait(timeout=2)
+        return json.dumps(valid_mcd_data())
+
+    monkeypatch.setattr(MCDPreviewDialog, "exec", lambda _self: QDialog.DialogCode.Rejected)
+    dialog = AiMcdDialog()
+    dialog.store = FakeStore()  # type: ignore[assignment]
+    monkeypatch.setattr(dialog.service, "generate", slow_generate)
+    dialog.description_edit.setPlainText("Gérer des pilotes et des équipes")
+
+    before = time.monotonic()
+    dialog.generate()
+    elapsed = time.monotonic() - before
+
+    try:
+        assert elapsed < 0.2
+        assert started.wait(timeout=1)
+        assert dialog._generation_thread is not None
+        assert not dialog.progress_bar.isHidden()
+        assert dialog.description_edit.isReadOnly()
+    finally:
+        release.set()
+
+    deadline = time.monotonic() + 2
+    while dialog._generation_thread is not None and time.monotonic() < deadline:
+        qapp.processEvents()
+        time.sleep(0.01)
+
+    assert dialog._generation_thread is None
+    assert dialog.progress_bar.isHidden()
+    assert not dialog.description_edit.isReadOnly()
+    assert dialog.generate_button.isEnabled()
+    dialog.close()

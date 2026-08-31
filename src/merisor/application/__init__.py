@@ -1,6 +1,11 @@
 """Logique applicative et coordination modèle–interface."""
 
 from merisor.application.controller import DiagramController, MLDGenerationBlocked
+from merisor.application.ddl_importer import (
+    DDLImportError,
+    DDLImportResult,
+    SQLDDLImporter,
+)
 from merisor.application.ai_mcd_service import (
     AiMcdCandidate,
     AiMcdService,
@@ -38,6 +43,9 @@ from merisor.application.sql_generator import (
 
 __all__ = [
     "DiagramController",
+    "DDLImportError",
+    "DDLImportResult",
+    "SQLDDLImporter",
     "AiMcdCandidate",
     "AiMcdService",
     "AiMcdValidationError",

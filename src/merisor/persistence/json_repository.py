@@ -16,6 +16,10 @@ from merisor.domain import (
     MCDModel,
     MaterializationStrategy,
     Entity,
+    Inheritance,
+    InheritanceStrategy,
+    MLDDataType,
+    MLDError,
     Position,
     Relation,
 )
@@ -38,6 +42,7 @@ class JsonDiagramRepository:
                 "id": attribute.id,
                 "name": attribute.name,
                 "identifier": attribute.identifier,
+                "data_type": self._data_type_data(attribute.data_type),
             }
 
         def node_data(node: Entity | Association) -> dict[str, Any]:
@@ -88,9 +93,21 @@ class JsonDiagramRepository:
                     "entity_id": relation.entity_id,
                     "association_id": relation.association_id,
                     "cardinality": cardinality_data(relation.cardinality),
+                    "role": relation.role,
                 }
                 for relation in sorted(
                     model.relations.values(), key=lambda item: item.id
+                )
+            ],
+            "inheritances": [
+                {
+                    "id": inheritance.id,
+                    "parent_entity_id": inheritance.parent_entity_id,
+                    "child_entity_ids": list(inheritance.child_entity_ids),
+                    "strategy": inheritance.strategy.value,
+                }
+                for inheritance in sorted(
+                    model.inheritances.values(), key=lambda item: item.id
                 )
             ],
         }
@@ -139,8 +156,10 @@ class JsonDiagramRepository:
                         entity_id=self._required_id(item, "entity_id"),
                         association_id=self._required_id(item, "association_id"),
                         cardinality=None,
+                        role=self._optional_text(item, "role"),
                     )
                 )
+            self._load_inheritances(model, data)
         except DiagramError as error:
             raise PersistenceError(f"Diagramme V0.1 incohérent : {error}") from error
         return model
@@ -178,11 +197,44 @@ class JsonDiagramRepository:
                         entity_id=self._required_id(item, "entity_id"),
                         association_id=self._required_id(item, "association_id"),
                         cardinality=self._cardinality(item),
+                        role=self._optional_text(item, "role"),
                     )
                 )
+            self._load_inheritances(model, data)
         except DiagramError as error:
             raise PersistenceError(f"Diagramme V0.2 incohérent : {error}") from error
         return model
+
+    def _load_inheritances(
+        self, model: MCDModel, data: dict[str, Any]
+    ) -> None:
+        raw_inheritances = data.get("inheritances", [])
+        if not isinstance(raw_inheritances, list):
+            raise PersistenceError("Le champ 'inheritances' doit être une liste.")
+        for raw in raw_inheritances:
+            item = self._required_object(raw, "héritage")
+            raw_children = self._required_list(item, "child_entity_ids")
+            children = tuple(
+                self._required_id({"value": child_id}, "value")
+                for child_id in raw_children
+            )
+            try:
+                strategy = InheritanceStrategy(
+                    item.get("strategy", InheritanceStrategy.JOINED.value)
+                )
+            except (TypeError, ValueError) as error:
+                raise PersistenceError(
+                    "Le champ 'strategy' d'un héritage doit valoir PARENT_ONLY, "
+                    "CHILDREN_ONLY ou JOINED."
+                ) from error
+            model.add_inheritance(
+                Inheritance(
+                    id=self._required_id(item, "id"),
+                    parent_entity_id=self._required_id(item, "parent_entity_id"),
+                    child_entity_ids=children,
+                    strategy=strategy,
+                )
+            )
 
     def save(self, model: MCDModel, path: str | Path) -> None:
         target = Path(path)
@@ -240,9 +292,38 @@ class JsonDiagramRepository:
                     id=self._required_id(item, "id"),
                     name=self._required_text(item, "name"),
                     identifier=identifier,
+                    data_type=self._attribute_data_type(item),
                 )
             )
         return attributes
+
+    @staticmethod
+    def _data_type_data(data_type: MLDDataType | None) -> dict[str, Any] | None:
+        if data_type is None:
+            return None
+        data: dict[str, Any] = {"name": data_type.name.value}
+        if data_type.length is not None:
+            data["length"] = data_type.length
+        if data_type.precision is not None:
+            data["precision"] = data_type.precision
+        if data_type.scale is not None:
+            data["scale"] = data_type.scale
+        return data
+
+    def _attribute_data_type(self, data: dict[str, Any]) -> MLDDataType | None:
+        raw = data.get("data_type")
+        if raw is None:
+            return None
+        item = self._required_object(raw, "type d'attribut")
+        try:
+            return MLDDataType(
+                self._required_text(item, "name"),
+                length=self._optional_integer(item, "length"),
+                precision=self._optional_integer(item, "precision"),
+                scale=self._optional_integer(item, "scale"),
+            )
+        except MLDError as error:
+            raise PersistenceError(f"Type d'attribut invalide : {error}") from error
 
     def _cardinality(self, data: dict[str, Any]) -> Cardinality | None:
         raw = data.get("cardinality")
@@ -300,6 +381,24 @@ class JsonDiagramRepository:
         value = data.get(key)
         if not isinstance(value, str):
             raise PersistenceError(f"Le champ '{key}' doit être une chaîne.")
+        return value
+
+    @staticmethod
+    def _optional_text(data: dict[str, Any], key: str) -> str:
+        value = data.get(key, "")
+        if not isinstance(value, str):
+            raise PersistenceError(f"Le champ '{key}' doit être une chaîne.")
+        return value.strip()
+
+    @staticmethod
+    def _optional_integer(data: dict[str, Any], key: str) -> int | None:
+        value = data.get(key)
+        if value is None:
+            return None
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise PersistenceError(
+                f"Le champ '{key}' d'un type doit être un entier."
+            )
         return value
 
     @staticmethod

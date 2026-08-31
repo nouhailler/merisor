@@ -16,10 +16,12 @@ from merisor.domain import (
     Cardinality,
     DiagramModel,
     Entity,
+    InheritanceStrategy,
     MaterializationStrategy,
+    MLDDataType,
+    MLDDataTypeName,
     MLDTableSource,
     Position,
-    Relation,
 )
 from merisor.persistence import JsonDiagramRepository
 
@@ -82,6 +84,54 @@ def test_entity_becomes_table_with_simple_primary_key() -> None:
     assert table.column("nom").nullable is None
 
 
+def test_explicit_mcd_attribute_types_are_preserved_in_the_mld() -> None:
+    model = DiagramModel()
+    entity = Entity(
+        "EVENEMENT",
+        attributes=[
+            Attribute(
+                "id_evenement",
+                identifier=True,
+                data_type=MLDDataType(MLDDataTypeName.BIGINT),
+            ),
+            Attribute(
+                "date_evenement",
+                data_type=MLDDataType(MLDDataTypeName.DATE),
+            ),
+            Attribute(
+                "prix",
+                data_type=MLDDataType(
+                    MLDDataTypeName.DECIMAL,
+                    precision=10,
+                    scale=2,
+                ),
+            ),
+            Attribute(
+                "description",
+                data_type=MLDDataType(MLDDataTypeName.TEXT),
+            ),
+        ],
+    )
+    model.add_entity(entity)
+
+    table = McdToMldTransformer().transform(model).table("EVENEMENT")
+
+    assert table.column("id_evenement").data_type == MLDDataType(
+        MLDDataTypeName.BIGINT
+    )
+    assert table.column("date_evenement").data_type == MLDDataType(
+        MLDDataTypeName.DATE
+    )
+    assert table.column("prix").data_type == MLDDataType(
+        MLDDataTypeName.DECIMAL,
+        precision=10,
+        scale=2,
+    )
+    assert table.column("description").data_type == MLDDataType(
+        MLDDataTypeName.TEXT
+    )
+
+
 def test_composite_identifier_becomes_composite_primary_key() -> None:
     model = DiagramModel()
     add_entity(
@@ -97,6 +147,64 @@ def test_composite_identifier_becomes_composite_primary_key() -> None:
         "id_course",
         "id_pilote",
     ]
+
+
+def inheritance_model(
+    strategy: InheritanceStrategy,
+) -> tuple[DiagramModel, Entity, Entity, Entity]:
+    model = DiagramModel()
+    person = add_entity(model, "PERSONNE", ("id_personne",), ("nom",))
+    client = add_entity(model, "CLIENT", ("id_client",), ("numero_client",))
+    supplier = add_entity(
+        model, "FOURNISSEUR", ("id_fournisseur",), ("raison_sociale",)
+    )
+    model.create_inheritance(person.id, (client.id, supplier.id), strategy)
+    return model, person, client, supplier
+
+
+def test_joined_inheritance_keeps_all_tables_and_adds_pk_foreign_keys() -> None:
+    model, *_ = inheritance_model(InheritanceStrategy.JOINED)
+
+    mld = McdToMldTransformer().transform(model)
+
+    assert {table.name for table in mld.tables} == {
+        "PERSONNE",
+        "CLIENT",
+        "FOURNISSEUR",
+    }
+    for child_name in ("CLIENT", "FOURNISSEUR"):
+        child = mld.table(child_name)
+        assert [column.name for column in child.primary_key_columns] == [
+            "id_personne"
+        ]
+        assert len(child.foreign_keys) == 1
+        assert child.foreign_keys[0].referenced_table_id == mld.table("PERSONNE").id
+        assert child.foreign_keys[0].column_ids == child.primary_key
+        assert child.foreign_keys[0].source_inheritance_id in model.inheritances
+
+
+def test_parent_only_inheritance_flattens_child_attributes_into_parent() -> None:
+    model, *_ = inheritance_model(InheritanceStrategy.PARENT_ONLY)
+
+    mld = McdToMldTransformer().transform(model)
+
+    assert [table.name for table in mld.tables] == ["PERSONNE"]
+    assert {column.name for column in mld.table("PERSONNE").columns} == {
+        "id_personne",
+        "nom",
+        "numero_client",
+        "raison_sociale",
+    }
+
+
+def test_children_only_inheritance_copies_parent_attributes_into_children() -> None:
+    model, *_ = inheritance_model(InheritanceStrategy.CHILDREN_ONLY)
+
+    mld = McdToMldTransformer().transform(model)
+
+    assert {table.name for table in mld.tables} == {"CLIENT", "FOURNISSEUR"}
+    assert mld.table("CLIENT").column("nom").nullable is True
+    assert mld.table("FOURNISSEUR").column("nom").nullable is True
 
 
 @pytest.mark.parametrize(
@@ -142,6 +250,21 @@ def test_many_to_many_keeps_association_attributes_in_its_table() -> None:
         "points",
         "temps",
     ]
+
+
+def test_association_attribute_type_is_preserved_when_materialized() -> None:
+    model, _alpha, _beta, association = binary_model(
+        ("0", "N"),
+        ("1", "N"),
+        association_attributes=("date_inscription",),
+    )
+    association.attributes[0].data_type = MLDDataType(MLDDataTypeName.DATE)
+
+    table = McdToMldTransformer().transform(model).table("LIER")
+
+    assert table.column("date_inscription").data_type == MLDDataType(
+        MLDDataTypeName.DATE
+    )
 
 
 @pytest.mark.parametrize(
@@ -256,39 +379,183 @@ def test_multiple_associations_are_not_merged_and_names_are_disambiguated() -> N
     )
 
 
-def test_ternary_association_is_rejected_explicitly() -> None:
+def test_ternary_association_becomes_table_with_three_foreign_keys() -> None:
     model = DiagramModel()
     entities = [
         add_entity(model, name, (f"id_{name.lower()}",))
         for name in ("A", "B", "C")
     ]
-    association = Association("TERNAIRE")
+    association = Association("TERNAIRE", attributes=[Attribute("quantite")])
     model.add_association(association)
     for entity in entities:
         model.create_relation(entity.id, association.id, Cardinality("0", "N"))
 
-    with pytest.raises(MLDTransformationError, match="3 entités"):
+    table = McdToMldTransformer().transform(model).table("TERNAIRE")
+
+    assert [column.name for column in table.primary_key_columns] == [
+        "id_a",
+        "id_b",
+        "id_c",
+    ]
+    assert len(table.foreign_keys) == 3
+    assert table.column("quantite").source_element_id == association.id
+    assert all(
+        column.nullable is False for column in table.primary_key_columns
+    )
+
+
+def test_ternary_association_uses_explicit_association_identifier() -> None:
+    model = DiagramModel()
+    entities = [
+        add_entity(model, name, (f"id_{name.lower()}",))
+        for name in ("A", "B", "C")
+    ]
+    association = Association(
+        "TERNAIRE",
+        attributes=[
+            Attribute("numero_occurrence", identifier=True),
+            Attribute("quantite"),
+        ],
+    )
+    model.add_association(association)
+    for entity in entities:
+        model.create_relation(entity.id, association.id, Cardinality("0", "N"))
+
+    table = McdToMldTransformer().transform(model).table("TERNAIRE")
+
+    assert [column.name for column in table.primary_key_columns] == [
+        "numero_occurrence"
+    ]
+    assert len(table.foreign_keys) == 3
+    assert not any(
+        column.id in table.primary_key
+        for foreign_key in table.foreign_keys
+        for column in (
+            table.column_by_id(column_id) for column_id in foreign_key.column_ids
+        )
+    )
+
+
+def test_force_fk_is_rejected_for_ternary_association() -> None:
+    model = DiagramModel()
+    entities = [
+        add_entity(model, name, (f"id_{name.lower()}",))
+        for name in ("A", "B", "C")
+    ]
+    association = Association(
+        "TERNAIRE",
+        materialization_strategy=MaterializationStrategy.FORCE_FK,
+    )
+    model.add_association(association)
+    for entity in entities:
+        model.create_relation(entity.id, association.id, Cardinality("0", "N"))
+
+    with pytest.raises(MLDTransformationError, match="FORCE_FK.*n-aire"):
         McdToMldTransformer().transform(model)
 
 
-def test_reflexive_association_is_rejected_explicitly() -> None:
+def test_reflexive_many_to_many_uses_roles_to_disambiguate_foreign_keys() -> None:
+    model = DiagramModel()
+    entity = add_entity(model, "EMPLOYE", ("id_employe",))
+    association = Association("COLLABORER")
+    model.add_association(association)
+    model.create_relation(
+        entity.id,
+        association.id,
+        Cardinality("0", "N"),
+        role="mentor",
+    )
+    model.create_relation(
+        entity.id,
+        association.id,
+        Cardinality("0", "N"),
+        role="mentoré",
+    )
+
+    table = McdToMldTransformer().transform(model).table("COLLABORER")
+
+    assert [column.name for column in table.primary_key_columns] == [
+        "id_employe_mentor",
+        "id_employe_mentoré",
+    ]
+    assert len(table.foreign_keys) == 2
+    assert len({foreign_key.id for foreign_key in table.foreign_keys}) == 2
+    assert all(
+        foreign_key.referenced_table_id
+        == McdToMldTransformer._entity_table_id(entity.id)
+        for foreign_key in table.foreign_keys
+    )
+
+
+def test_reflexive_one_to_many_creates_a_self_foreign_key() -> None:
+    model = DiagramModel()
+    entity = add_entity(model, "EMPLOYE", ("id_employe",))
+    association = Association("SUPERVISER")
+    model.add_association(association)
+    model.create_relation(
+        entity.id,
+        association.id,
+        Cardinality("0", "N"),
+        role="superviseur",
+    )
+    model.create_relation(
+        entity.id,
+        association.id,
+        Cardinality("0", "1"),
+        role="supervisé",
+    )
+
+    table = McdToMldTransformer().transform(model).table("EMPLOYE")
+
+    assert len(table.foreign_keys) == 1
+    foreign_key = table.foreign_keys[0]
+    assert foreign_key.referenced_table_id == table.id
+    assert table.column_by_id(foreign_key.column_ids[0]).name == (
+        "id_employe_superviseur"
+    )
+    assert table.column_by_id(foreign_key.column_ids[0]).nullable is True
+
+
+def test_reflexive_one_to_one_creates_a_unique_self_foreign_key() -> None:
+    model = DiagramModel()
+    entity = add_entity(model, "PERSONNE", ("id_personne",))
+    association = Association("PARRAINER")
+    model.add_association(association)
+    model.create_relation(
+        entity.id,
+        association.id,
+        Cardinality("0", "1"),
+        role="parrain",
+    )
+    model.create_relation(
+        entity.id,
+        association.id,
+        Cardinality("0", "1"),
+        role="filleul",
+    )
+
+    table = McdToMldTransformer().transform(model).table("PERSONNE")
+
+    assert len(table.foreign_keys) == 1
+    assert len(table.unique_constraints) == 1
+    foreign_key = table.foreign_keys[0]
+    assert table.unique_constraints[0].column_ids == foreign_key.column_ids
+    assert table.column_by_id(foreign_key.column_ids[0]).name in {
+        "id_personne_parrain",
+        "id_personne_filleul",
+    }
+
+
+def test_reflexive_association_requires_distinct_non_empty_roles() -> None:
     model = DiagramModel()
     entity = add_entity(model, "PERSONNE", ("id_personne",))
     association = Association("PARENTE")
     model.add_association(association)
-    first = model.create_relation(
-        entity.id, association.id, Cardinality("0", "N")
-    )
-    second = Relation(
-        entity.id,
-        association.id,
-        cardinality=Cardinality("0", "1"),
-    )
-    model.relations[second.id] = second
+    model.create_relation(entity.id, association.id, Cardinality("0", "N"))
+    model.create_relation(entity.id, association.id, Cardinality("0", "N"))
 
-    with pytest.raises(MLDTransformationError, match="réflexive"):
+    with pytest.raises(MLDTransformationError, match="rôle"):
         McdToMldTransformer().transform(model)
-    assert first.id in model.relations
 
 
 def test_one_to_one_with_attributes_is_rejected_instead_of_losing_data() -> None:

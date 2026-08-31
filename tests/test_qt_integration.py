@@ -1,8 +1,14 @@
 from PySide6.QtCore import QPointF, QSettings, Qt
 from PySide6.QtWidgets import QToolBar
 
-from merisor.application import DiagramController
-from merisor.domain import Cardinality, MaterializationStrategy, Position
+from merisor.application import DiagramController, SQLDDLImporter
+from merisor.domain import (
+    Cardinality,
+    MaterializationStrategy,
+    MLDDataType,
+    MLDDataTypeName,
+    Position,
+)
 from merisor.ui.canvas import DiagramScene
 from merisor.ui.main_window import MainWindow
 from merisor.persistence import JsonDiagramRepository
@@ -32,6 +38,42 @@ def test_relation_graphic_follows_a_moved_node(qapp) -> None:  # type: ignore[no
     assert controller.model.entities[entity.id].position == Position(0, 0)
 
 
+def test_reflexive_relations_get_roles_and_distinct_graphic_lines(qapp) -> None:  # type: ignore[no-untyped-def]
+    controller = DiagramController(DiagramScene())
+    employee = controller.create_entity("EMPLOYE", QPointF(0, 0))
+    supervise = controller.create_association("SUPERVISER", QPointF(300, 0))
+
+    assert controller.create_relation(employee.id, supervise.id)
+    assert controller.create_relation(employee.id, supervise.id)
+
+    relations = list(controller.model.relations.values())
+    assert {relation.role for relation in relations} == {"rôle_1", "rôle_2"}
+    assert (
+        controller._relation_items[relations[0].id].line()
+        != controller._relation_items[relations[1].id].line()
+    )
+    controller.set_relation_role(relations[0].id, "superviseur")
+    assert controller._relation_items[relations[0].id].role_text == "superviseur"
+    controller.undo_stack.undo()
+    assert relations[0].role in {"rôle_1", "rôle_2"}
+
+
+def test_inheritance_graphic_follows_entities_and_is_undoable(qapp) -> None:  # type: ignore[no-untyped-def]
+    controller = DiagramController(DiagramScene())
+    parent = controller.create_entity("PERSONNE", QPointF(0, 0))
+    child = controller.create_entity("CLIENT", QPointF(300, 200))
+
+    inheritance = controller.create_inheritance(parent.id, (child.id,))
+    item = controller._inheritance_items[inheritance.id]
+    original_bounds = item.boundingRect()
+    controller.command_move_node(child.id, Position(500, 350))
+
+    assert item.boundingRect() != original_bounds
+    controller.undo_stack.undo()
+    assert inheritance.id not in controller.model.inheritances
+    assert inheritance.id not in controller._inheritance_items
+
+
 def test_graphical_deletion_cascades_and_can_be_undone(qapp) -> None:  # type: ignore[no-untyped-def]
     scene = DiagramScene()
     controller = DiagramController(scene)
@@ -56,6 +98,7 @@ def test_main_window_starts_offscreen(qapp) -> None:  # type: ignore[no-untyped-
     qapp.processEvents()
 
     assert window.isVisible()
+    assert window.import_ddl_action.text() == "Importer SQL / DDL…"
     assert window.centralWidget() is window.workspace_tabs
     assert window.workspace_tabs.widget(0) is window.view
     assert window.workspace_tabs.widget(1) is window.mld_view
@@ -74,6 +117,22 @@ def test_main_window_starts_offscreen(qapp) -> None:  # type: ignore[no-untyped-
 
     window.close()
     qapp.processEvents()
+
+
+def test_controller_imports_reverse_engineered_mcd_and_current_mld(qapp) -> None:  # type: ignore[no-untyped-def]
+    result = SQLDDLImporter().import_text(
+        "CREATE TABLE pilote (id_pilote INTEGER PRIMARY KEY, nom TEXT);"
+    )
+    controller = DiagramController(DiagramScene())
+
+    controller.import_reverse_engineered_model(result.mcd, result.mld)
+
+    assert {entity.name for entity in controller.model.entities.values()} == {
+        "pilote"
+    }
+    assert controller.mld_model is result.mld
+    assert not controller.mld_is_stale
+    assert controller.is_dirty
 
 
 def test_recent_files_menu_persists_and_opens_existing_models(qapp, tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -121,6 +180,46 @@ def test_attribute_and_identifier_commands_refresh_graphics_and_undo(qapp) -> No
     assert not entity.attributes[0].identifier
     controller.undo_stack.undo()
     assert entity.attributes == []
+
+
+def test_properties_panel_edits_attribute_type_and_can_undo(qapp) -> None:  # type: ignore[no-untyped-def]
+    window = MainWindow()
+    entity = window.controller.create_entity("EVENEMENT", QPointF())
+    attribute = window.controller.add_attribute(entity.id, "montant")
+    window.controller._node_items[entity.id].setSelected(True)
+    qapp.processEvents()
+
+    panel = window.properties_panel
+    panel.attribute_tree.setCurrentItem(panel.attribute_tree.topLevelItem(0))
+    decimal_index = panel.attribute_type_combo.findData("DECIMAL")
+    panel.attribute_type_combo.setCurrentIndex(decimal_index)
+    panel.attribute_precision.setValue(12)
+    panel.attribute_scale.setValue(2)
+    panel.apply_attribute_type_button.click()
+
+    assert attribute.data_type == MLDDataType(
+        MLDDataTypeName.DECIMAL,
+        precision=12,
+        scale=2,
+    )
+    assert panel.attribute_tree.currentItem() is not None
+    assert panel.attribute_tree.currentItem().text(2) == "DECIMAL(12,2)"
+
+    window.controller.undo_stack.undo()
+    assert attribute.data_type is None
+    assert panel.attribute_tree.currentItem() is not None
+    assert panel.attribute_tree.currentItem().text(2) == "AUTO → VARCHAR(100)"
+
+    panel.attribute_type_combo.setCurrentIndex(
+        panel.attribute_type_combo.findData("VARCHAR")
+    )
+    panel.attribute_length.setValue(180)
+    panel.apply_attribute_type_button.click()
+    assert attribute.data_type == MLDDataType.varchar(180)
+
+    window.controller.undo_stack.setClean()
+    window.close()
+    qapp.processEvents()
 
 
 def test_node_rename_updates_graphics_and_can_be_undone(qapp) -> None:  # type: ignore[no-untyped-def]

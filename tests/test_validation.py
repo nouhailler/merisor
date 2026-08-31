@@ -160,3 +160,63 @@ def test_historized_force_fk_contradiction_is_blocking() -> None:
     assert "association.historized_force_fk" in {
         issue.code for issue in report.errors
     }
+
+
+def test_reflexive_association_is_valid_with_distinct_roles() -> None:
+    model = DiagramModel()
+    employee = Entity(
+        "EMPLOYE", attributes=[Attribute("id_employe", identifier=True)]
+    )
+    supervise = Association("SUPERVISER")
+    model.add_entity(employee)
+    model.add_association(supervise)
+    model.create_relation(
+        employee.id,
+        supervise.id,
+        Cardinality("0", "N"),
+        role="superviseur",
+    )
+    model.create_relation(
+        employee.id,
+        supervise.id,
+        Cardinality("0", "1"),
+        role="supervisé",
+    )
+
+    assert validate_mcd(model).is_valid
+
+
+def test_reflexive_association_requires_non_empty_unique_roles() -> None:
+    model = DiagramModel()
+    employee = Entity(
+        "EMPLOYE", attributes=[Attribute("id_employe", identifier=True)]
+    )
+    supervise = Association("SUPERVISER")
+    model.add_entity(employee)
+    model.add_association(supervise)
+    model.create_relation(employee.id, supervise.id, role="responsable")
+    model.create_relation(employee.id, supervise.id, role="RESPONSABLE")
+    model.create_relation(employee.id, supervise.id)
+
+    codes = issue_codes(model)
+
+    assert "relation.role_duplicate" in codes
+    assert "relation.role_missing" in codes
+
+
+def test_ternary_association_is_valid_and_force_fk_is_blocked() -> None:
+    model = DiagramModel()
+    association = Association("AFFECTER")
+    model.add_association(association)
+    for name in ("EMPLOYE", "PROJET", "ROLE"):
+        entity = Entity(
+            name,
+            attributes=[Attribute(f"id_{name.lower()}", identifier=True)],
+        )
+        model.add_entity(entity)
+        model.create_relation(entity.id, association.id, Cardinality("0", "N"))
+
+    assert validate_mcd(model).is_valid
+
+    association.materialization_strategy = MaterializationStrategy.FORCE_FK
+    assert "association.force_fk_nary" in issue_codes(model)

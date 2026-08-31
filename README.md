@@ -31,6 +31,10 @@ préparé par une IA via OpenRouter, avec validation et confirmation avant impor
 
 ![Fenêtre principale de MERISOR avec un MCD MotoGP et le panneau de propriétés](docs/images/mcd-editor.png)
 
+### Typage des attributs MCD
+
+![Sélection d’un type DECIMAL avec précision et échelle dans le panneau de propriétés](docs/images/attribute-types.png)
+
 <table>
   <tr>
     <td width="50%"><strong>MLD graphique et propriétés</strong></td>
@@ -75,12 +79,17 @@ flowchart LR
 - relations attachées aux objets : les lignes et cardinalités suivent les
   déplacements ;
 - attributs d’entités et d’associations ;
+- types logiques explicites ou automatiques, avec longueur de `VARCHAR` et
+  précision/échelle de `DECIMAL` ;
 - identifiants simples ou composés, repérés par `#` ;
 - cardinalités `(0,1)`, `(0,N)`, `(1,1)` et `(1,N)` ;
 - associations historisées ;
 - stratégies `AUTO`, `FORCE_TABLE` et `FORCE_FK` ;
+- associations réflexives avec rôles de branche, et associations n-aires ;
+- spécialisations ISA avec stratégies mère seule, filles seules ou jointes ;
 - annuler/rétablir pour les principales opérations ;
 - zoom, déplacement du canvas et disposition automatique du graphe ;
+- export visuel du MCD ou du MLD actif en PNG haute résolution, SVG ou PDF ;
 - sauvegarde JSON versionnée, chargement V1/V2 et fichiers récents.
 
 ### ✅ Validation MERISE
@@ -89,7 +98,7 @@ flowchart LR
 - entités sans identifiant ;
 - attributs dupliqués ;
 - associations reliées à moins de deux entités ;
-- relations incomplètes, cardinalités invalides et liaisons dupliquées ;
+- relations incomplètes, cardinalités invalides et rôles réflexifs dupliqués ;
 - incompatibilités entre historisation, `FORCE_FK` et N:N ;
 - rapport distinguant erreurs bloquantes et avertissements.
 
@@ -114,6 +123,18 @@ flowchart LR
 - aperçu, copie et export en `.sql` ;
 - aucune connexion et aucune exécution automatique.
 
+### 🔄 Reverse-engineering SQL / DDL
+
+- import de fichiers `.sql` et `.ddl` PostgreSQL ou SQLite ;
+- reconstruction fidèle du MLD : tables, colonnes, types, PK simples ou
+  composées, FK, UNIQUE, CHECK et index ;
+- reconnaissance des tables de jointure comme associations MCD ;
+- reconstruction des relations 1:N et des FK réflexives ;
+- détection d'une spécialisation ISA `JOINED` lorsqu'une PK est également une
+  FK vers une table mère ;
+- aperçu du MLD, du MCD heuristique et du DDL source avant confirmation ;
+- aucun changement du document courant sans validation explicite.
+
 ### ✨ Génération assistée par IA
 
 - clé OpenRouter stockée hors des projets ;
@@ -122,6 +143,8 @@ flowchart LR
 - génération d’un JSON MERISOR V2 depuis une description métier ;
 - aperçu, JSON éditable et double validation avant import ;
 - aucune modification du document courant sans confirmation ;
+- appel de génération exécuté dans un thread Qt avec progression indéterminée,
+  afin de conserver une interface réactive ;
 - organisation automatique du graphe après import.
 
 ## 🚀 Installation
@@ -186,11 +209,18 @@ Qt. Le paquet Debian dépend pour sa part des modules PySide6 de Debian.
 1. Cliquez sur **Entité**, puis dans le canvas.
 2. Sélectionnez l’entité pour ajouter ses attributs dans **Propriétés**.
 3. Cochez au moins un attribut comme identifiant.
-4. Créez une **Association**.
-5. Choisissez **Relation**, puis cliquez sur une entité et une association.
-6. Sélectionnez la relation pour régler sa cardinalité.
-7. Déplacez les objets librement ou utilisez
+4. Sélectionnez un attribut pour choisir son type, ou conservez
+   **Automatique**.
+5. Créez une **Association**.
+6. Choisissez **Relation**, puis cliquez sur une entité et une association.
+7. Sélectionnez la relation pour régler sa cardinalité.
+8. Déplacez les objets librement ou utilisez
    **Modèle → Réorganiser automatiquement le MCD**.
+
+Pour une réflexive, reliez deux fois la même entité à l'association : MERISOR
+crée des rôles distincts, modifiables dans les propriétés. Pour une
+spécialisation, utilisez **Modèle → Ajouter une spécialisation ISA…**, puis
+choisissez la mère, les filles et la stratégie MLD.
 
 La touche `Suppr` enlève la sélection. Supprimer une entité ou une association
 supprime aussi ses relations afin d’éviter les références orphelines.
@@ -222,7 +252,20 @@ doit être régénéré. Déplacer seulement un objet ne le rend pas obsolète.
 Lorsque le MLD est valide et à jour, cliquez sur **Générer SQL**, choisissez le
 SGBD, vérifiez l’aperçu puis utilisez **Copier** ou **Enregistrer sous…**.
 
-### 5. Générer un MCD avec OpenRouter
+### 5. Exporter un diagramme
+
+Activez l’onglet **MCD** ou **MLD**, puis choisissez **Fichier → Exporter le
+diagramme…** (`Ctrl+Shift+E`). MERISOR cadre automatiquement tout le graphe,
+indépendamment du zoom affiché, et propose :
+
+- **PNG** haute résolution pour une insertion immédiate dans un document ;
+- **SVG** vectoriel pour conserver une netteté parfaite à toute taille ;
+- **PDF** vectoriel en page A4 paysage pour les rapports et l’impression.
+
+Les marques de sélection ne figurent pas dans le fichier exporté et le modèle
+courant n’est pas modifié.
+
+### 6. Générer un MCD avec OpenRouter
 
 1. Ouvrez **Paramètres → Paramètres OpenRouter…**.
 2. Saisissez votre clé, testez-la puis actualisez les modèles gratuits.
@@ -237,6 +280,20 @@ SGBD, vérifiez l’aperçu puis utilisez **Copier** ou **Enregistrer sous…**.
 > les identifiants, les cardinalités et les besoins d’historisation. Les
 > modèles gratuits OpenRouter peuvent être soumis à des quotas.
 
+### 7. Importer un schéma SQL existant
+
+1. Ouvrez **Fichier → Importer SQL / DDL…** (`Ctrl+Shift+O`).
+2. Choisissez un fichier PostgreSQL ou SQLite.
+3. Contrôlez le **MLD détecté**, puis le **MCD reconstruit** dans l'aperçu.
+4. Confirmez avec **Importer le MCD et le MLD**.
+5. Vérifiez les cardinalités conceptuelles, puis enregistrez le projet JSON.
+
+> [!WARNING]
+> Un DDL ne contient pas toutes les intentions d'un MCD : les cardinalités
+> minimales, l'historisation et certaines associations métier ne peuvent pas
+> toujours être déduites. MERISOR conserve fidèlement le MLD et signale que le
+> MCD obtenu doit être relu.
+
 ## ⌨️ Raccourcis utiles
 
 | Action | Raccourci |
@@ -249,6 +306,8 @@ SGBD, vérifiez l’aperçu puis utilisez **Copier** ou **Enregistrer sous…**.
 | Réorganiser le MCD | `Ctrl+Shift+L` |
 | Générer le MLD | `Ctrl+Shift+M` |
 | Générer SQL | `Ctrl+Alt+S` |
+| Exporter le MCD ou MLD actif | `Ctrl+Shift+E` |
+| Importer SQL / DDL | `Ctrl+Shift+O` |
 | Zoom MLD | `Ctrl` + molette ou boutons `+` / `−` |
 
 ## 🧪 Exemple MotoGP
@@ -301,7 +360,8 @@ objets sans dépendre de leurs noms ni de leur position graphique.
         {
           "id": "attr_pilote_id",
           "name": "id_pilote",
-          "identifier": true
+          "identifier": true,
+          "data_type": {"name": "BIGINT"}
         }
       ]
     }
@@ -321,9 +381,11 @@ objets sans dépendre de leurs noms ni de leur position graphique.
       "id": "relation_pilote_participer",
       "entity_id": "entity_pilote",
       "association_id": "association_participer",
+      "role": "",
       "cardinality": {"minimum": "0", "maximum": "N"}
     }
-  ]
+  ],
+  "inheritances": []
 }
 ```
 
@@ -333,6 +395,10 @@ Compatibilité :
 - une cardinalité absente reste inconnue et doit être complétée ;
 - les propriétés absentes d’une ancienne association valent
   `is_historized = false` et `materialization_strategy = AUTO` ;
+- un attribut sans `data_type`, ou avec `data_type: null`, reste en mode
+  automatique ;
+- une relation ancienne sans `role` reçoit une chaîne vide et un fichier sans
+  `inheritances` reste parfaitement lisible ;
 - le fichier source n’est réécrit que lors d’un enregistrement explicite ;
 - le MLD n’est pas sauvegardé : il est toujours recalculé depuis le MCD.
 
@@ -369,6 +435,25 @@ Compatibilité :
 - lorsque les deux côtés sont équivalents, un tri stable par nom puis par
   identifiant choisit la table porteuse.
 
+### Associations n-aires et réflexives
+
+- une association de degré trois ou plus devient une table indépendante ;
+- ses FK forment la PK composée, sauf identifiant explicite d'association ;
+- `FORCE_FK` est refusé pour une association n-aire ;
+- dans une réflexive, les rôles produisent des noms de FK distincts
+  (`id_employe_superviseur`, `id_employe_supervise`) ;
+- les règles N:N, 1:N et 1:1 restent ensuite identiques aux associations
+  binaires ordinaires.
+
+### Héritages ISA
+
+- `JOINED` conserve mère et filles ; la PK de chaque fille est également une FK
+  vers la mère ;
+- `PARENT_ONLY` conserve uniquement la mère et y aplatit les attributs propres
+  des filles ;
+- `CHILDREN_ONLY` supprime la table mère et copie ses attributs propres dans
+  chaque table fille.
+
 ### Historisation et matérialisation
 
 ```text
@@ -404,6 +489,7 @@ src/merisor/
 │   ├── commands.py              annuler/rétablir
 │   ├── mcd_layout.py            disposition automatique
 │   ├── mld_transformer.py       transformation MCD → MLD
+│   ├── ddl_importer.py           reverse-engineering DDL → MLD → MCD
 │   ├── sql_generator.py         validation et dialectes SQL
 │   ├── ai_mcd_service.py        schéma/prompt/validation IA
 │   ├── openrouter_client.py     appels HTTP OpenRouter
@@ -445,9 +531,15 @@ n’influencent ni le MLD ni le SQL.
 Types logiques disponibles : `INTEGER`, `BIGINT`, `DECIMAL`, `FLOAT`,
 `BOOLEAN`, `VARCHAR(n)`, `TEXT`, `DATE`, `TIME`, `DATETIME` et `TIMESTAMP`.
 
-Les attributs MCD n’ayant pas encore de type configurable, MERISOR utilise par
-compatibilité `INTEGER` pour un identifiant conceptuel et `VARCHAR(100)` pour
-un attribut ordinaire. Une FK reprend le type de la colonne référencée.
+Dans le panneau **Propriétés**, sélectionnez un attribut puis son type. Les
+champs de longueur apparaissent pour `VARCHAR(n)` et ceux de précision/échelle
+pour `DECIMAL(p,s)`. Le type est enregistré dans le JSON, propagé au MLD puis
+traduit par le dialecte SQL choisi. Une FK reprend exactement le type de la
+colonne référencée.
+
+Le mode **Automatique** conserve la compatibilité historique : `INTEGER` pour
+un attribut identifiant et `VARCHAR(100)` pour un attribut ordinaire. Ainsi, les
+anciens fichiers produisent le même MLD et le même SQL qu’avant cette évolution.
 
 ## 🔐 Confidentialité et sécurité
 
@@ -501,15 +593,19 @@ l’envoi d’un tag `v*`.
 
 ## ⚠️ Limites connues
 
-- les associations ternaires ou de degré supérieur sont détectées mais leur
-  transformation MLD n’est pas prise en charge ;
-- les associations réflexives ne sont pas encore supportées ;
+- l'héritage multiple et les cycles ISA sont refusés ;
+- pour éviter une transformation ambiguë, les stratégies ISA aplaties refusent
+  encore une association directement portée par une table supprimée ; utilisez
+  `JOINED` dans ce cas ;
 - une association 1:1 porteuse d’attributs doit être matérialisée avec
   `FORCE_TABLE` pour éviter une perte d’information ;
-- les types d’attributs ne sont pas encore éditables dans le MCD ;
 - la génération IA dépend de la disponibilité et des quotas d’OpenRouter ;
-- l’appel OpenRouter est actuellement synchrone ;
-- MERISOR ne gère ni connexion, ni migration, ni reverse engineering de base.
+- MERISOR ne gère ni connexion, ni migration automatique, ni introspection
+  directe d'une base en fonctionnement ;
+- le reverse-engineering importe un fichier DDL, mais ne se connecte pas à une
+  base existante et n'analyse pas les vues, triggers, procédures ou extensions
+  propriétaires ;
+- les types SQL non portables ou inconnus sont refusés avec un message explicite.
 
 ## 🤝 Contribuer et signaler un problème
 

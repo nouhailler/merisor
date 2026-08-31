@@ -150,6 +150,7 @@ class MLDForeignKey:
     referenced_column_ids: tuple[str, ...]
     source_association_id: str
     source_relation_id: str | None = None
+    source_inheritance_id: str | None = None
     source_cardinality: tuple[str, str] | None = None
     name: str | None = None
     on_delete: MLDReferentialAction | str | None = None
@@ -167,6 +168,8 @@ class MLDForeignKey:
             )
         if self.source_relation_id is not None:
             _require_identifier(self.source_relation_id, "la relation source")
+        if self.source_inheritance_id is not None:
+            _require_identifier(self.source_inheritance_id, "l'héritage source")
         if self.source_cardinality is not None and (
             len(self.source_cardinality) != 2
             or self.source_cardinality[0] not in {"0", "1"}

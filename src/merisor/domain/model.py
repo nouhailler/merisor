@@ -13,6 +13,8 @@ import math
 from typing import Iterable
 from uuid import uuid4
 
+from merisor.domain.mld import MLDDataType
+
 
 class DiagramError(ValueError):
     """Erreur structurelle empêchant de maintenir un modèle cohérent."""
@@ -62,6 +64,14 @@ class MaterializationStrategy(str, Enum):
     FORCE_FK = "FORCE_FK"
 
 
+class InheritanceStrategy(str, Enum):
+    """Stratégie de projection d'une spécialisation ISA dans le MLD."""
+
+    PARENT_ONLY = "PARENT_ONLY"
+    CHILDREN_ONLY = "CHILDREN_ONLY"
+    JOINED = "JOINED"
+
+
 @dataclass(frozen=True, slots=True)
 class Cardinality:
     """Cardinalité MERISE portée par l'extrémité entité d'une relation."""
@@ -98,12 +108,19 @@ class Attribute:
     name: str
     identifier: bool = False
     id: str = field(default_factory=_new_id)
+    data_type: MLDDataType | None = None
 
     def __post_init__(self) -> None:
         _validate_internal_id(self.id, "l'attribut")
         _validate_name_type(self.name, "l'attribut")
         if not isinstance(self.identifier, bool):
             raise DiagramError("Le statut d'identifiant doit être booléen.")
+        if self.data_type is not None and not isinstance(
+            self.data_type, MLDDataType
+        ):
+            raise DiagramError(
+                "Le type explicite d'un attribut doit être un type logique MLD."
+            )
 
 
 @dataclass(slots=True)
@@ -179,6 +196,7 @@ class Relation:
     cardinality: Cardinality | None = field(
         default_factory=lambda: DEFAULT_CARDINALITY
     )
+    role: str = ""
 
     def __post_init__(self) -> None:
         _validate_internal_id(self.id, "la relation")
@@ -188,6 +206,36 @@ class Relation:
             self.cardinality, Cardinality
         ):
             raise DiagramError("La cardinalité d'une relation est invalide.")
+        if not isinstance(self.role, str):
+            raise DiagramError("Le rôle d'une relation doit être une chaîne.")
+        self.role = self.role.strip()
+
+
+@dataclass(slots=True)
+class Inheritance:
+    """Spécialisation ISA d'une entité mère vers une ou plusieurs filles."""
+
+    parent_entity_id: str
+    child_entity_ids: tuple[str, ...]
+    strategy: InheritanceStrategy | str = InheritanceStrategy.JOINED
+    id: str = field(default_factory=_new_id)
+
+    def __post_init__(self) -> None:
+        _validate_internal_id(self.id, "l'héritage")
+        _validate_internal_id(self.parent_entity_id, "l'entité mère")
+        if not isinstance(self.child_entity_ids, tuple):
+            self.child_entity_ids = tuple(self.child_entity_ids)
+        if not self.child_entity_ids:
+            raise DiagramError("Un héritage doit posséder au moins une entité fille.")
+        for child_id in self.child_entity_ids:
+            _validate_internal_id(child_id, "l'entité fille")
+        try:
+            self.strategy = InheritanceStrategy(self.strategy)
+        except (TypeError, ValueError) as error:
+            raise DiagramError(
+                "Stratégie d'héritage invalide : PARENT_ONLY, CHILDREN_ONLY "
+                "ou JOINED attendu."
+            ) from error
 
 
 Node = Entity | Association
@@ -200,6 +248,7 @@ class MCDModel:
         self.entities: dict[str, Entity] = {}
         self.associations: dict[str, Association] = {}
         self.relations: dict[str, Relation] = {}
+        self.inheritances: dict[str, Inheritance] = {}
 
     def _all_ids(self) -> set[str]:
         attribute_ids = {
@@ -211,6 +260,7 @@ class MCDModel:
             set(self.entities)
             | set(self.associations)
             | set(self.relations)
+            | set(self.inheritances)
             | attribute_ids
         )
 
@@ -257,21 +307,45 @@ class MCDModel:
         entity_id: str,
         association_id: str,
         cardinality: Cardinality | None = DEFAULT_CARDINALITY,
+        role: str = "",
     ) -> Relation:
         relation = Relation(
             entity_id=entity_id,
             association_id=association_id,
             cardinality=cardinality,
+            role=role,
         )
         self.add_relation(relation)
         return relation
 
     def create_attribute(
-        self, owner_id: str, name: str, identifier: bool = False
+        self,
+        owner_id: str,
+        name: str,
+        identifier: bool = False,
+        data_type: MLDDataType | None = None,
     ) -> Attribute:
-        attribute = Attribute(name=name, identifier=identifier)
+        attribute = Attribute(
+            name=name,
+            identifier=identifier,
+            data_type=data_type,
+        )
         self.add_attribute(owner_id, attribute)
         return attribute
+
+    def create_inheritance(
+        self,
+        parent_entity_id: str,
+        child_entity_ids: Iterable[str],
+        strategy: InheritanceStrategy | str = InheritanceStrategy.JOINED,
+    ) -> Inheritance:
+        inheritance = Inheritance(
+            parent_entity_id,
+            tuple(child_entity_ids),
+            strategy,
+        )
+        self.add_inheritance(inheritance)
+        return inheritance
 
     def add_entity(self, entity: Entity) -> None:
         self._ensure_available_ids(
@@ -291,13 +365,31 @@ class MCDModel:
             raise DiagramError(f"Entité inconnue : {relation.entity_id}")
         if relation.association_id not in self.associations:
             raise DiagramError(f"Association inconnue : {relation.association_id}")
-        if any(
-            existing.entity_id == relation.entity_id
-            and existing.association_id == relation.association_id
-            for existing in self.relations.values()
-        ):
-            raise DiagramError("Cette entité et cette association sont déjà reliées.")
         self.relations[relation.id] = relation
+
+    def add_inheritance(self, inheritance: Inheritance) -> None:
+        self._ensure_available_ids([inheritance.id])
+        if inheritance.parent_entity_id not in self.entities:
+            raise DiagramError(
+                f"Entité mère inconnue : {inheritance.parent_entity_id}"
+            )
+        if inheritance.parent_entity_id in inheritance.child_entity_ids:
+            raise DiagramError("Une entité ne peut pas hériter d'elle-même.")
+        if len(set(inheritance.child_entity_ids)) != len(
+            inheritance.child_entity_ids
+        ):
+            raise DiagramError("Un héritage contient une entité fille dupliquée.")
+        unknown = next(
+            (
+                child_id
+                for child_id in inheritance.child_entity_ids
+                if child_id not in self.entities
+            ),
+            None,
+        )
+        if unknown is not None:
+            raise DiagramError(f"Entité fille inconnue : {unknown}")
+        self.inheritances[inheritance.id] = inheritance
 
     def add_attribute(
         self, owner_id: str, attribute: Attribute, index: int | None = None
@@ -338,6 +430,18 @@ class MCDModel:
             raise DiagramError("Le statut d'identifiant doit être booléen.")
         self.attribute(owner_id, attribute_id).identifier = identifier
 
+    def set_attribute_data_type(
+        self,
+        owner_id: str,
+        attribute_id: str,
+        data_type: MLDDataType | None,
+    ) -> None:
+        if data_type is not None and not isinstance(data_type, MLDDataType):
+            raise DiagramError(
+                "Le type explicite d'un attribut doit être un type logique MLD."
+            )
+        self.attribute(owner_id, attribute_id).data_type = data_type
+
     def set_association_historized(
         self, association_id: str, is_historized: bool
     ) -> None:
@@ -375,6 +479,14 @@ class MCDModel:
         except KeyError as error:
             raise DiagramError(f"Relation inconnue : {relation_id}") from error
 
+    def set_relation_role(self, relation_id: str, role: str) -> None:
+        if not isinstance(role, str):
+            raise DiagramError("Le rôle d'une relation doit être une chaîne.")
+        try:
+            self.relations[relation_id].role = role.strip()
+        except KeyError as error:
+            raise DiagramError(f"Relation inconnue : {relation_id}") from error
+
     def move_node(self, element_id: str, position: Position) -> None:
         self.node(element_id).position = position
 
@@ -397,6 +509,12 @@ class MCDModel:
         relations = self.connected_relations(entity_id)
         for relation in relations:
             del self.relations[relation.id]
+        for inheritance_id, inheritance in list(self.inheritances.items()):
+            if (
+                inheritance.parent_entity_id == entity_id
+                or entity_id in inheritance.child_entity_ids
+            ):
+                del self.inheritances[inheritance_id]
         return self.entities.pop(entity_id), relations
 
     def remove_association(
@@ -416,13 +534,15 @@ class MCDModel:
             return self.associations[element_id]
         raise DiagramError(f"Nœud inconnu : {element_id}")
 
-    def element(self, element_id: str) -> Node | Relation:
+    def element(self, element_id: str) -> Node | Relation | Inheritance:
         if element_id in self.entities:
             return self.entities[element_id]
         if element_id in self.associations:
             return self.associations[element_id]
         if element_id in self.relations:
             return self.relations[element_id]
+        if element_id in self.inheritances:
+            return self.inheritances[element_id]
         raise DiagramError(f"Élément inconnu : {element_id}")
 
 

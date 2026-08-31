@@ -6,6 +6,9 @@ from merisor.domain import (
     Cardinality,
     DiagramError,
     DiagramModel,
+    MLDDataType,
+    MLDDataTypeName,
+    InheritanceStrategy,
     MaterializationStrategy,
     Position,
 )
@@ -96,7 +99,7 @@ def test_create_relation_between_entity_and_association() -> None:
     assert model.relations[relation.id] is relation
 
 
-def test_relation_rejects_unknown_endpoint_and_duplicate() -> None:
+def test_relation_rejects_unknown_endpoint_and_accepts_reflexive_roles() -> None:
     model = DiagramModel()
     entity = model.create_entity("PILOTE", Position())
     association = model.create_association("PARTICIPER", Position())
@@ -104,9 +107,29 @@ def test_relation_rejects_unknown_endpoint_and_duplicate() -> None:
     with pytest.raises(DiagramError, match="Association inconnue"):
         model.create_relation(entity.id, "missing")
 
-    model.create_relation(entity.id, association.id)
-    with pytest.raises(DiagramError, match="déjà reliées"):
-        model.create_relation(entity.id, association.id)
+    supervisor = model.create_relation(
+        entity.id, association.id, role=" superviseur "
+    )
+    supervised = model.create_relation(
+        entity.id, association.id, role="supervisé"
+    )
+
+    assert supervisor.role == "superviseur"
+    assert supervised.role == "supervisé"
+    assert len(model.relations) == 2
+
+
+def test_relation_role_can_be_modified() -> None:
+    model = DiagramModel()
+    entity = model.create_entity("EMPLOYE", Position())
+    association = model.create_association("SUPERVISER", Position())
+    relation = model.create_relation(entity.id, association.id)
+
+    model.set_relation_role(relation.id, " responsable ")
+
+    assert relation.role == "responsable"
+    with pytest.raises(DiagramError, match="rôle"):
+        model.set_relation_role(relation.id, 42)  # type: ignore[arg-type]
 
 
 def test_removing_node_also_removes_attached_relations() -> None:
@@ -154,6 +177,46 @@ def test_rename_entity_and_manage_attributes() -> None:
     assert removed is second
     assert index == 1
     assert entity.attributes == [first]
+
+
+def test_attribute_type_can_be_explicit_or_automatic() -> None:
+    model = DiagramModel()
+    entity = model.create_entity("EVENEMENT", Position())
+    attribute = model.create_attribute(entity.id, "date_evenement")
+
+    assert attribute.data_type is None
+
+    explicit_type = MLDDataType(MLDDataTypeName.DATE)
+    model.set_attribute_data_type(entity.id, attribute.id, explicit_type)
+    assert attribute.data_type == explicit_type
+
+    model.set_attribute_data_type(entity.id, attribute.id, None)
+    assert attribute.data_type is None
+
+
+def test_attribute_rejects_an_invalid_explicit_type() -> None:
+    with pytest.raises(DiagramError, match="type explicite"):
+        Attribute("date_evenement", data_type="DATE")  # type: ignore[arg-type]
+
+
+def test_entity_inheritance_is_a_first_class_model_object() -> None:
+    model = DiagramModel()
+    person = model.create_entity("PERSONNE", Position())
+    client = model.create_entity("CLIENT", Position())
+    supplier = model.create_entity("FOURNISSEUR", Position())
+
+    inheritance = model.create_inheritance(
+        person.id,
+        (client.id, supplier.id),
+        InheritanceStrategy.JOINED,
+    )
+
+    assert model.inheritances[inheritance.id] is inheritance
+    assert inheritance.child_entity_ids == (client.id, supplier.id)
+    assert inheritance.strategy is InheritanceStrategy.JOINED
+
+    model.remove_entity(client.id)
+    assert inheritance.id not in model.inheritances
 
 
 def test_entity_supports_composite_identifier() -> None:

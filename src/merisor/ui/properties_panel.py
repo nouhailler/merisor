@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QStackedWidget,
     QTreeWidget,
     QTreeWidgetItem,
@@ -25,8 +26,11 @@ from PySide6.QtWidgets import (
 from merisor.application import DiagramController
 from merisor.domain import (
     Association,
+    Attribute,
     Cardinality,
     Entity,
+    MLDDataType,
+    MLDDataTypeName,
     MaterializationStrategy,
     Relation,
 )
@@ -135,15 +139,59 @@ class PropertiesPanel(QWidget):
         layout.addWidget(attribute_title)
 
         self.attribute_tree = QTreeWidget()
-        self.attribute_tree.setHeaderLabels(["Identifiant", "Nom"])
+        self.attribute_tree.setHeaderLabels(["Identifiant", "Nom", "Type"])
         self.attribute_tree.setRootIsDecorated(False)
         self.attribute_tree.setAlternatingRowColors(True)
         self.attribute_tree.setSelectionMode(
             QTreeWidget.SelectionMode.SingleSelection
         )
         self.attribute_tree.header().setStretchLastSection(True)
-        self.attribute_tree.setColumnWidth(0, 88)
+        self.attribute_tree.setColumnWidth(0, 78)
+        self.attribute_tree.setColumnWidth(1, 105)
         layout.addWidget(self.attribute_tree, 1)
+
+        self.attribute_type_group = QGroupBox("Type de l'attribut sélectionné")
+        attribute_type_form = QFormLayout(self.attribute_type_group)
+        self.attribute_type_combo = QComboBox()
+        self.attribute_type_combo.addItem(
+            "Automatique",
+            None,
+        )
+        for data_type_name in MLDDataTypeName:
+            label = data_type_name.value
+            if data_type_name is MLDDataTypeName.VARCHAR:
+                label = "VARCHAR(n)"
+            elif data_type_name is MLDDataTypeName.DECIMAL:
+                label = "DECIMAL(p,s)"
+            self.attribute_type_combo.addItem(label, data_type_name.value)
+        self.attribute_type_combo.setToolTip(
+            "Automatique conserve le comportement historique : INTEGER pour "
+            "un identifiant, VARCHAR(100) pour un autre attribut."
+        )
+        self.attribute_length = QSpinBox()
+        self.attribute_length.setRange(1, 65535)
+        self.attribute_length.setValue(100)
+        self.attribute_precision = QSpinBox()
+        self.attribute_precision.setRange(1, 65)
+        self.attribute_precision.setValue(10)
+        self.attribute_scale = QSpinBox()
+        self.attribute_scale.setRange(0, 10)
+        self.attribute_scale.setValue(2)
+        self.attribute_length_label = QLabel("Longueur")
+        self.attribute_precision_label = QLabel("Précision")
+        self.attribute_scale_label = QLabel("Échelle")
+        attribute_type_form.addRow("Type", self.attribute_type_combo)
+        attribute_type_form.addRow(
+            self.attribute_length_label, self.attribute_length
+        )
+        attribute_type_form.addRow(
+            self.attribute_precision_label, self.attribute_precision
+        )
+        attribute_type_form.addRow(self.attribute_scale_label, self.attribute_scale)
+        self.apply_attribute_type_button = QPushButton("Appliquer le type")
+        attribute_type_form.addRow(self.apply_attribute_type_button)
+        self.attribute_type_group.setEnabled(False)
+        layout.addWidget(self.attribute_type_group)
 
         buttons = QHBoxLayout()
         self.add_attribute_button = QPushButton("+ Ajouter")
@@ -162,7 +210,18 @@ class PropertiesPanel(QWidget):
         self.attribute_tree.itemDoubleClicked.connect(
             lambda _item, _column: self._rename_attribute()
         )
-        self.attribute_tree.itemSelectionChanged.connect(self._update_buttons)
+        self.attribute_tree.itemSelectionChanged.connect(
+            self._attribute_selection_changed
+        )
+        self.attribute_type_combo.currentIndexChanged.connect(
+            self._attribute_type_selection_changed
+        )
+        self.attribute_precision.valueChanged.connect(
+            self._decimal_precision_changed
+        )
+        self.apply_attribute_type_button.clicked.connect(
+            self._apply_attribute_type
+        )
         self.historized_checkbox.toggled.connect(self._historization_changed)
         self.materialization_combo.currentIndexChanged.connect(
             self._materialization_changed
@@ -179,6 +238,13 @@ class PropertiesPanel(QWidget):
         )
         self.relation_endpoints = QLabel("—")
         self.relation_endpoints.setWordWrap(True)
+        self.relation_role = QLineEdit()
+        self.relation_role.setPlaceholderText("ex. superviseur, supervisé")
+        self.relation_role.setToolTip(
+            "Le rôle distingue les participations d'une même entité à une "
+            "association réflexive. Il est obligatoire lorsque l'entité est "
+            "reliée plusieurs fois à cette association."
+        )
         self.minimum_combo = QComboBox()
         self.minimum_combo.addItems(["0", "1"])
         self.maximum_combo = QComboBox()
@@ -186,10 +252,12 @@ class PropertiesPanel(QWidget):
         layout.addRow("Type", QLabel("Relation"))
         layout.addRow("ID interne", self.relation_identifier)
         layout.addRow("Extrémités", self.relation_endpoints)
+        layout.addRow("Rôle", self.relation_role)
         layout.addRow("Cardinalité minimale", self.minimum_combo)
         layout.addRow("Cardinalité maximale", self.maximum_combo)
         self.minimum_combo.currentIndexChanged.connect(self._cardinality_changed)
         self.maximum_combo.currentIndexChanged.connect(self._cardinality_changed)
+        self.relation_role.editingFinished.connect(self._relation_role_changed)
         return page
 
     def display(self, elements: list[Entity | Association | Relation]) -> None:
@@ -216,6 +284,7 @@ class PropertiesPanel(QWidget):
             self._update_buttons()
 
     def _display_node(self, node: Entity | Association) -> None:
+        selected_attribute_id = self._selected_attribute_id()
         self._current_node_id = node.id
         self.stack.setCurrentWidget(self.node_page)
         is_entity = isinstance(node, Entity)
@@ -238,6 +307,13 @@ class PropertiesPanel(QWidget):
             item = QTreeWidgetItem()
             item.setData(0, Qt.ItemDataRole.UserRole, attribute.id)
             item.setText(1, attribute.name)
+            item.setText(2, self._attribute_type_label(attribute))
+            item.setToolTip(
+                2,
+                "Type automatique selon le statut d'identifiant."
+                if attribute.data_type is None
+                else f"Type logique explicite : {attribute.data_type.label}",
+            )
             item.setFlags(
                 item.flags()
                 | Qt.ItemFlag.ItemIsSelectable
@@ -250,6 +326,9 @@ class PropertiesPanel(QWidget):
                 else Qt.CheckState.Unchecked,
             )
             self.attribute_tree.addTopLevelItem(item)
+            if attribute.id == selected_attribute_id:
+                self.attribute_tree.setCurrentItem(item)
+        self._load_selected_attribute_type()
 
     def _display_relation(self, relation: Relation) -> None:
         self._current_relation_id = relation.id
@@ -262,6 +341,7 @@ class PropertiesPanel(QWidget):
             association.name if association is not None else relation.association_id
         )
         self.relation_endpoints.setText(f"{entity_name} ↔ {association_name}")
+        self.relation_role.setText(relation.role)
         if relation.cardinality is None:
             self.minimum_combo.setCurrentIndex(-1)
             self.maximum_combo.setCurrentIndex(-1)
@@ -293,6 +373,86 @@ class PropertiesPanel(QWidget):
             return None
         value = item.data(0, Qt.ItemDataRole.UserRole)
         return value if isinstance(value, str) else None
+
+    @staticmethod
+    def _attribute_type_label(attribute: Attribute) -> str:
+        if attribute.data_type is not None:
+            return attribute.data_type.label
+        automatic = "INTEGER" if attribute.identifier else "VARCHAR(100)"
+        return f"AUTO → {automatic}"
+
+    def _attribute_selection_changed(self) -> None:
+        self._load_selected_attribute_type()
+        self._update_buttons()
+
+    def _load_selected_attribute_type(self) -> None:
+        attribute_id = self._selected_attribute_id()
+        if self._current_node_id is None or attribute_id is None:
+            self.attribute_type_group.setEnabled(False)
+            self.attribute_type_combo.setCurrentIndex(0)
+            self._attribute_type_selection_changed(0)
+            return
+        try:
+            attribute = self._controller.model.attribute(
+                self._current_node_id, attribute_id
+            )
+        except ValueError:
+            self.attribute_type_group.setEnabled(False)
+            return
+        self.attribute_type_group.setEnabled(True)
+        data_type = attribute.data_type
+        value = None if data_type is None else data_type.name.value
+        index = self.attribute_type_combo.findData(value)
+        self.attribute_type_combo.setCurrentIndex(max(0, index))
+        if data_type is not None:
+            if data_type.length is not None:
+                self.attribute_length.setValue(data_type.length)
+            if data_type.precision is not None:
+                self.attribute_precision.setValue(data_type.precision)
+            if data_type.scale is not None:
+                self.attribute_scale.setValue(data_type.scale)
+        self._attribute_type_selection_changed(
+            self.attribute_type_combo.currentIndex()
+        )
+
+    def _attribute_type_selection_changed(self, _index: int) -> None:
+        value = self.attribute_type_combo.currentData()
+        is_varchar = value == MLDDataTypeName.VARCHAR.value
+        is_decimal = value == MLDDataTypeName.DECIMAL.value
+        self.attribute_length_label.setVisible(is_varchar)
+        self.attribute_length.setVisible(is_varchar)
+        self.attribute_precision_label.setVisible(is_decimal)
+        self.attribute_precision.setVisible(is_decimal)
+        self.attribute_scale_label.setVisible(is_decimal)
+        self.attribute_scale.setVisible(is_decimal)
+
+    def _decimal_precision_changed(self, precision: int) -> None:
+        self.attribute_scale.setMaximum(precision)
+
+    def _apply_attribute_type(self) -> None:
+        if self._current_node_id is None:
+            return
+        attribute_id = self._selected_attribute_id()
+        if attribute_id is None:
+            return
+        value = self.attribute_type_combo.currentData()
+        if value is None:
+            data_type = None
+        else:
+            name = MLDDataTypeName(value)
+            if name is MLDDataTypeName.VARCHAR:
+                data_type = MLDDataType.varchar(self.attribute_length.value())
+            elif name is MLDDataTypeName.DECIMAL:
+                data_type = MLDDataType(
+                    name,
+                    precision=self.attribute_precision.value(),
+                    scale=self.attribute_scale.value(),
+                )
+            else:
+                data_type = MLDDataType(name)
+        self._controller.set_attribute_data_type(
+            self._current_node_id, attribute_id, data_type
+        )
 
     def _rename_attribute(self) -> None:
         if self._current_node_id is None:
@@ -353,6 +513,13 @@ class PropertiesPanel(QWidget):
             self._current_relation_id, cardinality
         )
 
+    def _relation_role_changed(self) -> None:
+        if self._updating or self._current_relation_id is None:
+            return
+        self._controller.set_relation_role(
+            self._current_relation_id, self.relation_role.text()
+        )
+
     def _historization_changed(self, checked: bool) -> None:
         if self._updating or self._current_node_id is None:
             return
@@ -384,3 +551,5 @@ class PropertiesPanel(QWidget):
         has_attribute = self._selected_attribute_id() is not None
         self.rename_attribute_button.setEnabled(has_attribute)
         self.remove_attribute_button.setEnabled(has_attribute)
+        self.attribute_type_group.setEnabled(has_attribute)
+        self.apply_attribute_type_button.setEnabled(has_attribute)

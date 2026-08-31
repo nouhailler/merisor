@@ -349,6 +349,18 @@ class CardinalityLabelItem(QGraphicsSimpleTextItem):
         super().paint(painter, option, widget)
 
 
+class RelationRoleLabelItem(CardinalityLabelItem):
+    """Rôle sémantique d'une branche, notamment pour une réflexive."""
+
+    def __init__(self, parent: QGraphicsItem) -> None:
+        super().__init__(parent)
+        font = QFont(self.font())
+        font.setBold(False)
+        font.setItalic(True)
+        self.setFont(font)
+        self.setBrush(QBrush(RELATION_COLOR))
+
+
 class RelationGraphicsItem(QGraphicsLineItem):
     """Ligne attachée à deux objets et portant une cardinalité graphique."""
 
@@ -358,6 +370,7 @@ class RelationGraphicsItem(QGraphicsLineItem):
         entity_item: EntityGraphicsItem,
         association_item: AssociationGraphicsItem,
         cardinality_text: str,
+        role_text: str = "",
     ) -> None:
         super().__init__()
         self.element_id = element_id
@@ -365,6 +378,11 @@ class RelationGraphicsItem(QGraphicsLineItem):
         self.association_item = association_item
         self.cardinality_label = CardinalityLabelItem(self)
         self.cardinality_label.setText(cardinality_text)
+        self.role_label = RelationRoleLabelItem(self)
+        self.role_label.setText(role_text)
+        self.role_label.setVisible(bool(role_text))
+        self._parallel_index = 0
+        self._parallel_count = 1
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setZValue(0)
         self.update_geometry()
@@ -375,17 +393,44 @@ class RelationGraphicsItem(QGraphicsLineItem):
 
     def set_cardinality(self, text: str) -> None:
         self.cardinality_label.setText(text)
-        self._position_cardinality()
+        self._position_labels()
+
+    @property
+    def role_text(self) -> str:
+        return self.role_label.text()
+
+    def set_role(self, text: str) -> None:
+        self.role_label.setText(text)
+        self.role_label.setVisible(bool(text))
+        self._position_labels()
+
+    def set_parallel(self, index: int, count: int) -> None:
+        self._parallel_index = max(0, index)
+        self._parallel_count = max(1, count)
+        self.update_geometry()
 
     def update_geometry(self) -> None:
         entity_center = self.entity_item.scenePos()
         association_center = self.association_item.scenePos()
         start = self.entity_item.connection_point_towards(association_center)
         end = self.association_item.connection_point_towards(entity_center)
+        base_line = QLineF(start, end)
+        length = base_line.length()
+        if length > 0 and self._parallel_count > 1:
+            offset = (
+                self._parallel_index - (self._parallel_count - 1) / 2
+            ) * 22.0
+            normal = QPointF(
+                -base_line.dy() / length,
+                base_line.dx() / length,
+            )
+            displacement = normal * offset
+            start += displacement
+            end += displacement
         self.setLine(QLineF(start, end))
-        self._position_cardinality()
+        self._position_labels()
 
-    def _position_cardinality(self) -> None:
+    def _position_labels(self) -> None:
         line = self.line()
         length = line.length()
         if length <= 0:
@@ -397,6 +442,13 @@ class RelationGraphicsItem(QGraphicsLineItem):
         perpendicular = QPointF(-uy * 14.0, ux * 14.0)
         label_rect = self.cardinality_label.boundingRect()
         self.cardinality_label.setPos(anchor + perpendicular - label_rect.center())
+        role_distance = min(48.0, length * 0.34)
+        role_anchor = line.p2() - QPointF(ux * role_distance, uy * role_distance)
+        role_perpendicular = QPointF(uy * 14.0, -ux * 14.0)
+        role_rect = self.role_label.boundingRect()
+        self.role_label.setPos(
+            role_anchor + role_perpendicular - role_rect.center()
+        )
 
     def shape(self) -> QPainterPath:
         path = QPainterPath()
@@ -421,3 +473,87 @@ class RelationGraphicsItem(QGraphicsLineItem):
         )
         painter.drawLine(self.line())
 
+
+class InheritanceGraphicsItem(QGraphicsItem):
+    """Connecteur ISA non métier reliant une mère à ses spécialisations."""
+
+    def __init__(
+        self,
+        element_id: str,
+        parent_item: EntityGraphicsItem,
+        child_items: list[EntityGraphicsItem],
+    ) -> None:
+        super().__init__()
+        self.element_id = element_id
+        self.parent_item = parent_item
+        self.child_items = child_items
+        self._path = QPainterPath()
+        self._label_position = QPointF()
+        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self.setZValue(-1)
+        self.update_geometry()
+
+    def update_geometry(self) -> None:
+        self.prepareGeometryChange()
+        parent_center = self.parent_item.scenePos()
+        child_centers = [item.scenePos() for item in self.child_items]
+        if not child_centers:
+            self._path = QPainterPath()
+            return
+        junction = QPointF(
+            sum(point.x() for point in child_centers) / len(child_centers),
+            sum(point.y() for point in child_centers) / len(child_centers),
+        )
+        junction = (parent_center + junction) / 2
+        path = QPainterPath()
+        parent_point = self.parent_item.connection_point_towards(junction)
+        path.moveTo(parent_point)
+        path.lineTo(junction)
+        for child_item, child_center in zip(
+            self.child_items, child_centers, strict=True
+        ):
+            child_point = child_item.connection_point_towards(junction)
+            path.moveTo(junction)
+            path.lineTo(child_point)
+        self._path = path
+        self._label_position = junction
+        self.update()
+
+    def boundingRect(self) -> QRectF:
+        return self._path.boundingRect().adjusted(-28, -20, 28, 20)
+
+    def shape(self) -> QPainterPath:
+        stroker = QPainterPathStroker()
+        stroker.setWidth(12)
+        return stroker.createStroke(self._path)
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionGraphicsItem,
+        widget: QWidget | None = None,
+    ) -> None:
+        del option, widget
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(RELATION_COLOR, 2.0))
+        painter.drawPath(self._path)
+        triangle = QPolygonF(
+            [
+                self._label_position + QPointF(0, -13),
+                self._label_position + QPointF(15, 12),
+                self._label_position + QPointF(-15, 12),
+            ]
+        )
+        painter.setBrush(QBrush(QColor("#e8eef7")))
+        painter.drawPolygon(triangle)
+        painter.setPen(DEFAULT_BORDER)
+        painter.drawText(
+            QRectF(
+                self._label_position.x() - 18,
+                self._label_position.y() - 9,
+                36,
+                18,
+            ),
+            Qt.AlignmentFlag.AlignCenter,
+            "ISA",
+        )

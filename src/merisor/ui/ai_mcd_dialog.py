@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
 from PySide6.QtWidgets import (
-    QApplication,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QTabWidget,
     QTreeWidget,
@@ -25,6 +25,40 @@ from merisor.application.ai_mcd_service import (
 )
 from merisor.application.openrouter_client import OpenRouterClient, OpenRouterError
 from merisor.application.openrouter_settings import OpenRouterKeyStore
+
+
+class _AiGenerationWorker(QObject):
+    """Exécute le seul appel réseau sans accéder à un widget Qt."""
+
+    succeeded = Signal(str)
+    failed = Signal(str)
+
+    def __init__(
+        self,
+        service: AiMcdService,
+        api_key: str,
+        model_id: str,
+        description: str,
+    ) -> None:
+        super().__init__()
+        self._service = service
+        self._api_key = api_key
+        self._model_id = model_id
+        self._description = description
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            client = OpenRouterClient(self._api_key, timeout=60)
+            result = self._service.generate(
+                client, self._model_id, self._description
+            )
+        except (OpenRouterError, AiMcdValidationError) as error:
+            self.failed.emit(str(error))
+        except Exception as error:  # filet de sécurité du thread réseau
+            self.failed.emit(f"Erreur inattendue pendant la génération : {error}")
+        else:
+            self.succeeded.emit(result)
 
 
 class MCDPreviewDialog(QDialog):
@@ -159,6 +193,10 @@ class AiMcdDialog(QDialog):
         self.store = OpenRouterKeyStore()
         self.service = AiMcdService()
         self.imported_candidate: AiMcdCandidate | None = None
+        self._generation_thread: QThread | None = None
+        self._generation_worker: _AiGenerationWorker | None = None
+        self._generated_json: str | None = None
+        self._generation_error: str | None = None
 
         layout = QVBoxLayout(self)
         model_id = self.store.get_model()
@@ -191,13 +229,28 @@ class AiMcdDialog(QDialog):
         example.setWordWrap(True)
         layout.addWidget(example)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        self.generate_button = buttons.addButton(
+        self.progress_label = QLabel(
+            "OpenRouter prépare le MCD… L'interface reste disponible."
+        )
+        self.progress_label.setStyleSheet("color: #315d8a; font-weight: bold;")
+        self.progress_label.setVisible(False)
+        layout.addWidget(self.progress_label)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setVisible(False)
+        layout.addWidget(self.progress_bar)
+
+        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        self.close_button = self.buttons.button(
+            QDialogButtonBox.StandardButton.Close
+        )
+        self.generate_button = self.buttons.addButton(
             "Générer le MCD", QDialogButtonBox.ButtonRole.ActionRole
         )
-        buttons.rejected.connect(self.reject)
+        self.buttons.rejected.connect(self.reject)
         self.generate_button.clicked.connect(self.generate)
-        layout.addWidget(buttons)
+        layout.addWidget(self.buttons)
 
         enabled = self.store.is_enabled() and bool(self.store.get()) and bool(model_id)
         self.generate_button.setEnabled(enabled)
@@ -207,28 +260,86 @@ class AiMcdDialog(QDialog):
             )
 
     def generate(self) -> None:
+        if self._generation_thread is not None:
+            return
         description = self.description_edit.toPlainText().strip()
         if not description:
             QMessageBox.warning(
                 self, "Description requise", "Décrivez d'abord l'application."
             )
             return
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        self._generated_json = None
+        self._generation_error = None
+        self.progress_label.setVisible(True)
+        self.progress_bar.setVisible(True)
         self.generate_button.setEnabled(False)
-        try:
-            client = OpenRouterClient(self.store.get(), timeout=60)
-            raw_json = self.service.generate(
-                client, self.store.get_model(), description
-            )
-        except (OpenRouterError, AiMcdValidationError) as error:
-            QMessageBox.critical(self, "Génération impossible", str(error))
+        self.description_edit.setReadOnly(True)
+        if self.close_button is not None:
+            self.close_button.setEnabled(False)
+
+        thread = QThread(self)
+        worker = _AiGenerationWorker(
+            self.service,
+            self.store.get(),
+            self.store.get_model(),
+            description,
+        )
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.succeeded.connect(self._generation_succeeded)
+        worker.failed.connect(self._generation_failed)
+        worker.succeeded.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        worker.succeeded.connect(worker.deleteLater)
+        worker.failed.connect(worker.deleteLater)
+        thread.finished.connect(self._generation_finished)
+        thread.finished.connect(thread.deleteLater)
+        self._generation_thread = thread
+        self._generation_worker = worker
+        thread.start()
+
+    @Slot(str)
+    def _generation_succeeded(self, raw_json: str) -> None:
+        self._generated_json = raw_json
+
+    @Slot(str)
+    def _generation_failed(self, message: str) -> None:
+        self._generation_error = message
+
+    @Slot()
+    def _generation_finished(self) -> None:
+        raw_json = self._generated_json
+        error = self._generation_error
+        self._generation_thread = None
+        self._generation_worker = None
+        self.progress_label.setVisible(False)
+        self.progress_bar.setVisible(False)
+        self.generate_button.setEnabled(True)
+        self.description_edit.setReadOnly(False)
+        if self.close_button is not None:
+            self.close_button.setEnabled(True)
+
+        if error is not None:
+            QMessageBox.critical(self, "Génération impossible", error)
             return
-        finally:
-            QApplication.restoreOverrideCursor()
-            self.generate_button.setEnabled(True)
+        if raw_json is None:
+            QMessageBox.critical(
+                self,
+                "Génération impossible",
+                "OpenRouter n'a renvoyé aucun résultat exploitable.",
+            )
+            return
 
         preview = MCDPreviewDialog(raw_json, self.service, self)
         if preview.exec() == QDialog.DialogCode.Accepted and preview.candidate:
             self.imported_candidate = preview.candidate
             self.accept()
 
+    def reject(self) -> None:
+        if self._generation_thread is not None:
+            self.progress_label.setText(
+                "La requête OpenRouter est encore en cours ; attendez sa fin "
+                "avant de fermer cette fenêtre."
+            )
+            return
+        super().reject()

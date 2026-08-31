@@ -21,13 +21,17 @@ from PySide6.QtWidgets import (
 from merisor import __version__
 from merisor.application import (
     DiagramController,
+    DDLImportError,
     MLDGenerationBlocked,
     MLDTransformationError,
+    SQLDDLImporter,
 )
-from merisor.domain import MLDModel
+from merisor.domain import InheritanceStrategy, MLDModel
 from merisor.persistence import PersistenceError
 from merisor.ui.canvas import DiagramScene, DiagramView, ToolMode
 from merisor.ui.ai_mcd_dialog import AiMcdDialog
+from merisor.ui.ddl_import_dialog import DDLImportPreviewDialog
+from merisor.ui.diagram_exporter import DiagramExportError, DiagramVisualExporter
 from merisor.ui.mld_view import MLDView
 from merisor.ui.mld_properties_panel import MLDPropertiesPanel
 from merisor.ui.openrouter_settings_dialog import OpenRouterSettingsDialog
@@ -77,10 +81,14 @@ class MainWindow(QMainWindow):
         self.new_action.setShortcut(QKeySequence.StandardKey.New)
         self.open_action = QAction("Ouvrir…", self)
         self.open_action.setShortcut(QKeySequence.StandardKey.Open)
+        self.import_ddl_action = QAction("Importer SQL / DDL…", self)
+        self.import_ddl_action.setShortcut(QKeySequence("Ctrl+Shift+O"))
         self.save_action = QAction("Enregistrer", self)
         self.save_action.setShortcut(QKeySequence.StandardKey.Save)
         self.save_as_action = QAction("Enregistrer sous…", self)
         self.save_as_action.setShortcut(QKeySequence.StandardKey.SaveAs)
+        self.export_visual_action = QAction("Exporter le diagramme…", self)
+        self.export_visual_action.setShortcut(QKeySequence("Ctrl+Shift+E"))
         self.quit_action = QAction("Quitter", self)
         self.quit_action.setShortcut(QKeySequence.StandardKey.Quit)
         self.openrouter_settings_action = QAction("Paramètres OpenRouter…", self)
@@ -110,6 +118,7 @@ class MainWindow(QMainWindow):
         self.generate_sql_action.setEnabled(False)
         self.generate_ai_mcd_action = QAction("Générer un MCD avec l'IA…", self)
         self.auto_layout_action = QAction("Réorganiser automatiquement le MCD", self)
+        self.add_inheritance_action = QAction("Ajouter une spécialisation ISA…", self)
         self.auto_layout_action.setShortcut(QKeySequence("Ctrl+Shift+L"))
 
         self.tool_group = QActionGroup(self)
@@ -131,11 +140,13 @@ class MainWindow(QMainWindow):
         file_menu = self.menuBar().addMenu("Fichier")
         file_menu.addAction(self.new_action)
         file_menu.addAction(self.open_action)
+        file_menu.addAction(self.import_ddl_action)
         self.recent_menu = file_menu.addMenu("Ouvrir récent")
         self._refresh_recent_menu()
         file_menu.addSeparator()
         file_menu.addAction(self.save_action)
         file_menu.addAction(self.save_as_action)
+        file_menu.addAction(self.export_visual_action)
         file_menu.addSeparator()
         file_menu.addAction(self.quit_action)
 
@@ -150,6 +161,7 @@ class MainWindow(QMainWindow):
 
         model_menu = self.menuBar().addMenu("Modèle")
         model_menu.addAction(self.validate_action)
+        model_menu.addAction(self.add_inheritance_action)
         model_menu.addSeparator()
         model_menu.addAction(self.generate_mld_action)
         model_menu.addAction(self.generate_sql_action)
@@ -182,8 +194,10 @@ class MainWindow(QMainWindow):
     def _connect_signals(self) -> None:
         self.new_action.triggered.connect(self.new_document)
         self.open_action.triggered.connect(self.open_document)
+        self.import_ddl_action.triggered.connect(self.import_ddl)
         self.save_action.triggered.connect(self.save_document)
         self.save_as_action.triggered.connect(self.save_document_as)
+        self.export_visual_action.triggered.connect(self.export_visual)
         self.quit_action.triggered.connect(self.close)
         self.openrouter_settings_action.triggered.connect(self.show_openrouter_settings)
         self.delete_action.triggered.connect(self.controller.delete_selected)
@@ -195,6 +209,7 @@ class MainWindow(QMainWindow):
         self.generate_sql_action.triggered.connect(self.generate_sql)
         self.generate_ai_mcd_action.triggered.connect(self.generate_ai_mcd)
         self.auto_layout_action.triggered.connect(self.auto_layout_mcd)
+        self.add_inheritance_action.triggered.connect(self.add_inheritance)
         self.tool_group.triggered.connect(self._tool_triggered)
 
         self.scene.entity_creation_requested.connect(self._request_entity)
@@ -243,6 +258,70 @@ class MainWindow(QMainWindow):
         )
         if accepted:
             self.controller.create_association(name, position)
+
+    def add_inheritance(self, _checked: bool = False) -> None:
+        entities = sorted(
+            self.controller.model.entities.values(),
+            key=lambda item: (item.name.casefold(), item.id),
+        )
+        if len(entities) < 2:
+            QMessageBox.warning(
+                self,
+                "Spécialisation ISA",
+                "Créez au moins deux entités avant d'ajouter un héritage.",
+            )
+            return
+        labels = [entity.name for entity in entities]
+        parent_name, accepted = QInputDialog.getItem(
+            self,
+            "Spécialisation ISA",
+            "Entité mère :",
+            labels,
+            0,
+            False,
+        )
+        if not accepted:
+            return
+        parent = next(entity for entity in entities if entity.name == parent_name)
+        candidates = [entity for entity in entities if entity.id != parent.id]
+        default_children = ", ".join(entity.name for entity in candidates)
+        child_names, accepted = QInputDialog.getText(
+            self,
+            "Spécialisation ISA",
+            "Entités filles (noms séparés par des virgules) :",
+            text=default_children,
+        )
+        if not accepted:
+            return
+        requested = [name.strip() for name in child_names.split(",") if name.strip()]
+        by_name = {entity.name.casefold(): entity for entity in candidates}
+        children = [by_name.get(name.casefold()) for name in requested]
+        if not children or any(child is None for child in children):
+            QMessageBox.warning(
+                self,
+                "Spécialisation ISA",
+                "Indiquez un ou plusieurs noms d'entités filles existantes.",
+            )
+            return
+        strategy_labels = {
+            "Mère + filles (PK/FK)": InheritanceStrategy.JOINED,
+            "Table mère seule": InheritanceStrategy.PARENT_ONLY,
+            "Tables filles seules": InheritanceStrategy.CHILDREN_ONLY,
+        }
+        strategy_label, accepted = QInputDialog.getItem(
+            self,
+            "Stratégie MLD de l'ISA",
+            "Export logique :",
+            list(strategy_labels),
+            0,
+            False,
+        )
+        if accepted:
+            self.controller.create_inheritance(
+                parent.id,
+                [child.id for child in children if child is not None],
+                strategy_labels[strategy_label],
+            )
 
     def _refresh_properties(self) -> None:
         self.properties_panel.display(self.controller.selected_elements())
@@ -366,6 +445,42 @@ class MainWindow(QMainWindow):
         )
         return choice == QMessageBox.StandardButton.Yes
 
+    def import_ddl(self, _checked: bool = False) -> None:
+        filename, _filter = QFileDialog.getOpenFileName(
+            self,
+            "Importer un schéma SQL / DDL",
+            str(self._dialog_directory()),
+            "Schémas SQL (*.sql *.ddl);;Tous les fichiers (*)",
+        )
+        if not filename:
+            return
+        try:
+            source_sql = Path(filename).read_text(encoding="utf-8")
+            result = SQLDDLImporter().import_text(source_sql)
+        except (OSError, UnicodeError) as error:
+            QMessageBox.critical(
+                self, "Import DDL impossible", f"Impossible de lire le fichier : {error}"
+            )
+            return
+        except DDLImportError as error:
+            QMessageBox.critical(
+                self,
+                "Import DDL impossible",
+                "Le schéma SQL ne peut pas être importé.\n\n"
+                + "\n".join(f"• {problem}" for problem in error.problems),
+            )
+            return
+        preview = DDLImportPreviewDialog(result, source_sql, self)
+        if preview.exec() != QDialog.DialogCode.Accepted:
+            return
+        if not self._maybe_save():
+            return
+        self.controller.import_reverse_engineered_model(result.mcd, result.mld)
+        self.controller.auto_layout()
+        self.workspace_tabs.setCurrentWidget(self.view)
+        self.select_action.setChecked(True)
+        self.view.fit_scene()
+
     def save_document(self, _checked: bool = False) -> bool:
         if not self._confirm_invalid_save():
             return False
@@ -402,6 +517,46 @@ class MainWindow(QMainWindow):
         except PersistenceError as error:
             QMessageBox.critical(self, "Enregistrement impossible", str(error))
             return False
+
+    def export_visual(self, _checked: bool = False) -> None:
+        exporting_mld = self.workspace_tabs.currentWidget() is self.mld_view
+        scene = self.mld_view.graphics_view.mld_scene if exporting_mld else self.scene
+        diagram_kind = "MLD" if exporting_mld else "MCD"
+        project_name = (
+            self.controller.document_path.stem
+            if self.controller.document_path is not None
+            else "diagramme"
+        )
+        default_path = self._dialog_directory() / f"{project_name}_{diagram_kind.lower()}.png"
+        filename, selected_filter = QFileDialog.getSaveFileName(
+            self,
+            f"Exporter le {diagram_kind}",
+            str(default_path),
+            "Image PNG (*.png);;Image vectorielle SVG (*.svg);;Document PDF (*.pdf)",
+        )
+        if not filename:
+            return
+        path = Path(filename)
+        if not path.suffix:
+            suffixes = {
+                "Image PNG (*.png)": ".png",
+                "Image vectorielle SVG (*.svg)": ".svg",
+                "Document PDF (*.pdf)": ".pdf",
+            }
+            path = path.with_suffix(suffixes.get(selected_filter, ".png"))
+        try:
+            DiagramVisualExporter().export(
+                scene,
+                path,
+                title=f"{diagram_kind} — {project_name}",
+            )
+        except DiagramExportError as error:
+            QMessageBox.critical(self, "Export impossible", str(error))
+            return
+        self.statusBar().showMessage(
+            f"{diagram_kind} exporté : {path}",
+            5000,
+        )
 
     def _dialog_directory(self) -> Path:
         if self.controller.document_path is not None:
