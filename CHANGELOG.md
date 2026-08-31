@@ -4,6 +4,8 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
+## [0.6.0] - 2026-08-31
+
 ### Ajouté
 
 - disposition automatique déterministe du MCD ;
@@ -41,6 +43,10 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
   `aarch64`, en complément du paquet Debian ;
 - publication automatique des fichiers `.deb` et `.AppImage` dans les releases
   GitHub, avec test de démarrage de l'AppImage.
+- métadonnées de distribution PyPI complètes et installation via
+  `pipx install merisor` ;
+- publication PyPI sans secret statique par GitHub Actions et OIDC, avec wheel,
+  archive source, contrôle `twine` et attestation de provenance.
 
 ### Modifié
 

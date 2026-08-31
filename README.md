@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/merisor/assets/merisor.png" alt="Logo MERISOR" width="190">
+  <img src="https://raw.githubusercontent.com/nouhailler/merisor/main/src/merisor/assets/merisor.png" alt="Logo MERISOR" width="190">
 </p>
 
 <h1 align="center">MERISOR</h1>
@@ -13,7 +13,8 @@
   <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
   <img alt="PySide6" src="https://img.shields.io/badge/Interface-PySide6-41CD52?logo=qt&logoColor=white">
   <img alt="Tests pytest" src="https://img.shields.io/badge/Tests-pytest-0A9EDC?logo=pytest&logoColor=white">
-  <a href="LICENSE"><img alt="Licence MIT" src="https://img.shields.io/badge/Licence-MIT-blue.svg"></a>
+  <a href="https://github.com/nouhailler/merisor/blob/main/LICENSE"><img alt="Licence MIT" src="https://img.shields.io/badge/Licence-MIT-blue.svg"></a>
+  <a href="https://pypi.org/project/merisor/"><img alt="PyPI" src="https://img.shields.io/pypi/v/merisor?logo=pypi&logoColor=white"></a>
 </p>
 
 MERISOR est un éditeur graphique MERISE pour Linux. Il permet de dessiner un
@@ -29,11 +30,11 @@ préparé par une IA via OpenRouter, avec validation et confirmation avant impor
 
 ### Édition d’un MCD
 
-![Fenêtre principale de MERISOR avec un MCD MotoGP et le panneau de propriétés](docs/images/mcd-editor.png)
+![Fenêtre principale de MERISOR avec un MCD MotoGP et le panneau de propriétés](https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/mcd-editor.png)
 
 ### Typage des attributs MCD
 
-![Sélection d’un type DECIMAL avec précision et échelle dans le panneau de propriétés](docs/images/attribute-types.png)
+![Sélection d’un type DECIMAL avec précision et échelle dans le panneau de propriétés](https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/attribute-types.png)
 
 <table>
   <tr>
@@ -41,14 +42,14 @@ préparé par une IA via OpenRouter, avec validation et confirmation avant impor
     <td width="50%"><strong>Aperçu SQL avant export</strong></td>
   </tr>
   <tr>
-    <td><img src="docs/images/mld-view.png" alt="Vue graphique du MLD dans MERISOR"></td>
-    <td><img src="docs/images/sql-preview.png" alt="Aperçu d’un script PostgreSQL généré par MERISOR"></td>
+    <td><img src="https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/mld-view.png" alt="Vue graphique du MLD dans MERISOR"></td>
+    <td><img src="https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/sql-preview.png" alt="Aperçu d’un script PostgreSQL généré par MERISOR"></td>
   </tr>
 </table>
 
 ### Import d’un MCD proposé par l’IA
 
-![Aperçu et validation d’un MCD généré par IA avant import](docs/images/ai-preview.png)
+![Aperçu et validation d’un MCD généré par IA avant import](https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/ai-preview.png)
 
 ## 🧭 MERISE en trente secondes
 
@@ -179,7 +180,7 @@ ne demande pas d’installation administrateur et ne modifie pas le système.
 3. Installez le paquet :
 
 ```bash
-sudo apt install ./merisor_0.5.0_amd64.deb
+sudo apt install ./merisor_0.6.0_amd64.deb
 ```
 
 Adaptez le nom au fichier téléchargé. MERISOR apparaît ensuite dans le menu des
@@ -207,6 +208,25 @@ python -m merisor
 
 L’extra `ai` installe `keyring`, recommandé pour protéger la clé OpenRouter.
 Sans fonctionnalité IA, `python -m pip install -e ".[test]"` suffit.
+
+### Option D — installation avec pipx
+
+Lorsque la version est publiée sur PyPI, `pipx` crée un environnement isolé et
+installe le raccourci `merisor` sans modifier les paquets Python du système :
+
+```bash
+pipx install merisor
+merisor
+```
+
+Pour utiliser le trousseau système avec la clé OpenRouter, installez l'extra
+optionnel sécurisé dès le départ : `pipx install "merisor[ai]"`.
+
+Pour mettre l’application à jour ultérieurement :
+
+```bash
+pipx upgrade merisor
+```
 
 <details>
 <summary><strong>Résoudre les problèmes d’affichage Qt sous Linux</strong></summary>
