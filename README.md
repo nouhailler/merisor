@@ -149,7 +149,28 @@ flowchart LR
 
 ## 🚀 Installation
 
-### Option A — paquet Debian recommandé
+### Option A — AppImage universelle
+
+Cette option convient à Fedora, Arch Linux, openSUSE, Debian, Ubuntu et à la
+plupart des distributions Linux 64 bits récentes :
+
+1. Téléchargez `MERISOR-<version>-x86_64.AppImage` depuis la page
+   [Releases](https://github.com/nouhailler/merisor/releases/latest).
+2. Rendez le fichier exécutable et lancez-le :
+
+```bash
+chmod +x MERISOR-*.AppImage
+./MERISOR-*.AppImage
+```
+
+L’AppImage embarque Python, PySide6 et les dépendances de l’application. Elle
+ne demande pas d’installation administrateur et ne modifie pas le système.
+
+> [!NOTE]
+> Certaines distributions anciennes exigent encore FUSE 2 pour lancer une
+> AppImage. Sans FUSE, utilisez `APPIMAGE_EXTRACT_AND_RUN=1 ./MERISOR-*.AppImage`.
+
+### Option B — paquet Debian / Ubuntu
 
 1. Téléchargez le fichier `.deb` depuis la page
    [Releases](https://github.com/nouhailler/merisor/releases/latest).
@@ -167,7 +188,7 @@ applications et peut aussi être lancé avec :
 merisor
 ```
 
-### Option B — installation depuis les sources
+### Option C — installation depuis les sources
 
 Prérequis : Debian ou Linux équivalent, Python 3.10 ou plus récent, Git et le
 module `venv`.
@@ -580,7 +601,9 @@ Le code suit une architecture modulaire et utilise des annotations de types.
 Une contribution doit conserver la compatibilité JSON et ajouter des tests pour
 toute nouvelle règle métier.
 
-## 📦 Construire un paquet Debian
+## 📦 Construire les paquets Linux
+
+### Paquet Debian
 
 ```bash
 ./packaging/build_deb.sh
@@ -588,8 +611,27 @@ dpkg-deb --info dist/merisor_*.deb
 ```
 
 Le paquet contient l’application Python, le lanceur, l’entrée de menu desktop
-et l’icône. Le workflow GitHub Actions publie automatiquement un `.deb` lors de
-l’envoi d’un tag `v*`.
+et l’icône.
+
+### AppImage
+
+Installez d’abord les dépendances de construction dans l’environnement Python,
+puis lancez le script :
+
+```bash
+python -m pip install -e ".[ai]" pyinstaller
+./packaging/build_appimage.sh
+./dist/MERISOR-*-x86_64.AppImage
+```
+
+Le script prend en charge `x86_64` et `aarch64`. Il construit une application
+autonome avec PyInstaller, prépare l’`AppDir`, puis utilise la version épinglée
+d’`appimagetool`. La variable `APPIMAGETOOL` permet d’indiquer un binaire déjà
+installé et d’effectuer une construction hors ligne.
+
+Le workflow GitHub Actions exécute les tests, construit le `.deb` et
+l’`.AppImage`, teste le démarrage de cette dernière puis publie les deux
+artefacts lors de l’envoi d’un tag `v*`.
 
 ## ⚠️ Limites connues
 

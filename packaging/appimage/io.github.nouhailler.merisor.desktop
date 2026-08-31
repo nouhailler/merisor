@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=MERISOR
+GenericName=Éditeur MERISE
+Comment=Créer des MCD et générer des MLD et scripts SQL
+Exec=merisor
+Icon=merisor
+Terminal=false
+Categories=Development;Database;
+Keywords=MERISE;MCD;MLD;SQL;Database;Modélisation;
+StartupWMClass=MERISOR

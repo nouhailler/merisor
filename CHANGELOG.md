@@ -37,6 +37,10 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
   vectoriel et PDF A4 paysage ;
 - cadrage automatique du contenu exporté et masquage temporaire de la
   sélection, sans modifier le diagramme.
+- packaging AppImage autonome pour les distributions Linux `x86_64` et
+  `aarch64`, en complément du paquet Debian ;
+- publication automatique des fichiers `.deb` et `.AppImage` dans les releases
+  GitHub, avec test de démarrage de l'AppImage.
 
 ### Modifié
 
