@@ -167,8 +167,9 @@ L’AppImage embarque Python, PySide6 et les dépendances de l’application. El
 ne demande pas d’installation administrateur et ne modifie pas le système.
 
 > [!NOTE]
-> Certaines distributions anciennes exigent encore FUSE 2 pour lancer une
-> AppImage. Sans FUSE, utilisez `APPIMAGE_EXTRACT_AND_RUN=1 ./MERISOR-*.AppImage`.
+> Le runtime AppImage embarqué est autonome et ne requiert pas `libfuse2`.
+> Si le montage des AppImage est interdit sur votre système, utilisez
+> `APPIMAGE_EXTRACT_AND_RUN=1 ./MERISOR-*.AppImage`.
 
 ### Option B — paquet Debian / Ubuntu
 
