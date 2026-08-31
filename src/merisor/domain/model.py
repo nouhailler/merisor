@@ -7,10 +7,10 @@ ou cardinalité absente) afin qu'un diagramme en cours de construction puisse
 
 from __future__ import annotations
 
+import math
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
-import math
-from typing import Iterable
 from uuid import uuid4
 
 from merisor.domain.mld import MLDDataType
@@ -46,6 +46,9 @@ class Position:
             raise DiagramError("Une position doit contenir des nombres finis.")
 
 
+_ORIGIN = Position()
+
+
 class CardinalityMinimum(str, Enum):
     ZERO = "0"
     ONE = "1"
@@ -72,23 +75,37 @@ class InheritanceStrategy(str, Enum):
     JOINED = "JOINED"
 
 
-@dataclass(frozen=True, slots=True)
+class FunctionalDependencyOrigin(str, Enum):
+    """Origine d'une dépendance, afin de distinguer faits et suggestions."""
+
+    USER = "USER"
+    AI = "AI"
+
+
+@dataclass(frozen=True, slots=True, init=False)
 class Cardinality:
     """Cardinalité MERISE portée par l'extrémité entité d'une relation."""
 
-    minimum: CardinalityMinimum | str
-    maximum: CardinalityMaximum | str
+    minimum: CardinalityMinimum
+    maximum: CardinalityMaximum
 
-    def __post_init__(self) -> None:
+    def __init__(
+        self,
+        minimum: CardinalityMinimum | str,
+        maximum: CardinalityMaximum | str,
+    ) -> None:
         try:
-            minimum = CardinalityMinimum(self.minimum)
-            maximum = CardinalityMaximum(self.maximum)
+            normalized_minimum = CardinalityMinimum(minimum)
+            normalized_maximum = CardinalityMaximum(maximum)
         except (TypeError, ValueError) as error:
             raise DiagramError(
                 "Cardinalité invalide : minimum attendu 0 ou 1, maximum attendu 1 ou N."
             ) from error
-        object.__setattr__(self, "minimum", minimum)
-        object.__setattr__(self, "maximum", maximum)
+        object.__setattr__(self, "minimum", normalized_minimum)
+        object.__setattr__(self, "maximum", normalized_maximum)
+
+    def __post_init__(self) -> None:
+        """Compatibilité avec les outils appelant explicitement ce hook."""
 
     @property
     def label(self) -> str:
@@ -109,18 +126,45 @@ class Attribute:
     identifier: bool = False
     id: str = field(default_factory=_new_id)
     data_type: MLDDataType | None = None
+    nullable: bool | None = None
+    default: str | None = None
+    unique: bool = False
+    comment: str = ""
+    auto_increment: bool = False
+    constraints: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _validate_internal_id(self.id, "l'attribut")
         _validate_name_type(self.name, "l'attribut")
         if not isinstance(self.identifier, bool):
             raise DiagramError("Le statut d'identifiant doit être booléen.")
-        if self.data_type is not None and not isinstance(
-            self.data_type, MLDDataType
-        ):
+        if self.data_type is not None and not isinstance(self.data_type, MLDDataType):
             raise DiagramError(
                 "Le type explicite d'un attribut doit être un type logique MLD."
             )
+        if self.nullable is not None and not isinstance(self.nullable, bool):
+            raise DiagramError(
+                "La nullabilité d'un attribut doit être booléenne ou automatique."
+            )
+        if self.default is not None and not isinstance(self.default, str):
+            raise DiagramError("La valeur par défaut doit être textuelle.")
+        if not isinstance(self.unique, bool):
+            raise DiagramError("Le statut UNIQUE doit être booléen.")
+        if not isinstance(self.comment, str):
+            raise DiagramError("Le commentaire d'un attribut doit être textuel.")
+        if not isinstance(self.auto_increment, bool):
+            raise DiagramError("Le statut d'auto-incrémentation doit être booléen.")
+        if not isinstance(self.constraints, tuple):
+            self.constraints = tuple(self.constraints)
+        if not all(isinstance(expression, str) for expression in self.constraints):
+            raise DiagramError("Les contraintes d'un attribut doivent être textuelles.")
+        self.default = (
+            self.default.strip() or None if self.default is not None else None
+        )
+        self.comment = self.comment.strip()
+        self.constraints = tuple(
+            expression.strip() for expression in self.constraints if expression.strip()
+        )
 
 
 @dataclass(slots=True)
@@ -145,7 +189,7 @@ class Entity:
         return [attribute for attribute in self.attributes if attribute.identifier]
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, init=False)
 class Association:
     """Association MERISE, éventuellement porteuse d'attributs."""
 
@@ -154,9 +198,34 @@ class Association:
     id: str = field(default_factory=_new_id)
     attributes: list[Attribute] = field(default_factory=list)
     is_historized: bool = False
-    materialization_strategy: MaterializationStrategy | str = (
-        MaterializationStrategy.AUTO
-    )
+    materialization_strategy: MaterializationStrategy = MaterializationStrategy.AUTO
+
+    def __init__(
+        self,
+        name: str,
+        position: Position = _ORIGIN,
+        id: str | None = None,
+        attributes: list[Attribute] | None = None,
+        is_historized: bool = False,
+        materialization_strategy: MaterializationStrategy | str = (
+            MaterializationStrategy.AUTO
+        ),
+    ) -> None:
+        self.name = name
+        self.position = position
+        self.id = _new_id() if id is None else id
+        self.attributes = [] if attributes is None else attributes
+        self.is_historized = is_historized
+        try:
+            self.materialization_strategy = MaterializationStrategy(
+                materialization_strategy
+            )
+        except (TypeError, ValueError) as error:
+            raise DiagramError(
+                "Stratégie de matérialisation invalide : "
+                "AUTO, FORCE_TABLE ou FORCE_FK attendu."
+            ) from error
+        self.__post_init__()
 
     def __post_init__(self) -> None:
         _validate_internal_id(self.id, "l'association")
@@ -169,15 +238,6 @@ class Association:
             )
         if not isinstance(self.is_historized, bool):
             raise DiagramError("Le statut d'historisation doit être booléen.")
-        try:
-            self.materialization_strategy = MaterializationStrategy(
-                self.materialization_strategy
-            )
-        except (TypeError, ValueError) as error:
-            raise DiagramError(
-                "Stratégie de matérialisation invalide : "
-                "AUTO, FORCE_TABLE ou FORCE_FK attendu."
-            ) from error
 
     @property
     def identifier_attributes(self) -> list[Attribute]:
@@ -193,9 +253,7 @@ class Relation:
     entity_id: str
     association_id: str
     id: str = field(default_factory=_new_id)
-    cardinality: Cardinality | None = field(
-        default_factory=lambda: DEFAULT_CARDINALITY
-    )
+    cardinality: Cardinality | None = field(default_factory=lambda: DEFAULT_CARDINALITY)
     role: str = ""
 
     def __post_init__(self) -> None:
@@ -211,14 +269,33 @@ class Relation:
         self.role = self.role.strip()
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, init=False)
 class Inheritance:
     """Spécialisation ISA d'une entité mère vers une ou plusieurs filles."""
 
     parent_entity_id: str
     child_entity_ids: tuple[str, ...]
-    strategy: InheritanceStrategy | str = InheritanceStrategy.JOINED
+    strategy: InheritanceStrategy = InheritanceStrategy.JOINED
     id: str = field(default_factory=_new_id)
+
+    def __init__(
+        self,
+        parent_entity_id: str,
+        child_entity_ids: tuple[str, ...],
+        strategy: InheritanceStrategy | str = InheritanceStrategy.JOINED,
+        id: str | None = None,
+    ) -> None:
+        self.parent_entity_id = parent_entity_id
+        self.child_entity_ids = tuple(child_entity_ids)
+        try:
+            self.strategy = InheritanceStrategy(strategy)
+        except (TypeError, ValueError) as error:
+            raise DiagramError(
+                "Stratégie d'héritage invalide : PARENT_ONLY, CHILDREN_ONLY "
+                "ou JOINED attendu."
+            ) from error
+        self.id = _new_id() if id is None else id
+        self.__post_init__()
 
     def __post_init__(self) -> None:
         _validate_internal_id(self.id, "l'héritage")
@@ -229,13 +306,58 @@ class Inheritance:
             raise DiagramError("Un héritage doit posséder au moins une entité fille.")
         for child_id in self.child_entity_ids:
             _validate_internal_id(child_id, "l'entité fille")
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class FunctionalDependency:
+    """Dépendance fonctionnelle X → Y déclarée sur un même objet métier."""
+
+    owner_id: str
+    determinant_attribute_ids: tuple[str, ...]
+    dependent_attribute_ids: tuple[str, ...]
+    origin: FunctionalDependencyOrigin
+    id: str
+
+    def __init__(
+        self,
+        owner_id: str,
+        determinant_attribute_ids: Iterable[str],
+        dependent_attribute_ids: Iterable[str],
+        origin: FunctionalDependencyOrigin | str = FunctionalDependencyOrigin.USER,
+        id: str | None = None,
+    ) -> None:
+        determinants = tuple(determinant_attribute_ids)
+        dependents = tuple(dependent_attribute_ids)
+        _validate_internal_id(owner_id, "l'objet porteur")
+        dependency_id = _new_id() if id is None else id
+        _validate_internal_id(dependency_id, "la dépendance fonctionnelle")
+        if not determinants or not dependents:
+            raise DiagramError(
+                "Une dépendance fonctionnelle doit avoir un déterminant et une cible."
+            )
+        if len(determinants) != len(set(determinants)) or len(dependents) != len(
+            set(dependents)
+        ):
+            raise DiagramError(
+                "Une dépendance fonctionnelle contient un attribut dupliqué."
+            )
+        for attribute_id in (*determinants, *dependents):
+            _validate_internal_id(attribute_id, "l'attribut référencé")
+        if set(determinants) & set(dependents):
+            raise DiagramError(
+                "Le déterminant et la cible d'une dépendance doivent être disjoints."
+            )
         try:
-            self.strategy = InheritanceStrategy(self.strategy)
+            normalized_origin = FunctionalDependencyOrigin(origin)
         except (TypeError, ValueError) as error:
             raise DiagramError(
-                "Stratégie d'héritage invalide : PARENT_ONLY, CHILDREN_ONLY "
-                "ou JOINED attendu."
+                "Origine de dépendance invalide : USER ou AI attendu."
             ) from error
+        object.__setattr__(self, "owner_id", owner_id)
+        object.__setattr__(self, "determinant_attribute_ids", determinants)
+        object.__setattr__(self, "dependent_attribute_ids", dependents)
+        object.__setattr__(self, "origin", normalized_origin)
+        object.__setattr__(self, "id", dependency_id)
 
 
 Node = Entity | Association
@@ -249,18 +371,24 @@ class MCDModel:
         self.associations: dict[str, Association] = {}
         self.relations: dict[str, Relation] = {}
         self.inheritances: dict[str, Inheritance] = {}
+        self.functional_dependencies: dict[str, FunctionalDependency] = {}
 
     def _all_ids(self) -> set[str]:
         attribute_ids = {
             attribute.id
-            for node in (*self.entities.values(), *self.associations.values())
-            for attribute in node.attributes
+            for entity in self.entities.values()
+            for attribute in entity.attributes
+        } | {
+            attribute.id
+            for association in self.associations.values()
+            for attribute in association.attributes
         }
         return (
             set(self.entities)
             | set(self.associations)
             | set(self.relations)
             | set(self.inheritances)
+            | set(self.functional_dependencies)
             | attribute_ids
         )
 
@@ -269,7 +397,9 @@ class MCDModel:
         if len(candidate_ids) != len(set(candidate_ids)):
             raise DiagramError("Un objet contient des identifiants internes dupliqués.")
         existing = self._all_ids()
-        conflict = next((item_id for item_id in candidate_ids if item_id in existing), None)
+        conflict = next(
+            (item_id for item_id in candidate_ids if item_id in existing), None
+        )
         if conflict is not None:
             raise DiagramError(f"Identifiant déjà utilisé : {conflict}")
 
@@ -324,11 +454,23 @@ class MCDModel:
         name: str,
         identifier: bool = False,
         data_type: MLDDataType | None = None,
+        nullable: bool | None = None,
+        default: str | None = None,
+        unique: bool = False,
+        comment: str = "",
+        auto_increment: bool = False,
+        constraints: Iterable[str] = (),
     ) -> Attribute:
         attribute = Attribute(
             name=name,
             identifier=identifier,
             data_type=data_type,
+            nullable=nullable,
+            default=default,
+            unique=unique,
+            comment=comment,
+            auto_increment=auto_increment,
+            constraints=tuple(constraints),
         )
         self.add_attribute(owner_id, attribute)
         return attribute
@@ -346,6 +488,22 @@ class MCDModel:
         )
         self.add_inheritance(inheritance)
         return inheritance
+
+    def create_functional_dependency(
+        self,
+        owner_id: str,
+        determinant_attribute_ids: Iterable[str],
+        dependent_attribute_ids: Iterable[str],
+        origin: FunctionalDependencyOrigin | str = FunctionalDependencyOrigin.USER,
+    ) -> FunctionalDependency:
+        dependency = FunctionalDependency(
+            owner_id,
+            determinant_attribute_ids,
+            dependent_attribute_ids,
+            origin,
+        )
+        self.add_functional_dependency(dependency)
+        return dependency
 
     def add_entity(self, entity: Entity) -> None:
         self._ensure_available_ids(
@@ -370,14 +528,10 @@ class MCDModel:
     def add_inheritance(self, inheritance: Inheritance) -> None:
         self._ensure_available_ids([inheritance.id])
         if inheritance.parent_entity_id not in self.entities:
-            raise DiagramError(
-                f"Entité mère inconnue : {inheritance.parent_entity_id}"
-            )
+            raise DiagramError(f"Entité mère inconnue : {inheritance.parent_entity_id}")
         if inheritance.parent_entity_id in inheritance.child_entity_ids:
             raise DiagramError("Une entité ne peut pas hériter d'elle-même.")
-        if len(set(inheritance.child_entity_ids)) != len(
-            inheritance.child_entity_ids
-        ):
+        if len(set(inheritance.child_entity_ids)) != len(inheritance.child_entity_ids):
             raise DiagramError("Un héritage contient une entité fille dupliquée.")
         unknown = next(
             (
@@ -391,6 +545,51 @@ class MCDModel:
             raise DiagramError(f"Entité fille inconnue : {unknown}")
         self.inheritances[inheritance.id] = inheritance
 
+    def add_functional_dependency(self, dependency: FunctionalDependency) -> None:
+        self._ensure_available_ids([dependency.id])
+        owner = self.node(dependency.owner_id)
+        owner_attribute_ids = {attribute.id for attribute in owner.attributes}
+        referenced_ids = set(dependency.determinant_attribute_ids) | set(
+            dependency.dependent_attribute_ids
+        )
+        unknown = referenced_ids - owner_attribute_ids
+        if unknown:
+            raise DiagramError(
+                "Une dépendance fonctionnelle référence un attribut inconnu : "
+                f"{sorted(unknown)[0]}"
+            )
+        signature = (
+            frozenset(dependency.determinant_attribute_ids),
+            frozenset(dependency.dependent_attribute_ids),
+        )
+        if any(
+            item.owner_id == dependency.owner_id
+            and (
+                frozenset(item.determinant_attribute_ids),
+                frozenset(item.dependent_attribute_ids),
+            )
+            == signature
+            for item in self.functional_dependencies.values()
+        ):
+            raise DiagramError("Cette dépendance fonctionnelle existe déjà.")
+        self.functional_dependencies[dependency.id] = dependency
+
+    def replace_functional_dependency(
+        self, dependency_id: str, replacement: FunctionalDependency
+    ) -> None:
+        if dependency_id not in self.functional_dependencies:
+            raise DiagramError(f"Dépendance fonctionnelle inconnue : {dependency_id}")
+        if replacement.id != dependency_id:
+            raise DiagramError(
+                "L'identifiant d'une dépendance ne peut pas être modifié."
+            )
+        previous = self.functional_dependencies.pop(dependency_id)
+        try:
+            self.add_functional_dependency(replacement)
+        except DiagramError:
+            self.functional_dependencies[dependency_id] = previous
+            raise
+
     def add_attribute(
         self, owner_id: str, attribute: Attribute, index: int | None = None
     ) -> None:
@@ -401,11 +600,22 @@ class MCDModel:
         else:
             owner.attributes.insert(index, attribute)
 
-    def remove_attribute(self, owner_id: str, attribute_id: str) -> tuple[Attribute, int]:
+    def remove_attribute(
+        self, owner_id: str, attribute_id: str
+    ) -> tuple[Attribute, int]:
         owner = self.node(owner_id)
         for index, attribute in enumerate(owner.attributes):
             if attribute.id == attribute_id:
-                return owner.attributes.pop(index), index
+                removed = owner.attributes.pop(index)
+                for dependency_id, dependency in list(
+                    self.functional_dependencies.items()
+                ):
+                    if attribute_id in (
+                        *dependency.determinant_attribute_ids,
+                        *dependency.dependent_attribute_ids,
+                    ):
+                        del self.functional_dependencies[dependency_id]
+                return removed, index
         raise DiagramError(f"Attribut inconnu : {attribute_id}")
 
     def attribute(self, owner_id: str, attribute_id: str) -> Attribute:
@@ -414,6 +624,19 @@ class MCDModel:
             if attribute.id == attribute_id:
                 return attribute
         raise DiagramError(f"Attribut inconnu : {attribute_id}")
+
+    def replace_attribute(self, owner_id: str, replacement: Attribute) -> None:
+        current = self.attribute(owner_id, replacement.id)
+        replacement.__post_init__()
+        current.name = replacement.name
+        current.identifier = replacement.identifier
+        current.data_type = replacement.data_type
+        current.nullable = replacement.nullable
+        current.default = replacement.default
+        current.unique = replacement.unique
+        current.comment = replacement.comment
+        current.auto_increment = replacement.auto_increment
+        current.constraints = replacement.constraints
 
     def rename_node(self, element_id: str, name: str) -> None:
         _validate_name_type(name, "l'objet")
@@ -497,6 +720,25 @@ class MCDModel:
             if relation.entity_id == node_id or relation.association_id == node_id
         ]
 
+    def functional_dependencies_for(self, owner_id: str) -> list[FunctionalDependency]:
+        self.node(owner_id)
+        return sorted(
+            (
+                dependency
+                for dependency in self.functional_dependencies.values()
+                if dependency.owner_id == owner_id
+            ),
+            key=lambda dependency: dependency.id,
+        )
+
+    def remove_functional_dependency(self, dependency_id: str) -> FunctionalDependency:
+        try:
+            return self.functional_dependencies.pop(dependency_id)
+        except KeyError as error:
+            raise DiagramError(
+                f"Dépendance fonctionnelle inconnue : {dependency_id}"
+            ) from error
+
     def remove_relation(self, relation_id: str) -> Relation:
         try:
             return self.relations.pop(relation_id)
@@ -515,6 +757,7 @@ class MCDModel:
                 or entity_id in inheritance.child_entity_ids
             ):
                 del self.inheritances[inheritance_id]
+        self._remove_owner_dependencies(entity_id)
         return self.entities.pop(entity_id), relations
 
     def remove_association(
@@ -525,7 +768,13 @@ class MCDModel:
         relations = self.connected_relations(association_id)
         for relation in relations:
             del self.relations[relation.id]
+        self._remove_owner_dependencies(association_id)
         return self.associations.pop(association_id), relations
+
+    def _remove_owner_dependencies(self, owner_id: str) -> None:
+        for dependency_id, dependency in list(self.functional_dependencies.items()):
+            if dependency.owner_id == owner_id:
+                del self.functional_dependencies[dependency_id]
 
     def node(self, element_id: str) -> Node:
         if element_id in self.entities:

@@ -95,12 +95,18 @@ class MLDPropertiesPanel(QWidget):
                     "/".join(roles),
                     column.name,
                     column.data_type.label,
-                    "NULL" if column.nullable is True else "NOT NULL" if column.nullable is False else "—",
+                    "NULL"
+                    if column.nullable is True
+                    else "NOT NULL"
+                    if column.nullable is False
+                    else "—",
                 ]
             )
             self.columns.addTopLevelItem(item)
         fk_lines = []
         for foreign_key in table.foreign_keys:
-            local = ", ".join(table.column_by_id(cid).name for cid in foreign_key.column_ids)
+            local = ", ".join(
+                table.column_by_id(cid).name for cid in foreign_key.column_ids
+            )
             fk_lines.append(f"{local} → {foreign_key.referenced_table_id}")
         self.foreign_keys.setText("\n".join(fk_lines) if fk_lines else "Aucune")

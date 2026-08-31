@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from merisor.domain.mld import MLDDataTypeName
 from merisor.domain.model import (
     Association,
     Attribute,
@@ -64,8 +65,63 @@ def validate_mcd(model: MCDModel) -> ValidationReport:
         _validate_association(model, association, issues)
     _validate_relations(model, issues)
     _validate_inheritances(model, issues)
+    _validate_functional_dependencies(model, issues)
     _validate_duplicate_node_names(model, issues)
     return ValidationReport(tuple(issues))
+
+
+def _validate_functional_dependencies(
+    model: MCDModel, issues: list[ValidationIssue]
+) -> None:
+    for dependency in model.functional_dependencies.values():
+        try:
+            owner = model.node(dependency.owner_id)
+        except ValueError:
+            issues.append(
+                ValidationIssue(
+                    ValidationSeverity.ERROR,
+                    "functional_dependency.owner_missing",
+                    "Une dépendance fonctionnelle référence un objet absent.",
+                    dependency.id,
+                )
+            )
+            continue
+        owner_attribute_ids = {attribute.id for attribute in owner.attributes}
+        referenced = set(dependency.determinant_attribute_ids) | set(
+            dependency.dependent_attribute_ids
+        )
+        if (
+            not dependency.determinant_attribute_ids
+            or not dependency.dependent_attribute_ids
+        ):
+            issues.append(
+                ValidationIssue(
+                    ValidationSeverity.ERROR,
+                    "functional_dependency.incomplete",
+                    f"{owner.name} : une dépendance fonctionnelle est incomplète.",
+                    dependency.id,
+                )
+            )
+        if referenced - owner_attribute_ids:
+            issues.append(
+                ValidationIssue(
+                    ValidationSeverity.ERROR,
+                    "functional_dependency.attribute_missing",
+                    f"{owner.name} : une dépendance fonctionnelle référence un attribut absent.",
+                    dependency.id,
+                )
+            )
+        if set(dependency.determinant_attribute_ids) & set(
+            dependency.dependent_attribute_ids
+        ):
+            issues.append(
+                ValidationIssue(
+                    ValidationSeverity.ERROR,
+                    "functional_dependency.trivial_overlap",
+                    f"{owner.name} : le déterminant et la cible doivent être disjoints.",
+                    dependency.id,
+                )
+            )
 
 
 def _validate_entity(entity: Entity, issues: list[ValidationIssue]) -> None:
@@ -184,6 +240,7 @@ def _validate_attributes(
     issues: list[ValidationIssue],
 ) -> None:
     seen: dict[str, str] = {}
+    identifier_count = sum(attribute.identifier for attribute in attributes)
     for attribute in attributes:
         clean_name = attribute.name.strip()
         if not clean_name:
@@ -208,6 +265,60 @@ def _validate_attributes(
             )
         else:
             seen[key] = attribute.id
+        if attribute.identifier and attribute.nullable is True:
+            issues.append(
+                ValidationIssue(
+                    ValidationSeverity.ERROR,
+                    "attribute.identifier_nullable",
+                    f"{kind} {owner_name} : l'identifiant « {clean_name} » "
+                    "ne peut pas être facultatif.",
+                    owner_id,
+                )
+            )
+        if attribute.auto_increment:
+            if not attribute.identifier:
+                issues.append(
+                    ValidationIssue(
+                        ValidationSeverity.ERROR,
+                        "attribute.auto_increment_not_identifier",
+                        f"{kind} {owner_name} : « {clean_name} » doit être un "
+                        "identifiant pour être auto-incrémenté.",
+                        owner_id,
+                    )
+                )
+            if identifier_count != 1:
+                issues.append(
+                    ValidationIssue(
+                        ValidationSeverity.ERROR,
+                        "attribute.auto_increment_composite_key",
+                        f"{kind} {owner_name} : une auto-incrémentation exige "
+                        "un identifiant simple.",
+                        owner_id,
+                    )
+                )
+            if attribute.data_type is not None and attribute.data_type.name not in {
+                MLDDataTypeName.INTEGER,
+                MLDDataTypeName.BIGINT,
+            }:
+                issues.append(
+                    ValidationIssue(
+                        ValidationSeverity.ERROR,
+                        "attribute.auto_increment_type",
+                        f"{kind} {owner_name} : « {clean_name} » doit être de "
+                        "type INTEGER ou BIGINT pour être auto-incrémenté.",
+                        owner_id,
+                    )
+                )
+            if attribute.default is not None:
+                issues.append(
+                    ValidationIssue(
+                        ValidationSeverity.ERROR,
+                        "attribute.auto_increment_default",
+                        f"{kind} {owner_name} : « {clean_name} » ne peut pas "
+                        "combiner auto-incrémentation et valeur par défaut.",
+                        owner_id,
+                    )
+                )
 
 
 def _validate_relations(model: MCDModel, issues: list[ValidationIssue]) -> None:
@@ -269,16 +380,14 @@ def _validate_relations(model: MCDModel, issues: list[ValidationIssue]) -> None:
                     ValidationIssue(
                         ValidationSeverity.ERROR,
                         "relation.role_duplicate",
-                        f'Le rôle réflexif « {clean_role} » est utilisé plusieurs fois.',
+                        f"Le rôle réflexif « {clean_role} » est utilisé plusieurs fois.",
                         relation.id,
                     )
                 )
             seen_roles.add(key)
 
 
-def _validate_inheritances(
-    model: MCDModel, issues: list[ValidationIssue]
-) -> None:
+def _validate_inheritances(model: MCDModel, issues: list[ValidationIssue]) -> None:
     child_owner: dict[str, str] = {}
     adjacency: dict[str, set[str]] = {entity_id: set() for entity_id in model.entities}
     for inheritance in model.inheritances.values():

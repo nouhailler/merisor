@@ -4,6 +4,45 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
+### Ajouté
+
+- workflow GitHub Actions de qualité exécutant Ruff, mypy en mode strict et la
+  suite pytest à chaque push ou pull request vers `main` ;
+- configuration partagée de formatage, lint et typage dans `pyproject.toml` ;
+- analyse locale de qualité du MCD avec suggestions de typage et d'unicité,
+  détection d'entités similaires, conventions de nommage et signaux de
+  normalisation ;
+- rapport graphique avec score global pondéré, six dimensions, niveaux de
+  confiance et justification de chaque déduction ;
+- assistant pédagogique de normalisation avec dépendances fonctionnelles,
+  fermeture d'attributs, clés candidates et contrôles 1NF/2NF/3NF ;
+- persistance JSON rétrocompatible des dépendances fonctionnelles ;
+- aperçu non destructif des décompositions et application confirmée/annulable
+  des extractions 3NF non ambiguës ;
+- suggestions facultatives de dépendances via OpenRouter, exécutées hors du
+  thread graphique et soumises à confirmation ;
+- édition complète des attributs MCD : nullabilité, valeur par défaut,
+  unicité, commentaire, auto-incrémentation et contraintes `CHECK` ;
+- propagation de ces propriétés vers le MLD, les trois dialectes SQL et le
+  reverse-engineering DDL, avec commentaires SQL adaptés au dialecte ;
+- affichage du type et des principales contraintes directement dans les objets
+  du graphe MCD.
+
+### Modifié
+
+- normalisation du formatage de tous les fichiers Python ;
+- annotations renforcées pour que les 57 modules source et tests passent le
+  contrôle `mypy --strict` sans erreur.
+
+### Prévu pour la prochaine reprise
+
+- assistant MERISE conversationnel fondé sur un `DesignSession` local ;
+- détection de concepts, hypothèses explicites et questions de clarification ;
+- évolution du brouillon par patchs JSON stricts et révisions versionnées ;
+- validation du brouillon après chaque tour, comparaison avec le MCD courant et
+  import final confirmé/annulable ;
+- aucune application directe d'une réponse textuelle de l'IA.
+
 ## [0.6.1] - 2026-08-31
 
 ### Corrigé

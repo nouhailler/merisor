@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QSpinBox,
     QStackedWidget,
@@ -29,9 +30,9 @@ from merisor.domain import (
     Attribute,
     Cardinality,
     Entity,
+    MaterializationStrategy,
     MLDDataType,
     MLDDataTypeName,
-    MaterializationStrategy,
     Relation,
 )
 
@@ -59,7 +60,9 @@ class PropertiesPanel(QWidget):
 
         self.stack = QStackedWidget()
         root.addWidget(self.stack, 1)
-        self.empty_page = QLabel("Sélectionnez une entité, une association ou une relation.")
+        self.empty_page = QLabel(
+            "Sélectionnez une entité, une association ou une relation."
+        )
         self.empty_page.setWordWrap(True)
         self.empty_page.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.node_page = self._build_node_page()
@@ -139,19 +142,23 @@ class PropertiesPanel(QWidget):
         layout.addWidget(attribute_title)
 
         self.attribute_tree = QTreeWidget()
-        self.attribute_tree.setHeaderLabels(["Identifiant", "Nom", "Type"])
+        self.attribute_tree.setHeaderLabels(
+            ["Identifiant", "Nom", "Type", "Null", "Unique"]
+        )
         self.attribute_tree.setRootIsDecorated(False)
         self.attribute_tree.setAlternatingRowColors(True)
-        self.attribute_tree.setSelectionMode(
-            QTreeWidget.SelectionMode.SingleSelection
-        )
+        self.attribute_tree.setSelectionMode(QTreeWidget.SelectionMode.SingleSelection)
         self.attribute_tree.header().setStretchLastSection(True)
         self.attribute_tree.setColumnWidth(0, 78)
         self.attribute_tree.setColumnWidth(1, 105)
         layout.addWidget(self.attribute_tree, 1)
 
-        self.attribute_type_group = QGroupBox("Type de l'attribut sélectionné")
+        self.attribute_type_group = QGroupBox(
+            "Propriétés complètes de l'attribut sélectionné"
+        )
         attribute_type_form = QFormLayout(self.attribute_type_group)
+        self.attribute_name_edit = QLineEdit()
+        attribute_type_form.addRow("Nom", self.attribute_name_edit)
         self.attribute_type_combo = QComboBox()
         self.attribute_type_combo.addItem(
             "Automatique",
@@ -181,14 +188,42 @@ class PropertiesPanel(QWidget):
         self.attribute_precision_label = QLabel("Précision")
         self.attribute_scale_label = QLabel("Échelle")
         attribute_type_form.addRow("Type", self.attribute_type_combo)
-        attribute_type_form.addRow(
-            self.attribute_length_label, self.attribute_length
-        )
+        attribute_type_form.addRow(self.attribute_length_label, self.attribute_length)
         attribute_type_form.addRow(
             self.attribute_precision_label, self.attribute_precision
         )
         attribute_type_form.addRow(self.attribute_scale_label, self.attribute_scale)
-        self.apply_attribute_type_button = QPushButton("Appliquer le type")
+        self.attribute_nullable_combo = QComboBox()
+        self.attribute_nullable_combo.addItem("Automatique (compatibilité)", None)
+        self.attribute_nullable_combo.addItem("Obligatoire — NOT NULL", False)
+        self.attribute_nullable_combo.addItem("Facultatif — NULL", True)
+        attribute_type_form.addRow("Présence", self.attribute_nullable_combo)
+        self.attribute_default_edit = QLineEdit()
+        self.attribute_default_edit.setPlaceholderText("ex. TRUE, 0, CURRENT_DATE")
+        self.attribute_default_edit.setToolTip(
+            "Expression logique transmise au générateur SQL. Laissez vide pour "
+            "ne définir aucune valeur par défaut."
+        )
+        attribute_type_form.addRow("Valeur par défaut", self.attribute_default_edit)
+        self.attribute_unique_checkbox = QCheckBox("Valeur unique")
+        attribute_type_form.addRow("Contrainte UNIQUE", self.attribute_unique_checkbox)
+        self.attribute_auto_increment_checkbox = QCheckBox("Générée automatiquement")
+        attribute_type_form.addRow(
+            "Auto-incrémentation", self.attribute_auto_increment_checkbox
+        )
+        self.attribute_comment_edit = QPlainTextEdit()
+        self.attribute_comment_edit.setMaximumHeight(65)
+        self.attribute_comment_edit.setPlaceholderText(
+            "Description métier de l'attribut"
+        )
+        attribute_type_form.addRow("Commentaire", self.attribute_comment_edit)
+        self.attribute_constraints_edit = QPlainTextEdit()
+        self.attribute_constraints_edit.setMaximumHeight(80)
+        self.attribute_constraints_edit.setPlaceholderText(
+            "Une expression CHECK par ligne, ex. prix >= 0"
+        )
+        attribute_type_form.addRow("Contraintes CHECK", self.attribute_constraints_edit)
+        self.apply_attribute_type_button = QPushButton("Appliquer les propriétés")
         attribute_type_form.addRow(self.apply_attribute_type_button)
         self.attribute_type_group.setEnabled(False)
         layout.addWidget(self.attribute_type_group)
@@ -216,12 +251,8 @@ class PropertiesPanel(QWidget):
         self.attribute_type_combo.currentIndexChanged.connect(
             self._attribute_type_selection_changed
         )
-        self.attribute_precision.valueChanged.connect(
-            self._decimal_precision_changed
-        )
-        self.apply_attribute_type_button.clicked.connect(
-            self._apply_attribute_type
-        )
+        self.attribute_precision.valueChanged.connect(self._decimal_precision_changed)
+        self.apply_attribute_type_button.clicked.connect(self._apply_attribute_type)
         self.historized_checkbox.toggled.connect(self._historization_changed)
         self.materialization_combo.currentIndexChanged.connect(
             self._materialization_changed
@@ -291,9 +322,7 @@ class PropertiesPanel(QWidget):
         self.node_type.setText("Entité" if is_entity else "Association")
         self.node_name.setText(node.name)
         self.node_identifier.setText(node.id)
-        self.node_position.setText(
-            f"x = {node.position.x:g}, y = {node.position.y:g}"
-        )
+        self.node_position.setText(f"x = {node.position.x:g}, y = {node.position.y:g}")
         self.association_transformation_group.setVisible(not is_entity)
         if isinstance(node, Association):
             self.historized_checkbox.setChecked(node.is_historized)
@@ -308,6 +337,13 @@ class PropertiesPanel(QWidget):
             item.setData(0, Qt.ItemDataRole.UserRole, attribute.id)
             item.setText(1, attribute.name)
             item.setText(2, self._attribute_type_label(attribute))
+            item.setText(
+                3,
+                "AUTO"
+                if attribute.nullable is None
+                else ("NULL" if attribute.nullable else "NOT NULL"),
+            )
+            item.setText(4, "Oui" if attribute.unique else "")
             item.setToolTip(
                 2,
                 "Type automatique selon le statut d'identifiant."
@@ -390,6 +426,7 @@ class PropertiesPanel(QWidget):
         if self._current_node_id is None or attribute_id is None:
             self.attribute_type_group.setEnabled(False)
             self.attribute_type_combo.setCurrentIndex(0)
+            self.attribute_name_edit.clear()
             self._attribute_type_selection_changed(0)
             return
         try:
@@ -400,6 +437,7 @@ class PropertiesPanel(QWidget):
             self.attribute_type_group.setEnabled(False)
             return
         self.attribute_type_group.setEnabled(True)
+        self.attribute_name_edit.setText(attribute.name)
         data_type = attribute.data_type
         value = None if data_type is None else data_type.name.value
         index = self.attribute_type_combo.findData(value)
@@ -411,9 +449,14 @@ class PropertiesPanel(QWidget):
                 self.attribute_precision.setValue(data_type.precision)
             if data_type.scale is not None:
                 self.attribute_scale.setValue(data_type.scale)
-        self._attribute_type_selection_changed(
-            self.attribute_type_combo.currentIndex()
-        )
+        nullable_index = self.attribute_nullable_combo.findData(attribute.nullable)
+        self.attribute_nullable_combo.setCurrentIndex(max(0, nullable_index))
+        self.attribute_default_edit.setText(attribute.default or "")
+        self.attribute_unique_checkbox.setChecked(attribute.unique)
+        self.attribute_auto_increment_checkbox.setChecked(attribute.auto_increment)
+        self.attribute_comment_edit.setPlainText(attribute.comment)
+        self.attribute_constraints_edit.setPlainText("\n".join(attribute.constraints))
+        self._attribute_type_selection_changed(self.attribute_type_combo.currentIndex())
 
     def _attribute_type_selection_changed(self, _index: int) -> None:
         value = self.attribute_type_combo.currentData()
@@ -450,8 +493,66 @@ class PropertiesPanel(QWidget):
                 )
             else:
                 data_type = MLDDataType(name)
-        self._controller.set_attribute_data_type(
-            self._current_node_id, attribute_id, data_type
+        name_value = self.attribute_name_edit.text().strip()
+        if not name_value:
+            QMessageBox.warning(self, "Nom requis", "Le nom de l'attribut est vide.")
+            return
+        current = self._controller.model.attribute(self._current_node_id, attribute_id)
+        nullable = self.attribute_nullable_combo.currentData()
+        auto_increment = self.attribute_auto_increment_checkbox.isChecked()
+        default = self.attribute_default_edit.text().strip() or None
+        if current.identifier and nullable is True:
+            QMessageBox.warning(
+                self,
+                "Propriété incompatible",
+                "Un attribut identifiant ne peut pas être facultatif.",
+            )
+            return
+        if auto_increment:
+            if not current.identifier:
+                QMessageBox.warning(
+                    self,
+                    "Propriété incompatible",
+                    "L'auto-incrémentation est réservée à un attribut identifiant.",
+                )
+                return
+            effective_type = (
+                MLDDataTypeName.INTEGER if data_type is None else data_type.name
+            )
+            if effective_type not in {
+                MLDDataTypeName.INTEGER,
+                MLDDataTypeName.BIGINT,
+            }:
+                QMessageBox.warning(
+                    self,
+                    "Type incompatible",
+                    "Un attribut auto-incrémenté doit être INTEGER ou BIGINT.",
+                )
+                return
+            if default is not None:
+                QMessageBox.warning(
+                    self,
+                    "Propriété incompatible",
+                    "Une colonne auto-incrémentée ne peut pas avoir de valeur "
+                    "par défaut explicite.",
+                )
+                return
+        self._controller.update_attribute(
+            self._current_node_id,
+            attribute_id,
+            name=name_value,
+            data_type=data_type,
+            nullable=nullable,
+            default=default,
+            unique=self.attribute_unique_checkbox.isChecked(),
+            comment=self.attribute_comment_edit.toPlainText(),
+            identifier=current.identifier,
+            auto_increment=auto_increment,
+            constraints=tuple(
+                line.strip()
+                for line in self.attribute_constraints_edit.toPlainText().splitlines()
+                if line.strip()
+            ),
         )
 
     def _rename_attribute(self) -> None:
@@ -504,7 +605,10 @@ class PropertiesPanel(QWidget):
     def _cardinality_changed(self) -> None:
         if self._updating or self._current_relation_id is None:
             return
-        if self.minimum_combo.currentIndex() < 0 or self.maximum_combo.currentIndex() < 0:
+        if (
+            self.minimum_combo.currentIndex() < 0
+            or self.maximum_combo.currentIndex() < 0
+        ):
             return
         cardinality = Cardinality(
             self.minimum_combo.currentText(), self.maximum_combo.currentText()
@@ -524,9 +628,7 @@ class PropertiesPanel(QWidget):
         if self._updating or self._current_node_id is None:
             return
         if self._current_node_id in self._controller.model.associations:
-            self._controller.set_association_historized(
-                self._current_node_id, checked
-            )
+            self._controller.set_association_historized(self._current_node_id, checked)
 
     def _materialization_changed(self, index: int) -> None:
         self._update_materialization_tooltip(index)

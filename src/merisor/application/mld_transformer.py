@@ -8,12 +8,15 @@ import json
 from merisor.domain import (
     Association,
     Attribute,
+    Cardinality,
     CardinalityMaximum,
     CardinalityMinimum,
     Entity,
     Inheritance,
     InheritanceStrategy,
+    MaterializationStrategy,
     MCDModel,
+    MLDCheckConstraint,
     MLDColumn,
     MLDDataType,
     MLDDataTypeName,
@@ -22,7 +25,6 @@ from merisor.domain import (
     MLDTable,
     MLDTableSource,
     MLDUniqueConstraint,
-    MaterializationStrategy,
     Relation,
 )
 
@@ -31,10 +33,17 @@ class MLDTransformationError(ValueError):
     """Le MCD est valide en V0.2 mais utilise une règle non prise en charge."""
 
     def __init__(self, problems: str | list[str]) -> None:
-        self.problems = (
-            (problems,) if isinstance(problems, str) else tuple(problems)
-        )
+        self.problems = (problems,) if isinstance(problems, str) else tuple(problems)
         super().__init__("\n".join(self.problems))
+
+
+def _serialized_cardinality(cardinality: Cardinality | None) -> dict[str, str] | None:
+    if cardinality is None:
+        return None
+    return {
+        "minimum": cardinality.minimum.value,
+        "maximum": cardinality.maximum.value,
+    }
 
 
 class MLDNamePolicy:
@@ -108,6 +117,12 @@ def mcd_logical_fingerprint(model: MCDModel) -> str:
                         "scale": attribute.data_type.scale,
                     }
                 ),
+                "nullable": attribute.nullable,
+                "default": attribute.default,
+                "unique": attribute.unique,
+                "comment": attribute.comment,
+                "auto_increment": attribute.auto_increment,
+                "constraints": list(attribute.constraints),
             }
             for attribute in items
         ]
@@ -141,14 +156,7 @@ def mcd_logical_fingerprint(model: MCDModel) -> str:
                 "entity_id": relation.entity_id,
                 "association_id": relation.association_id,
                 "role": relation.role,
-                "cardinality": (
-                    None
-                    if relation.cardinality is None
-                    else {
-                        "minimum": relation.cardinality.minimum.value,
-                        "maximum": relation.cardinality.maximum.value,
-                    }
-                ),
+                "cardinality": _serialized_cardinality(relation.cardinality),
             }
             for relation in sorted(model.relations.values(), key=lambda item: item.id)
         ],
@@ -164,7 +172,9 @@ def mcd_logical_fingerprint(model: MCDModel) -> str:
             )
         ],
     }
-    payload = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    payload = json.dumps(
+        data, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -196,9 +206,7 @@ class McdToMldTransformer:
             tables_by_entity[entity.id] = table
 
         generated_tables: list[MLDTable] = list(tables_by_entity.values())
-        for association in sorted(
-            model.associations.values(), key=self._node_sort_key
-        ):
+        for association in sorted(model.associations.values(), key=self._node_sort_key):
             relations = sorted(
                 (
                     relation
@@ -236,7 +244,9 @@ class McdToMldTransformer:
                 )
                 continue
 
-            maxima = [relation.cardinality.maximum for relation in relations]
+            maxima = [
+                self._required_cardinality(relation).maximum for relation in relations
+            ]
             is_many_to_many = all(
                 maximum is CardinalityMaximum.MANY for maximum in maxima
             )
@@ -275,9 +285,8 @@ class McdToMldTransformer:
                 )
 
         self._apply_inheritances(model, tables_by_entity, generated_tables)
-        generated_tables.sort(
-            key=lambda table: (table.name.casefold(), table.id)
-        )
+        self._apply_attribute_constraints(model, generated_tables)
+        generated_tables.sort(key=lambda table: (table.name.casefold(), table.id))
         return MLDModel(
             tables=generated_tables,
             generated_from_fingerprint=mcd_logical_fingerprint(model),
@@ -329,14 +338,11 @@ class McdToMldTransformer:
     ) -> None:
         parent_columns = parent.primary_key_columns
         child_pk_columns = child.primary_key_columns
-        compatible = (
-            len(parent_columns) == len(child_pk_columns)
-            and all(
-                parent_column.name.casefold() == child_column.name.casefold()
-                and parent_column.data_type == child_column.data_type
-                for parent_column, child_column in zip(
-                    parent_columns, child_pk_columns, strict=True
-                )
+        compatible = len(parent_columns) == len(child_pk_columns) and all(
+            parent_column.name.casefold() == child_column.name.casefold()
+            and parent_column.data_type == child_column.data_type
+            for parent_column, child_column in zip(
+                parent_columns, child_pk_columns, strict=True
             )
         )
         if compatible:
@@ -346,8 +352,7 @@ class McdToMldTransformer:
             local_ids_list: list[str] = []
             for parent_column in parent_columns:
                 column_id = (
-                    f"column:inheritance:{inheritance.id}:{child.id}:"
-                    f"{parent_column.id}"
+                    f"column:inheritance:{inheritance.id}:{child.id}:{parent_column.id}"
                 )
                 name = self.name_policy.allocate(
                     parent_column.name,
@@ -428,10 +433,13 @@ class McdToMldTransformer:
             MLDColumn(
                 id=self._attribute_column_id(attribute),
                 name=self.name_policy.attribute_column_name(attribute.name),
-                nullable=False if attribute.identifier else None,
+                nullable=False if attribute.identifier else attribute.nullable,
                 data_type=self._attribute_data_type(attribute),
+                default=attribute.default,
                 source_attribute_id=attribute.id,
                 source_element_id=entity.id,
+                auto_increment=attribute.auto_increment,
+                comment=attribute.comment,
             )
             for attribute in entity.attributes
         ]
@@ -656,9 +664,7 @@ class McdToMldTransformer:
                 for attribute in association.identifier_attributes
             )
         else:
-            technical_column_id = self._technical_identifier_column_id(
-                association.id
-            )
+            technical_column_id = self._technical_identifier_column_id(association.id)
             technical_name = self.name_policy.allocate(
                 self.name_policy.technical_identifier_name(association.name),
                 used_names,
@@ -680,7 +686,9 @@ class McdToMldTransformer:
         for relation in relations:
             source_entity = model.entities[relation.entity_id]
             referenced_table = entity_tables[source_entity.id]
-            nullable = relation.cardinality.minimum is CardinalityMinimum.ZERO
+            nullable = (
+                self._required_cardinality(relation).minimum is CardinalityMinimum.ZERO
+            )
             column_ids, referenced_column_ids = self._migrate_primary_key(
                 table,
                 referenced_table,
@@ -712,9 +720,7 @@ class McdToMldTransformer:
             association,
             used_names,
             nullable=None,
-            identifier_filter=(
-                False if association.identifier_attributes else None
-            ),
+            identifier_filter=(False if association.identifier_attributes else None),
         )
         return table
 
@@ -728,19 +734,21 @@ class McdToMldTransformer:
         many_relation = next(
             relation
             for relation in relations
-            if relation.cardinality.maximum is CardinalityMaximum.MANY
+            if self._required_cardinality(relation).maximum is CardinalityMaximum.MANY
         )
         one_relation = next(
             relation
             for relation in relations
-            if relation.cardinality.maximum is CardinalityMaximum.ONE
+            if self._required_cardinality(relation).maximum is CardinalityMaximum.ONE
         )
         referenced_entity = model.entities[many_relation.entity_id]
         holder_entity = model.entities[one_relation.entity_id]
         referenced_table = entity_tables[referenced_entity.id]
         holder_table = entity_tables[holder_entity.id]
         used_names = {column.name.casefold() for column in holder_table.columns}
-        nullable = many_relation.cardinality.minimum is CardinalityMinimum.ZERO
+        nullable = (
+            self._required_cardinality(many_relation).minimum is CardinalityMinimum.ZERO
+        )
         column_ids, referenced_column_ids = self._migrate_primary_key(
             holder_table,
             referenced_table,
@@ -782,15 +790,16 @@ class McdToMldTransformer:
                 f"L'association 1:1 {association.name} porte des attributs. "
                 "Ce cas n'est pas transformé automatiquement en V0.3."
             )
-        holder_relation, referenced_relation = self._one_to_one_sides(
-            model, relations
-        )
+        holder_relation, referenced_relation = self._one_to_one_sides(model, relations)
         holder_entity = model.entities[holder_relation.entity_id]
         referenced_entity = model.entities[referenced_relation.entity_id]
         holder_table = entity_tables[holder_entity.id]
         referenced_table = entity_tables[referenced_entity.id]
         used_names = {column.name.casefold() for column in holder_table.columns}
-        nullable = holder_relation.cardinality.minimum is CardinalityMinimum.ZERO
+        nullable = (
+            self._required_cardinality(holder_relation).minimum
+            is CardinalityMinimum.ZERO
+        )
         column_ids, referenced_column_ids = self._migrate_primary_key(
             holder_table,
             referenced_table,
@@ -830,7 +839,7 @@ class McdToMldTransformer:
         mandatory = [
             relation
             for relation in relations
-            if relation.cardinality.minimum is CardinalityMinimum.ONE
+            if self._required_cardinality(relation).minimum is CardinalityMinimum.ONE
         ]
         if len(mandatory) == 1:
             holder = mandatory[0]
@@ -859,9 +868,7 @@ class McdToMldTransformer:
             referenced_entity.identifier_attributes
         ):
             referenced_column_id = referenced_table.primary_key[index]
-            referenced_column = referenced_table.column_by_id(
-                referenced_column_id
-            )
+            referenced_column = referenced_table.column_by_id(referenced_column_id)
             preferred_name = self.name_policy.role_column_name(
                 source_attribute.name, relation.role
             )
@@ -913,12 +920,70 @@ class McdToMldTransformer:
                 MLDColumn(
                     id=self._attribute_column_id(attribute),
                     name=name,
-                    nullable=nullable,
+                    nullable=(
+                        False
+                        if attribute.identifier
+                        else (
+                            attribute.nullable
+                            if attribute.nullable is not None
+                            else nullable
+                        )
+                    ),
                     data_type=self._attribute_data_type(attribute),
+                    default=attribute.default,
                     source_attribute_id=attribute.id,
                     source_element_id=association.id,
+                    auto_increment=attribute.auto_increment,
+                    comment=attribute.comment,
                 )
             )
+
+    @staticmethod
+    def _apply_attribute_constraints(model: MCDModel, tables: list[MLDTable]) -> None:
+        attributes: dict[str, tuple[str, Attribute]] = {}
+        for entity in model.entities.values():
+            attributes.update(
+                {
+                    attribute.id: (entity.id, attribute)
+                    for attribute in entity.attributes
+                }
+            )
+        for association in model.associations.values():
+            attributes.update(
+                {
+                    attribute.id: (association.id, attribute)
+                    for attribute in association.attributes
+                }
+            )
+        for table in tables:
+            existing_unique = {
+                constraint.column_ids for constraint in table.unique_constraints
+            }
+            for column in table.columns:
+                if column.source_attribute_id not in attributes:
+                    continue
+                owner_id, attribute = attributes[column.source_attribute_id]
+                if (
+                    attribute.unique
+                    and column.id not in table.primary_key
+                    and (column.id,) not in existing_unique
+                ):
+                    table.unique_constraints.append(
+                        MLDUniqueConstraint(
+                            id=f"unique:attribute:{table.id}:{attribute.id}",
+                            column_ids=(column.id,),
+                            source_association_id=owner_id,
+                        )
+                    )
+                    existing_unique.add((column.id,))
+                for index, expression in enumerate(attribute.constraints, start=1):
+                    table.check_constraints.append(
+                        MLDCheckConstraint(
+                            id=f"check:attribute:{table.id}:{attribute.id}:{index}",
+                            expression=expression,
+                            source_element_id=owner_id,
+                        )
+                    )
 
     @staticmethod
     def _attribute_column_id(attribute: Attribute) -> str:
@@ -948,6 +1013,14 @@ class McdToMldTransformer:
             relation.cardinality.minimum.value,
             relation.cardinality.maximum.value,
         )
+
+    @staticmethod
+    def _required_cardinality(relation: Relation) -> Cardinality:
+        if relation.cardinality is None:
+            raise MLDTransformationError(
+                "Une relation sans cardinalité ne peut pas être transformée."
+            )
+        return relation.cardinality
 
     @staticmethod
     def _entity_table_id(entity_id: str) -> str:

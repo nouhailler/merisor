@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from merisor.application import McdAutoLayout
 from merisor.application.controller import DiagramController
-from merisor.domain import Association, Attribute, Cardinality, Entity, MCDModel, Relation
+from merisor.domain import (
+    Association,
+    Attribute,
+    Cardinality,
+    Entity,
+    MCDModel,
+    Relation,
+)
 from merisor.ui.canvas import DiagramScene
 
 
@@ -12,9 +19,15 @@ def crowded_model() -> MCDModel:
         Entity(
             name,
             id=identifier,
-            attributes=[Attribute(f"id_{identifier}", identifier=True, id=f"{identifier}.id")],
+            attributes=[
+                Attribute(f"id_{identifier}", identifier=True, id=f"{identifier}.id")
+            ],
         )
-        for identifier, name in (("student", "ELEVE"), ("course", "COURS"), ("teacher", "PROFESSEUR"))
+        for identifier, name in (
+            ("student", "ELEVE"),
+            ("course", "COURS"),
+            ("teacher", "PROFESSEUR"),
+        )
     ]
     associations = [
         Association("SUIVRE", id="follow"),
@@ -54,12 +67,21 @@ def test_auto_layout_is_deterministic_and_separates_nodes() -> None:
 def test_controller_auto_layout_is_one_undoable_operation(qapp) -> None:  # type: ignore[no-untyped-def]
     controller = DiagramController(DiagramScene())
     controller.import_generated_model(crowded_model())
-    nodes = (*controller.model.entities.values(), *controller.model.associations.values())
+    nodes: tuple[Entity | Association, ...] = (
+        *controller.model.entities.values(),
+        *controller.model.associations.values(),
+    )
     initial = {node.id: node.position for node in nodes}
     controller.auto_layout()
-    nodes = (*controller.model.entities.values(), *controller.model.associations.values())
+    nodes = (
+        *controller.model.entities.values(),
+        *controller.model.associations.values(),
+    )
     arranged = {node.id: node.position for node in nodes}
     assert arranged != initial
     controller.undo_stack.undo()
-    nodes = (*controller.model.entities.values(), *controller.model.associations.values())
+    nodes = (
+        *controller.model.entities.values(),
+        *controller.model.associations.values(),
+    )
     assert {node.id: node.position for node in nodes} == initial

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
 from PySide6.QtCore import QPointF
+from PySide6.QtWidgets import QApplication
 
 from merisor.domain import (
     MLDColumn,
@@ -33,13 +37,13 @@ def preview_model(*, primary_key: bool = True) -> MLDModel:
     return MLDModel([table], generated_from_fingerprint="test")
 
 
-def test_sql_preview_switches_dialect_copies_and_exports(qapp, tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_sql_preview_switches_dialect_copies_and_exports(
+    qapp: QApplication, tmp_path: Path
+) -> None:
     dialog = SQLPreviewDialog(preview_model(), "MotoGP")
 
     assert "PostgreSQL" in dialog.script
-    dialog.target_combo.setCurrentIndex(
-        dialog.target_combo.findData("sqlite")
-    )
+    dialog.target_combo.setCurrentIndex(dialog.target_combo.findData("sqlite"))
     assert "PRAGMA foreign_keys = ON;" in dialog.script
     dialog.copy_sql()
     assert qapp.clipboard().text() == dialog.script
@@ -65,8 +69,8 @@ def test_sql_preview_displays_readable_mld_errors(qapp) -> None:  # type: ignore
 
 
 def test_generate_sql_action_tracks_current_mld_and_uses_only_it(
-    qapp, monkeypatch
-) -> None:  # type: ignore[no-untyped-def]
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
     window = MainWindow()
     assert not window.generate_sql_action.isEnabled()
     entity = window.controller.create_entity("PILOTE", QPointF())
@@ -91,9 +95,7 @@ def test_generate_sql_action_tracks_current_mld_and_uses_only_it(
             captured["executed"] = True
             return 0
 
-    monkeypatch.setattr(
-        "merisor.ui.main_window.SQLPreviewDialog", FakeSQLPreviewDialog
-    )
+    monkeypatch.setattr("merisor.ui.main_window.SQLPreviewDialog", FakeSQLPreviewDialog)
     window.generate_sql()
 
     assert captured["model"] is generated
@@ -130,7 +132,7 @@ def test_mld_graphics_view_supports_zoom_controls(qapp) -> None:  # type: ignore
 def test_mld_table_selection_displays_properties(qapp) -> None:  # type: ignore[no-untyped-def]
     view = MLDView()
     view.set_model(preview_model())
-    selected: list[object] = []
+    selected: list[MLDTable] = []
     view.graphics_view.table_selected.connect(selected.append)
     item = next(
         graphics_item

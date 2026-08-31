@@ -22,7 +22,7 @@ class OpenRouterKeyStore:
         self.settings = settings or QSettings("MERISOR", "MERISOR")
         self._keyring = None
         try:
-            import keyring  # type: ignore[import-not-found]
+            import keyring
 
             backend = keyring.get_keyring()
             if backend.__class__.__module__.startswith("keyring.backends.fail"):

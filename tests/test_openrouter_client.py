@@ -7,26 +7,35 @@ from merisor.application import OpenRouterClient, OpenRouterError
 
 def test_free_text_models_are_filtered_and_json_models_sorted() -> None:
     client = OpenRouterClient("sk-or-test")
-    client._get = lambda _path: {  # type: ignore[method-assign]
+    client._get = lambda _path: {  # type: ignore[assignment,method-assign]
         "data": [
             {
                 "id": "paid/model",
                 "name": "Paid",
                 "pricing": {"prompt": "1", "completion": "1"},
-                "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
+                "architecture": {
+                    "input_modalities": ["text"],
+                    "output_modalities": ["text"],
+                },
             },
             {
                 "id": "free/model:free",
                 "name": "Free",
                 "pricing": {"prompt": "0", "completion": "0"},
-                "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
+                "architecture": {
+                    "input_modalities": ["text"],
+                    "output_modalities": ["text"],
+                },
                 "supported_parameters": ["response_format"],
             },
             {
                 "id": "free/image:free",
                 "name": "Image",
                 "pricing": {"prompt": "0", "completion": "0"},
-                "architecture": {"input_modalities": ["image"], "output_modalities": ["text"]},
+                "architecture": {
+                    "input_modalities": ["image"],
+                    "output_modalities": ["text"],
+                },
             },
         ]
     }

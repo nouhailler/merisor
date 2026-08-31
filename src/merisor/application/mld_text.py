@@ -32,14 +32,16 @@ def _render_table(model: MLDModel, table: MLDTable) -> str:
         elif column.nullable is False:
             roles.append("NOT NULL")
         prefix = "/".join(roles) if roles else ""
+        default = f" DEFAULT {column.default}" if column.default is not None else ""
         lines.append(
-            f"{prefix:<18} {column.name} : {column.data_type.label}".rstrip()
+            f"{prefix:<18} {column.name} : {column.data_type.label}{default}".rstrip()
         )
+        if column.comment:
+            lines.append(f"{'':<18} -- {column.comment}")
 
     for foreign_key in table.foreign_keys:
         local_names = ", ".join(
-            table.column_by_id(column_id).name
-            for column_id in foreign_key.column_ids
+            table.column_by_id(column_id).name for column_id in foreign_key.column_ids
         )
         referenced_table = model.table_by_id(foreign_key.referenced_table_id)
         referenced_names = ", ".join(
@@ -51,8 +53,9 @@ def _render_table(model: MLDModel, table: MLDTable) -> str:
         )
     for constraint in table.unique_constraints:
         names = ", ".join(
-            table.column_by_id(column_id).name
-            for column_id in constraint.column_ids
+            table.column_by_id(column_id).name for column_id in constraint.column_ids
         )
         lines.append(f"UNIQUE ({names})")
+    for check in table.check_constraints:
+        lines.append(f"CHECK ({check.expression})")
     return "\n".join(lines)

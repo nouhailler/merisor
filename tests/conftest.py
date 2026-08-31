@@ -1,4 +1,5 @@
 import os
+from collections.abc import Generator
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -7,7 +8,7 @@ from PySide6.QtWidgets import QApplication
 
 
 @pytest.fixture(scope="session")
-def qapp() -> QApplication:
-    application = QApplication.instance() or QApplication([])
+def qapp() -> Generator[QApplication, None, None]:
+    existing = QApplication.instance()
+    application = existing if isinstance(existing, QApplication) else QApplication([])
     yield application
-

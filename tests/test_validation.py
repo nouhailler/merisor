@@ -157,16 +157,12 @@ def test_historized_force_fk_contradiction_is_blocking() -> None:
 
     report = validate_mcd(model)
 
-    assert "association.historized_force_fk" in {
-        issue.code for issue in report.errors
-    }
+    assert "association.historized_force_fk" in {issue.code for issue in report.errors}
 
 
 def test_reflexive_association_is_valid_with_distinct_roles() -> None:
     model = DiagramModel()
-    employee = Entity(
-        "EMPLOYE", attributes=[Attribute("id_employe", identifier=True)]
-    )
+    employee = Entity("EMPLOYE", attributes=[Attribute("id_employe", identifier=True)])
     supervise = Association("SUPERVISER")
     model.add_entity(employee)
     model.add_association(supervise)
@@ -188,9 +184,7 @@ def test_reflexive_association_is_valid_with_distinct_roles() -> None:
 
 def test_reflexive_association_requires_non_empty_unique_roles() -> None:
     model = DiagramModel()
-    employee = Entity(
-        "EMPLOYE", attributes=[Attribute("id_employe", identifier=True)]
-    )
+    employee = Entity("EMPLOYE", attributes=[Attribute("id_employe", identifier=True)])
     supervise = Association("SUPERVISER")
     model.add_entity(employee)
     model.add_association(supervise)

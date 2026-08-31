@@ -5,7 +5,12 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QRectF
 from PySide6.QtGui import QImage
-from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsScene, QGraphicsTextItem
+from PySide6.QtWidgets import (
+    QApplication,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+)
 
 from merisor.ui.diagram_exporter import DiagramExportError, DiagramVisualExporter
 from merisor.ui.main_window import MainWindow
@@ -52,13 +57,11 @@ def test_export_visual_rejects_unknown_extension(qapp, tmp_path) -> None:  # typ
 
 
 def test_main_window_exports_the_scene_of_the_active_workspace(
-    qapp, tmp_path, monkeypatch
-) -> None:  # type: ignore[no-untyped-def]
+    qapp: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     window = MainWindow()
     selected_scenes: list[QGraphicsScene] = []
-    destinations = iter(
-        [tmp_path / "active_mcd.png", tmp_path / "active_mld.svg"]
-    )
+    destinations = iter([tmp_path / "active_mcd.png", tmp_path / "active_mld.svg"])
 
     def choose_path(*_args):  # type: ignore[no-untyped-def]
         return str(next(destinations)), "Image PNG (*.png)"

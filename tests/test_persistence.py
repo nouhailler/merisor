@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -7,9 +8,9 @@ from merisor.domain import (
     DiagramModel,
     Entity,
     InheritanceStrategy,
+    MaterializationStrategy,
     MLDDataType,
     MLDDataTypeName,
-    MaterializationStrategy,
     Position,
 )
 from merisor.persistence import JsonDiagramRepository, PersistenceError
@@ -23,13 +24,11 @@ def populated_model() -> tuple[DiagramModel, str, str, str]:
     model.create_attribute(entity.id, "code_licence", identifier=True)
     model.create_attribute(entity.id, "nom")
     model.create_attribute(association.id, "points")
-    relation = model.create_relation(
-        entity.id, association.id, Cardinality("1", "N")
-    )
+    relation = model.create_relation(entity.id, association.id, Cardinality("1", "N"))
     return model, entity.id, association.id, relation.id
 
 
-def test_save_writes_versioned_json(tmp_path) -> None:
+def test_save_writes_versioned_json(tmp_path: Path) -> None:
     model, entity_id, association_id, relation_id = populated_model()
     path = tmp_path / "modele.json"
 
@@ -53,7 +52,7 @@ def test_save_writes_versioned_json(tmp_path) -> None:
     ]
 
 
-def test_round_trip_preserves_positions_and_relations(tmp_path) -> None:
+def test_round_trip_preserves_positions_and_relations(tmp_path: Path) -> None:
     model, entity_id, association_id, relation_id = populated_model()
     association = model.associations[association_id]
     association.is_historized = True
@@ -87,7 +86,7 @@ def test_round_trip_preserves_positions_and_relations(tmp_path) -> None:
     assert loaded.relations[relation_id].role == "participant"
 
 
-def test_round_trip_preserves_explicit_attribute_types(tmp_path) -> None:
+def test_round_trip_preserves_explicit_attribute_types(tmp_path: Path) -> None:
     model = DiagramModel()
     entity = model.create_entity("FACTURE", Position())
     identifier = model.create_attribute(
@@ -136,9 +135,7 @@ def test_round_trip_preserves_explicit_attribute_types(tmp_path) -> None:
         precision=12,
         scale=2,
     )
-    assert loaded.attribute(entity.id, label.id).data_type == MLDDataType.varchar(
-        180
-    )
+    assert loaded.attribute(entity.id, label.id).data_type == MLDDataType.varchar(180)
 
 
 def test_loader_ignores_unknown_fields_for_forward_enrichment() -> None:
@@ -154,7 +151,7 @@ def test_loader_ignores_unknown_fields_for_forward_enrichment() -> None:
     assert len(loaded.relations) == 1
 
 
-def test_round_trip_preserves_entity_inheritance(tmp_path) -> None:
+def test_round_trip_preserves_entity_inheritance(tmp_path: Path) -> None:
     model = DiagramModel()
     parent = model.create_entity("PERSONNE", Position())
     child = model.create_entity("CLIENT", Position(100, 200))
@@ -191,9 +188,7 @@ def test_loader_rejects_orphan_relation() -> None:
         "format_version": 1,
         "entities": [],
         "associations": [],
-        "relations": [
-            {"id": "r1", "entity_id": "e1", "association_id": "a1"}
-        ],
+        "relations": [{"id": "r1", "entity_id": "e1", "association_id": "a1"}],
     }
 
     with pytest.raises(PersistenceError, match="Entité inconnue"):
@@ -229,9 +224,7 @@ def test_loads_and_migrates_v01_without_losing_structure() -> None:
                 "position": {"x": 200.0, "y": 100.0},
             }
         ],
-        "relations": [
-            {"id": "r1", "entity_id": "e1", "association_id": "a1"}
-        ],
+        "relations": [{"id": "r1", "entity_id": "e1", "association_id": "a1"}],
     }
 
     model = JsonDiagramRepository().from_dict(legacy_data)
@@ -250,18 +243,12 @@ def test_loads_and_migrates_v01_without_losing_structure() -> None:
     assert model.relations["r1"].role == ""
 
 
-def test_migrated_v01_is_saved_as_v02(tmp_path) -> None:
+def test_migrated_v01_is_saved_as_v02(tmp_path: Path) -> None:
     legacy_data = {
         "format_version": 1,
-        "entities": [
-            {"id": "e1", "name": "E", "position": {"x": 1, "y": 2}}
-        ],
-        "associations": [
-            {"id": "a1", "name": "A", "position": {"x": 3, "y": 4}}
-        ],
-        "relations": [
-            {"id": "r1", "entity_id": "e1", "association_id": "a1"}
-        ],
+        "entities": [{"id": "e1", "name": "E", "position": {"x": 1, "y": 2}}],
+        "associations": [{"id": "a1", "name": "A", "position": {"x": 3, "y": 4}}],
+        "relations": [{"id": "r1", "entity_id": "e1", "association_id": "a1"}],
     }
     repository = JsonDiagramRepository()
     model = repository.from_dict(legacy_data)
@@ -307,9 +294,7 @@ def test_loads_older_v02_attribute_in_automatic_type_mode() -> None:
                 "id": "e1",
                 "name": "PILOTE",
                 "position": {"x": 0, "y": 0},
-                "attributes": [
-                    {"id": "a1", "name": "id_pilote", "identifier": True}
-                ],
+                "attributes": [{"id": "a1", "name": "id_pilote", "identifier": True}],
             }
         ],
         "associations": [],
@@ -371,7 +356,7 @@ def test_loader_rejects_unknown_materialization_strategy() -> None:
         JsonDiagramRepository().from_dict(data)
 
 
-def test_invalid_work_in_progress_can_be_saved_without_mutation(tmp_path) -> None:
+def test_invalid_work_in_progress_can_be_saved_without_mutation(tmp_path: Path) -> None:
     model = DiagramModel()
     entity = Entity("", Position(7, 9))
     model.add_entity(entity)

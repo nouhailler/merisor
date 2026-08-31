@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from contextlib import suppress
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QPointF, Signal, Slot
@@ -10,6 +12,7 @@ from PySide6.QtGui import QUndoStack
 
 from merisor.application.commands import (
     AddAttributeCommand,
+    AddFunctionalDependencyCommand,
     AddInheritanceCommand,
     AddNodeCommand,
     AddRelationCommand,
@@ -17,8 +20,12 @@ from merisor.application.commands import (
     DeletionSnapshot,
     MoveNodeCommand,
     RemoveAttributeCommand,
+    RemoveFunctionalDependencyCommand,
     RenameAttributeCommand,
     RenameNodeCommand,
+    ReplaceAttributeCommand,
+    ReplaceFunctionalDependencyCommand,
+    ReplaceModelStateCommand,
     SetAssociationHistorizedCommand,
     SetAssociationMaterializationStrategyCommand,
     SetAttributeDataTypeCommand,
@@ -26,27 +33,35 @@ from merisor.application.commands import (
     SetIdentifierCommand,
     SetRelationRoleCommand,
 )
+from merisor.application.mcd_layout import McdAutoLayout
 from merisor.application.mld_transformer import (
     McdToMldTransformer,
     mcd_logical_fingerprint,
 )
-from merisor.application.mcd_layout import McdAutoLayout
 from merisor.domain import (
+    DEFAULT_CARDINALITY,
     Association,
     Attribute,
     Cardinality,
-    DEFAULT_CARDINALITY,
     DiagramError,
     Entity,
+    FunctionalDependency,
+    FunctionalDependencyOrigin,
     Inheritance,
     InheritanceStrategy,
-    MCDModel,
-    MLDModel,
-    MLDDataType,
     MaterializationStrategy,
+    MCDModel,
+    MLDDataType,
+    MLDModel,
+    ModelQualityReport,
+    NormalizationProposal,
+    NormalizationReport,
     Position,
     Relation,
     ValidationReport,
+    analyze_model_quality,
+    analyze_normalization,
+    apply_normalization_proposal,
     validate_mcd,
 )
 from merisor.persistence import JsonDiagramRepository
@@ -71,7 +86,7 @@ class MLDGenerationBlocked(ValueError):
 
 
 class DiagramController(QObject):
-    """Façade applicative et unique synchronisateur modèle–scène."""
+    """Façade applicative et unique synchronisateur modèle-scène."""
 
     model_changed = Signal()
     selection_changed = Signal(object)
@@ -162,9 +177,7 @@ class DiagramController(QObject):
         owner = self.model.node(owner_id)
         attribute = Attribute(name=name, identifier=identifier)
         self.undo_stack.push(
-            AddAttributeCommand(
-                self, owner_id, attribute, index=len(owner.attributes)
-            )
+            AddAttributeCommand(self, owner_id, attribute, index=len(owner.attributes))
         )
         return attribute
 
@@ -174,15 +187,27 @@ class DiagramController(QObject):
             if attribute.id == attribute_id:
                 self.undo_stack.push(
                     RemoveAttributeCommand(
-                        self, owner_id, attribute, index
+                        self,
+                        owner_id,
+                        attribute,
+                        index,
+                        tuple(
+                            dependency
+                            for dependency in self.model.functional_dependencies_for(
+                                owner_id
+                            )
+                            if attribute_id
+                            in (
+                                *dependency.determinant_attribute_ids,
+                                *dependency.dependent_attribute_ids,
+                            )
+                        ),
                     )
                 )
                 return
         raise DiagramError(f"Attribut inconnu : {attribute_id}")
 
-    def rename_attribute(
-        self, owner_id: str, attribute_id: str, name: str
-    ) -> None:
+    def rename_attribute(self, owner_id: str, attribute_id: str, name: str) -> None:
         attribute = self.model.attribute(owner_id, attribute_id)
         if attribute.name != name:
             self.undo_stack.push(
@@ -224,9 +249,43 @@ class DiagramController(QObject):
                 )
             )
 
-    def create_relation(
-        self, first_id: str, second_id: str, role: str = ""
-    ) -> bool:
+    def update_attribute(
+        self,
+        owner_id: str,
+        attribute_id: str,
+        *,
+        name: str,
+        data_type: MLDDataType | None,
+        nullable: bool | None,
+        default: str | None,
+        unique: bool,
+        comment: str,
+        identifier: bool,
+        auto_increment: bool,
+        constraints: Iterable[str],
+    ) -> Attribute:
+        current = self.model.attribute(owner_id, attribute_id)
+        previous = replace(current)
+        replacement = replace(
+            current,
+            name=name,
+            data_type=data_type,
+            nullable=nullable,
+            default=default,
+            unique=unique,
+            comment=comment,
+            identifier=identifier,
+            auto_increment=auto_increment,
+            constraints=tuple(constraints),
+        )
+        replacement.__post_init__()
+        if replacement != previous:
+            self.undo_stack.push(
+                ReplaceAttributeCommand(self, owner_id, previous, replacement)
+            )
+        return replacement
+
+    def create_relation(self, first_id: str, second_id: str, role: str = "") -> bool:
         if first_id in self.model.entities and second_id in self.model.associations:
             entity_id, association_id = first_id, second_id
         elif second_id in self.model.entities and first_id in self.model.associations:
@@ -248,14 +307,12 @@ class DiagramController(QObject):
             for relation in self.model.relations.values()
         ):
             self.message.emit(
-                f'Le rôle « {clean_role} » existe déjà entre ces deux objets.'
+                f"Le rôle « {clean_role} » existe déjà entre ces deux objets."
             )
             return False
 
         used_roles = {
-            relation.role.casefold()
-            for relation in parallel_relations
-            if relation.role
+            relation.role.casefold() for relation in parallel_relations if relation.role
         }
 
         def next_role() -> str:
@@ -323,9 +380,7 @@ class DiagramController(QObject):
         clean_role = role.strip()
         if relation.role != clean_role:
             self.undo_stack.push(
-                SetRelationRoleCommand(
-                    self, relation_id, relation.role, clean_role
-                )
+                SetRelationRoleCommand(self, relation_id, relation.role, clean_role)
             )
 
     def set_association_historized(
@@ -361,6 +416,60 @@ class DiagramController(QObject):
 
     def validate(self) -> ValidationReport:
         return validate_mcd(self.model)
+
+    def analyze_quality(self) -> ModelQualityReport:
+        return analyze_model_quality(self.model, self.validate())
+
+    def analyze_normalization(self) -> NormalizationReport:
+        return analyze_normalization(self.model)
+
+    def add_functional_dependency(
+        self,
+        owner_id: str,
+        determinant_attribute_ids: Iterable[str],
+        dependent_attribute_ids: Iterable[str],
+        origin: FunctionalDependencyOrigin | str = FunctionalDependencyOrigin.USER,
+    ) -> FunctionalDependency:
+        dependency = FunctionalDependency(
+            owner_id,
+            determinant_attribute_ids,
+            dependent_attribute_ids,
+            origin,
+        )
+        self.undo_stack.push(AddFunctionalDependencyCommand(self, dependency))
+        return dependency
+
+    def update_functional_dependency(
+        self,
+        dependency_id: str,
+        determinant_attribute_ids: Iterable[str],
+        dependent_attribute_ids: Iterable[str],
+        origin: FunctionalDependencyOrigin | str | None = None,
+    ) -> FunctionalDependency:
+        previous = self.model.functional_dependencies[dependency_id]
+        replacement = FunctionalDependency(
+            previous.owner_id,
+            determinant_attribute_ids,
+            dependent_attribute_ids,
+            previous.origin if origin is None else origin,
+            id=previous.id,
+        )
+        if replacement != previous:
+            self.undo_stack.push(
+                ReplaceFunctionalDependencyCommand(self, previous, replacement)
+            )
+        return replacement
+
+    def remove_functional_dependency(self, dependency_id: str) -> None:
+        dependency = self.model.functional_dependencies[dependency_id]
+        self.undo_stack.push(RemoveFunctionalDependencyCommand(self, dependency))
+
+    def apply_normalization(self, proposal: NormalizationProposal) -> None:
+        transformed = apply_normalization_proposal(self.model, proposal)
+        self.undo_stack.push(ReplaceModelStateCommand(self, self.model, transformed))
+        self.message.emit(
+            "Décomposition appliquée ; utilisez Annuler pour restaurer le MCD."
+        )
 
     @property
     def mld_is_stale(self) -> bool:
@@ -402,9 +511,12 @@ class DiagramController(QObject):
             if element_id in self.model.associations
         )
         relation_ids = {
-            element_id for element_id in element_ids if element_id in self.model.relations
+            element_id
+            for element_id in element_ids
+            if element_id in self.model.relations
         }
-        for node in (*entities, *associations):
+        nodes: tuple[Entity | Association, ...] = (*entities, *associations)
+        for node in nodes:
             relation_ids.update(
                 relation.id for relation in self.model.connected_relations(node.id)
             )
@@ -416,7 +528,19 @@ class DiagramController(QObject):
             if inheritance.parent_entity_id in selected_entity_ids
             or bool(selected_entity_ids.intersection(inheritance.child_entity_ids))
         )
-        return DeletionSnapshot(entities, associations, relations, inheritances)
+        selected_node_ids = {node.id for node in nodes}
+        functional_dependencies = tuple(
+            dependency
+            for dependency in self.model.functional_dependencies.values()
+            if dependency.owner_id in selected_node_ids
+        )
+        return DeletionSnapshot(
+            entities,
+            associations,
+            relations,
+            inheritances,
+            functional_dependencies,
+        )
 
     def new_document(self) -> None:
         self._replace_model(MCDModel(), None)
@@ -468,7 +592,9 @@ class DiagramController(QObject):
                 )
         finally:
             self.undo_stack.endMacro()
-        self.scene.setSceneRect(self.scene.itemsBoundingRect().adjusted(-100, -100, 100, 100))
+        self.scene.setSceneRect(
+            self.scene.itemsBoundingRect().adjusted(-100, -100, 100, 100)
+        )
         self.message.emit("Disposition automatique du MCD appliquée.")
 
     def save(self, path: str | Path | None = None) -> Path:
@@ -483,6 +609,13 @@ class DiagramController(QObject):
         return target
 
     def _replace_model(self, model: MCDModel, path: Path | None) -> None:
+        self._install_model_state(model)
+        self.document_path = path
+        self.undo_stack.clear()
+        self.undo_stack.setClean()
+        self.document_path_changed.emit(path)
+
+    def _install_model_state(self, model: MCDModel) -> None:
         self.scene.reset_interaction()
         self.scene.clear()
         self._node_items.clear()
@@ -499,10 +632,6 @@ class DiagramController(QObject):
         for relation in self.model.relations.values():
             self._add_relation_item(relation)
         self._refresh_all_parallel_relations()
-        self.document_path = path
-        self.undo_stack.clear()
-        self.undo_stack.setClean()
-        self.document_path_changed.emit(path)
         self.model_changed.emit()
         self.mld_changed.emit(None)
         self.mld_stale_changed.emit(False)
@@ -518,10 +647,10 @@ class DiagramController(QObject):
         for item in selected_items:
             element_id = getattr(item, "element_id", None)
             if isinstance(element_id, str):
-                try:
-                    result.append(self.model.element(element_id))
-                except DiagramError:
-                    pass
+                with suppress(DiagramError):
+                    element = self.model.element(element_id)
+                    if isinstance(element, (Entity, Association, Relation)):
+                        result.append(element)
         return result
 
     def _emit_selection(self) -> None:
@@ -534,16 +663,33 @@ class DiagramController(QObject):
 
     @staticmethod
     def _attribute_display(node: Entity | Association) -> list[tuple[str, bool]]:
-        return [
-            (attribute.name, attribute.identifier) for attribute in node.attributes
-        ]
+        rows: list[tuple[str, bool]] = []
+        for attribute in node.attributes:
+            if attribute.data_type is not None:
+                type_label = attribute.data_type.label
+            else:
+                type_label = "INTEGER" if attribute.identifier else "VARCHAR(100)"
+            properties: list[str] = []
+            if attribute.nullable is False and not attribute.identifier:
+                properties.append("NOT NULL")
+            elif attribute.nullable is True:
+                properties.append("NULL")
+            if attribute.unique and not attribute.identifier:
+                properties.append("UNIQUE")
+            if attribute.default is not None:
+                properties.append(f"DEFAULT {attribute.default}")
+            if attribute.auto_increment:
+                properties.append("AUTO")
+            suffix = f" {' '.join(properties)}" if properties else ""
+            rows.append(
+                (f"{attribute.name} : {type_label}{suffix}", attribute.identifier)
+            )
+        return rows
 
     def _add_node_item(self, node: Entity | Association) -> None:
         attributes = self._attribute_display(node)
         if isinstance(node, Entity):
-            item: NodeGraphicsItem = EntityGraphicsItem(
-                node.id, node.name, attributes
-            )
+            item: NodeGraphicsItem = EntityGraphicsItem(node.id, node.name, attributes)
         else:
             item = AssociationGraphicsItem(node.id, node.name, attributes)
         item.setPos(node.position.x, node.position.y)
@@ -597,20 +743,23 @@ class DiagramController(QObject):
         self._update_relations_for_node(node_id)
 
     def _update_relations_for_node(self, node_id: str) -> None:
-        if node_id not in self.model.entities and node_id not in self.model.associations:
+        if (
+            node_id not in self.model.entities
+            and node_id not in self.model.associations
+        ):
             return
         for relation in self.model.connected_relations(node_id):
-            item = self._relation_items.get(relation.id)
-            if item is not None:
-                item.update_geometry()
+            relation_item = self._relation_items.get(relation.id)
+            if relation_item is not None:
+                relation_item.update_geometry()
         for inheritance in self.model.inheritances.values():
             if (
                 inheritance.parent_entity_id == node_id
                 or node_id in inheritance.child_entity_ids
             ):
-                item = self._inheritance_items.get(inheritance.id)
-                if item is not None:
-                    item.update_geometry()
+                inheritance_item = self._inheritance_items.get(inheritance.id)
+                if inheritance_item is not None:
+                    inheritance_item.update_geometry()
 
     def _node_move_finished(
         self, node_id: str, old_point: QPointF, new_point: QPointF
@@ -632,24 +781,22 @@ class DiagramController(QObject):
 
     def command_remove_node(self, node_id: str) -> None:
         for relation in list(self.model.connected_relations(node_id)):
-            item = self._relation_items.pop(relation.id, None)
-            if item is not None:
-                self.scene.removeItem(item)
+            relation_item = self._relation_items.pop(relation.id, None)
+            if relation_item is not None:
+                self.scene.removeItem(relation_item)
         if node_id in self.model.entities:
             self.model.remove_entity(node_id)
         elif node_id in self.model.associations:
             self.model.remove_association(node_id)
-        item = self._node_items.pop(node_id, None)
-        if item is not None:
-            self.scene.removeItem(item)
+        node_item = self._node_items.pop(node_id, None)
+        if node_item is not None:
+            self.scene.removeItem(node_item)
         self._model_did_change()
 
     def command_insert_relation(self, relation: Relation) -> None:
         self.model.add_relation(relation)
         self._add_relation_item(relation)
-        self._refresh_parallel_relations(
-            relation.entity_id, relation.association_id
-        )
+        self._refresh_parallel_relations(relation.entity_id, relation.association_id)
         self._model_did_change()
 
     def command_remove_relation(self, relation_id: str) -> None:
@@ -658,9 +805,7 @@ class DiagramController(QObject):
         item = self._relation_items.pop(relation_id, None)
         if item is not None:
             self.scene.removeItem(item)
-        self._refresh_parallel_relations(
-            relation.entity_id, relation.association_id
-        )
+        self._refresh_parallel_relations(relation.entity_id, relation.association_id)
         self._model_did_change()
 
     def command_insert_inheritance(self, inheritance: Inheritance) -> None:
@@ -677,6 +822,25 @@ class DiagramController(QObject):
         if item is not None:
             self.scene.removeItem(item)
         self._model_did_change()
+
+    def command_insert_functional_dependency(
+        self, dependency: FunctionalDependency
+    ) -> None:
+        self.model.add_functional_dependency(dependency)
+        self._model_did_change()
+
+    def command_remove_functional_dependency(self, dependency_id: str) -> None:
+        self.model.remove_functional_dependency(dependency_id)
+        self._model_did_change()
+
+    def command_replace_functional_dependency(
+        self, dependency_id: str, replacement: FunctionalDependency
+    ) -> None:
+        self.model.replace_functional_dependency(dependency_id, replacement)
+        self._model_did_change()
+
+    def command_replace_model_state(self, model: MCDModel) -> None:
+        self._install_model_state(model)
 
     def command_move_node(self, node_id: str, position: Position) -> None:
         self.model.move_node(node_id, position)
@@ -699,6 +863,11 @@ class DiagramController(QObject):
 
     def command_remove_attribute(self, owner_id: str, attribute_id: str) -> None:
         self.model.remove_attribute(owner_id, attribute_id)
+        self._refresh_node_item(owner_id)
+        self._model_did_change()
+
+    def command_replace_attribute(self, owner_id: str, replacement: Attribute) -> None:
+        self.model.replace_attribute(owner_id, replacement)
         self._refresh_node_item(owner_id)
         self._model_did_change()
 
@@ -740,9 +909,7 @@ class DiagramController(QObject):
         item = self._relation_items.get(relation_id)
         if item is not None:
             item.set_role(self.model.relations[relation_id].role)
-        self._refresh_parallel_relations(
-            relation.entity_id, relation.association_id
-        )
+        self._refresh_parallel_relations(relation.entity_id, relation.association_id)
         self._model_did_change()
 
     def command_set_association_historized(
@@ -754,36 +921,42 @@ class DiagramController(QObject):
     def command_set_association_materialization_strategy(
         self, association_id: str, strategy: MaterializationStrategy
     ) -> None:
-        self.model.set_association_materialization_strategy(
-            association_id, strategy
-        )
+        self.model.set_association_materialization_strategy(association_id, strategy)
         self._model_did_change()
 
     def command_remove_snapshot(self, snapshot: DeletionSnapshot) -> None:
         for inheritance in snapshot.inheritances:
             self.model.inheritances.pop(inheritance.id, None)
-            item = self._inheritance_items.pop(inheritance.id, None)
-            if item is not None:
-                self.scene.removeItem(item)
+            inheritance_item = self._inheritance_items.pop(inheritance.id, None)
+            if inheritance_item is not None:
+                self.scene.removeItem(inheritance_item)
         for relation in snapshot.relations:
             if relation.id in self.model.relations:
                 self.model.remove_relation(relation.id)
-                item = self._relation_items.pop(relation.id, None)
-                if item is not None:
-                    self.scene.removeItem(item)
-        for node in (*snapshot.entities, *snapshot.associations):
+                relation_item = self._relation_items.pop(relation.id, None)
+                if relation_item is not None:
+                    self.scene.removeItem(relation_item)
+        nodes: tuple[Entity | Association, ...] = (
+            *snapshot.entities,
+            *snapshot.associations,
+        )
+        for node in nodes:
             if node.id in self._node_items:
                 if isinstance(node, Entity):
                     self.model.remove_entity(node.id)
                 else:
                     self.model.remove_association(node.id)
-                item = self._node_items.pop(node.id)
-                self.scene.removeItem(item)
+                node_item = self._node_items.pop(node.id)
+                self.scene.removeItem(node_item)
         self._refresh_all_parallel_relations()
         self._model_did_change()
 
     def command_restore_snapshot(self, snapshot: DeletionSnapshot) -> None:
-        for node in (*snapshot.entities, *snapshot.associations):
+        nodes: tuple[Entity | Association, ...] = (
+            *snapshot.entities,
+            *snapshot.associations,
+        )
+        for node in nodes:
             if isinstance(node, Entity):
                 self.model.add_entity(node)
             else:
@@ -795,12 +968,12 @@ class DiagramController(QObject):
         for inheritance in snapshot.inheritances:
             self.model.add_inheritance(inheritance)
             self._add_inheritance_item(inheritance)
+        for dependency in snapshot.functional_dependencies:
+            self.model.add_functional_dependency(dependency)
         self._refresh_all_parallel_relations()
         self._model_did_change()
 
-    def _refresh_parallel_relations(
-        self, entity_id: str, association_id: str
-    ) -> None:
+    def _refresh_parallel_relations(self, entity_id: str, association_id: str) -> None:
         relations = sorted(
             (
                 relation

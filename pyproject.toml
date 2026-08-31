@@ -44,9 +44,14 @@ Changelog = "https://github.com/nouhailler/merisor/blob/main/CHANGELOG.md"
 [project.optional-dependencies]
 test = [
     "pytest>=8,<9",
+    "tomli>=2,<3; python_version < '3.11'",
 ]
 ai = [
     "keyring>=25,<26",
+]
+quality = [
+    "mypy>=1.15,<2",
+    "ruff>=0.12,<1",
 ]
 
 [project.gui-scripts]
@@ -64,3 +69,23 @@ merisor = ["assets/*.png"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["B", "C4", "E", "F", "I", "RUF", "SIM", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["merisor"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+mypy_path = "src"
+files = ["src", "tests"]
+show_error_codes = true
+pretty = true

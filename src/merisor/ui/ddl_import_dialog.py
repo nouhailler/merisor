@@ -15,13 +15,11 @@ from merisor.application import DDLImportResult, render_mld_text
 
 
 class DDLImportPreviewDialog(QDialog):
-    def __init__(
-        self, result: DDLImportResult, source_sql: str, parent=None
-    ) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, result: DDLImportResult, source_sql: str, parent=None) -> None:  # type: ignore[no-untyped-def]
         super().__init__(parent)
         self.setWindowTitle("Aperçu de l'import SQL / DDL")
         self.resize(900, 680)
-        self.result = result
+        self.import_result = result
 
         layout = QVBoxLayout(self)
         headline = QLabel(
@@ -61,8 +59,7 @@ class DDLImportPreviewDialog(QDialog):
             layout.addWidget(warnings)
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok
-            | QDialogButtonBox.StandardButton.Cancel
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         buttons.button(QDialogButtonBox.StandardButton.Ok).setText(
             "Importer le MCD et le MLD"
@@ -91,8 +88,9 @@ class DDLImportPreviewDialog(QDialog):
         for inheritance in result.mcd.inheritances.values():
             parent = result.mcd.entities[inheritance.parent_entity_id]
             children = ", ".join(
-                result.mcd.entities[item].name
-                for item in inheritance.child_entity_ids
+                result.mcd.entities[item].name for item in inheritance.child_entity_ids
             )
-            lines.append(f"ISA {parent.name} → {children} ({inheritance.strategy.value})")
+            lines.append(
+                f"ISA {parent.name} → {children} ({inheritance.strategy.value})"
+            )
         return "\n".join(lines).strip() + "\n"

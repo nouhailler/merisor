@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -17,9 +16,7 @@ from merisor.domain import ValidationReport, ValidationSeverity
 
 
 class ValidationDialog(QDialog):
-    def __init__(
-        self, report: ValidationReport, parent: QWidget | None = None
-    ) -> None:
+    def __init__(self, report: ValidationReport, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Validation du MCD")
         self.resize(680, 430)
@@ -64,4 +61,3 @@ class ValidationDialog(QDialog):
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self.accept)
         layout.addWidget(buttons)
-

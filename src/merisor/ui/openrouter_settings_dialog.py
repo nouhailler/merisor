@@ -4,16 +4,20 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
-    QComboBox,
     QLabel,
     QLineEdit,
     QPushButton,
     QVBoxLayout,
 )
 
-from merisor.application.openrouter_client import OpenRouterClient, OpenRouterError, OpenRouterModel
+from merisor.application.openrouter_client import (
+    OpenRouterClient,
+    OpenRouterError,
+    OpenRouterModel,
+)
 from merisor.application.openrouter_settings import OpenRouterKeyStore
 
 

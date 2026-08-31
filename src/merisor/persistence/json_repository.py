@@ -13,17 +13,18 @@ from merisor.domain import (
     Attribute,
     Cardinality,
     DiagramError,
-    MCDModel,
-    MaterializationStrategy,
     Entity,
+    FunctionalDependency,
+    FunctionalDependencyOrigin,
     Inheritance,
     InheritanceStrategy,
+    MaterializationStrategy,
+    MCDModel,
     MLDDataType,
     MLDError,
     Position,
     Relation,
 )
-
 
 FORMAT_VERSION = 2
 LEGACY_FORMAT_VERSION = 1
@@ -43,6 +44,12 @@ class JsonDiagramRepository:
                 "name": attribute.name,
                 "identifier": attribute.identifier,
                 "data_type": self._data_type_data(attribute.data_type),
+                "nullable": attribute.nullable,
+                "default": attribute.default,
+                "unique": attribute.unique,
+                "comment": attribute.comment,
+                "auto_increment": attribute.auto_increment,
+                "constraints": list(attribute.constraints),
             }
 
         def node_data(node: Entity | Association) -> dict[str, Any]:
@@ -110,6 +117,20 @@ class JsonDiagramRepository:
                     model.inheritances.values(), key=lambda item: item.id
                 )
             ],
+            "functional_dependencies": [
+                {
+                    "id": dependency.id,
+                    "owner_id": dependency.owner_id,
+                    "determinant_attribute_ids": list(
+                        dependency.determinant_attribute_ids
+                    ),
+                    "dependent_attribute_ids": list(dependency.dependent_attribute_ids),
+                    "origin": dependency.origin.value,
+                }
+                for dependency in sorted(
+                    model.functional_dependencies.values(), key=lambda item: item.id
+                )
+            ],
         }
 
     def from_dict(self, data: Any) -> MCDModel:
@@ -160,6 +181,7 @@ class JsonDiagramRepository:
                     )
                 )
             self._load_inheritances(model, data)
+            self._load_functional_dependencies(model, data)
         except DiagramError as error:
             raise PersistenceError(f"Diagramme V0.1 incohérent : {error}") from error
         return model
@@ -201,13 +223,12 @@ class JsonDiagramRepository:
                     )
                 )
             self._load_inheritances(model, data)
+            self._load_functional_dependencies(model, data)
         except DiagramError as error:
             raise PersistenceError(f"Diagramme V0.2 incohérent : {error}") from error
         return model
 
-    def _load_inheritances(
-        self, model: MCDModel, data: dict[str, Any]
-    ) -> None:
+    def _load_inheritances(self, model: MCDModel, data: dict[str, Any]) -> None:
         raw_inheritances = data.get("inheritances", [])
         if not isinstance(raw_inheritances, list):
             raise PersistenceError("Le champ 'inheritances' doit être une liste.")
@@ -233,6 +254,42 @@ class JsonDiagramRepository:
                     parent_entity_id=self._required_id(item, "parent_entity_id"),
                     child_entity_ids=children,
                     strategy=strategy,
+                )
+            )
+
+    def _load_functional_dependencies(
+        self, model: MCDModel, data: dict[str, Any]
+    ) -> None:
+        raw_dependencies = data.get("functional_dependencies", [])
+        if not isinstance(raw_dependencies, list):
+            raise PersistenceError(
+                "Le champ 'functional_dependencies' doit être une liste."
+            )
+        for raw in raw_dependencies:
+            item = self._required_object(raw, "dépendance fonctionnelle")
+            determinant_ids = tuple(
+                self._required_id({"value": value}, "value")
+                for value in self._required_list(item, "determinant_attribute_ids")
+            )
+            dependent_ids = tuple(
+                self._required_id({"value": value}, "value")
+                for value in self._required_list(item, "dependent_attribute_ids")
+            )
+            try:
+                origin = FunctionalDependencyOrigin(
+                    item.get("origin", FunctionalDependencyOrigin.USER.value)
+                )
+            except (TypeError, ValueError) as error:
+                raise PersistenceError(
+                    "Le champ 'origin' d'une dépendance doit valoir USER ou AI."
+                ) from error
+            model.add_functional_dependency(
+                FunctionalDependency(
+                    id=self._required_id(item, "id"),
+                    owner_id=self._required_id(item, "owner_id"),
+                    determinant_attribute_ids=determinant_ids,
+                    dependent_attribute_ids=dependent_ids,
+                    origin=origin,
                 )
             )
 
@@ -264,7 +321,9 @@ class JsonDiagramRepository:
         except (OSError, TypeError, ValueError) as error:
             if temporary_name is not None:
                 Path(temporary_name).unlink(missing_ok=True)
-            raise PersistenceError(f"Impossible d'enregistrer {target} : {error}") from error
+            raise PersistenceError(
+                f"Impossible d'enregistrer {target} : {error}"
+            ) from error
 
     def load(self, path: str | Path) -> MCDModel:
         source = Path(path)
@@ -293,6 +352,12 @@ class JsonDiagramRepository:
                     name=self._required_text(item, "name"),
                     identifier=identifier,
                     data_type=self._attribute_data_type(item),
+                    nullable=self._optional_boolean(item, "nullable"),
+                    default=self._nullable_text(item, "default"),
+                    unique=self._boolean(item, "unique", False),
+                    comment=self._text(item, "comment", ""),
+                    auto_increment=self._boolean(item, "auto_increment", False),
+                    constraints=self._string_tuple(item, "constraints"),
                 )
             )
         return attributes
@@ -345,9 +410,7 @@ class JsonDiagramRepository:
     def _materialization_strategy(
         data: dict[str, Any],
     ) -> MaterializationStrategy:
-        value = data.get(
-            "materialization_strategy", MaterializationStrategy.AUTO.value
-        )
+        value = data.get("materialization_strategy", MaterializationStrategy.AUTO.value)
         try:
             return MaterializationStrategy(value)
         except (TypeError, ValueError) as error:
@@ -396,10 +459,44 @@ class JsonDiagramRepository:
         if value is None:
             return None
         if not isinstance(value, int) or isinstance(value, bool):
+            raise PersistenceError(f"Le champ '{key}' d'un type doit être un entier.")
+        return value
+
+    @staticmethod
+    def _boolean(data: dict[str, Any], key: str, default: bool) -> bool:
+        value = data.get(key, default)
+        if not isinstance(value, bool):
+            raise PersistenceError(f"Le champ '{key}' doit être booléen.")
+        return value
+
+    @staticmethod
+    def _optional_boolean(data: dict[str, Any], key: str) -> bool | None:
+        value = data.get(key)
+        if value is not None and not isinstance(value, bool):
             raise PersistenceError(
-                f"Le champ '{key}' d'un type doit être un entier."
+                f"Le champ '{key}' doit être booléen ou valoir null."
             )
         return value
+
+    @staticmethod
+    def _nullable_text(data: dict[str, Any], key: str) -> str | None:
+        value = data.get(key)
+        if value is not None and not isinstance(value, str):
+            raise PersistenceError(f"Le champ '{key}' doit être textuel ou null.")
+        return value
+
+    @staticmethod
+    def _text(data: dict[str, Any], key: str, default: str) -> str:
+        value = data.get(key, default)
+        if not isinstance(value, str):
+            raise PersistenceError(f"Le champ '{key}' doit être textuel.")
+        return value
+
+    def _string_tuple(self, data: dict[str, Any], key: str) -> tuple[str, ...]:
+        raw = data.get(key, [])
+        if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
+            raise PersistenceError(f"Le champ '{key}' doit être une liste de textes.")
+        return tuple(raw)
 
     @staticmethod
     def _position(data: dict[str, Any]) -> Position:

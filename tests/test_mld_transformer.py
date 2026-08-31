@@ -5,8 +5,8 @@ from copy import deepcopy
 import pytest
 
 from merisor.application import (
-    MLDTransformationError,
     McdToMldTransformer,
+    MLDTransformationError,
     mcd_logical_fingerprint,
     render_mld_text,
 )
@@ -57,12 +57,8 @@ def binary_model(
         attributes=[Attribute(name) for name in association_attributes],
     )
     model.add_association(association)
-    model.create_relation(
-        first.id, association.id, Cardinality(*first_cardinality)
-    )
-    model.create_relation(
-        second.id, association.id, Cardinality(*second_cardinality)
-    )
+    model.create_relation(first.id, association.id, Cardinality(*first_cardinality))
+    model.create_relation(second.id, association.id, Cardinality(*second_cardinality))
     return model, first, second, association
 
 
@@ -116,20 +112,14 @@ def test_explicit_mcd_attribute_types_are_preserved_in_the_mld() -> None:
 
     table = McdToMldTransformer().transform(model).table("EVENEMENT")
 
-    assert table.column("id_evenement").data_type == MLDDataType(
-        MLDDataTypeName.BIGINT
-    )
-    assert table.column("date_evenement").data_type == MLDDataType(
-        MLDDataTypeName.DATE
-    )
+    assert table.column("id_evenement").data_type == MLDDataType(MLDDataTypeName.BIGINT)
+    assert table.column("date_evenement").data_type == MLDDataType(MLDDataTypeName.DATE)
     assert table.column("prix").data_type == MLDDataType(
         MLDDataTypeName.DECIMAL,
         precision=10,
         scale=2,
     )
-    assert table.column("description").data_type == MLDDataType(
-        MLDDataTypeName.TEXT
-    )
+    assert table.column("description").data_type == MLDDataType(MLDDataTypeName.TEXT)
 
 
 def test_composite_identifier_becomes_composite_primary_key() -> None:
@@ -174,9 +164,7 @@ def test_joined_inheritance_keeps_all_tables_and_adds_pk_foreign_keys() -> None:
     }
     for child_name in ("CLIENT", "FOURNISSEUR"):
         child = mld.table(child_name)
-        assert [column.name for column in child.primary_key_columns] == [
-            "id_personne"
-        ]
+        assert [column.name for column in child.primary_key_columns] == ["id_personne"]
         assert len(child.foreign_keys) == 1
         assert child.foreign_keys[0].referenced_table_id == mld.table("PERSONNE").id
         assert child.foreign_keys[0].column_ids == child.primary_key
@@ -382,8 +370,7 @@ def test_multiple_associations_are_not_merged_and_names_are_disambiguated() -> N
 def test_ternary_association_becomes_table_with_three_foreign_keys() -> None:
     model = DiagramModel()
     entities = [
-        add_entity(model, name, (f"id_{name.lower()}",))
-        for name in ("A", "B", "C")
+        add_entity(model, name, (f"id_{name.lower()}",)) for name in ("A", "B", "C")
     ]
     association = Association("TERNAIRE", attributes=[Attribute("quantite")])
     model.add_association(association)
@@ -399,16 +386,13 @@ def test_ternary_association_becomes_table_with_three_foreign_keys() -> None:
     ]
     assert len(table.foreign_keys) == 3
     assert table.column("quantite").source_element_id == association.id
-    assert all(
-        column.nullable is False for column in table.primary_key_columns
-    )
+    assert all(column.nullable is False for column in table.primary_key_columns)
 
 
 def test_ternary_association_uses_explicit_association_identifier() -> None:
     model = DiagramModel()
     entities = [
-        add_entity(model, name, (f"id_{name.lower()}",))
-        for name in ("A", "B", "C")
+        add_entity(model, name, (f"id_{name.lower()}",)) for name in ("A", "B", "C")
     ]
     association = Association(
         "TERNAIRE",
@@ -439,8 +423,7 @@ def test_ternary_association_uses_explicit_association_identifier() -> None:
 def test_force_fk_is_rejected_for_ternary_association() -> None:
     model = DiagramModel()
     entities = [
-        add_entity(model, name, (f"id_{name.lower()}",))
-        for name in ("A", "B", "C")
+        add_entity(model, name, (f"id_{name.lower()}",)) for name in ("A", "B", "C")
     ]
     association = Association(
         "TERNAIRE",
@@ -450,7 +433,7 @@ def test_force_fk_is_rejected_for_ternary_association() -> None:
     for entity in entities:
         model.create_relation(entity.id, association.id, Cardinality("0", "N"))
 
-    with pytest.raises(MLDTransformationError, match="FORCE_FK.*n-aire"):
+    with pytest.raises(MLDTransformationError, match=r"FORCE_FK.*n-aire"):
         McdToMldTransformer().transform(model)
 
 
@@ -559,18 +542,14 @@ def test_reflexive_association_requires_distinct_non_empty_roles() -> None:
 
 
 def test_one_to_one_with_attributes_is_rejected_instead_of_losing_data() -> None:
-    model, *_ = binary_model(
-        ("1", "1"), ("0", "1"), association_attributes=("date",)
-    )
+    model, *_ = binary_model(("1", "1"), ("0", "1"), association_attributes=("date",))
 
     with pytest.raises(MLDTransformationError, match="porte des attributs"):
         McdToMldTransformer().transform(model)
 
 
 def test_transformation_does_not_modify_mcd_and_is_repeatable() -> None:
-    model, *_ = binary_model(
-        ("0", "N"), ("1", "N"), association_attributes=("points",)
-    )
+    model, *_ = binary_model(("0", "N"), ("1", "N"), association_attributes=("points",))
     repository = JsonDiagramRepository()
     before = deepcopy(repository.to_dict(model))
 
@@ -768,7 +747,7 @@ def test_force_fk_many_to_many_is_rejected_by_transformer() -> None:
     model, *_nodes, association = binary_model(("0", "N"), ("1", "N"))
     association.materialization_strategy = MaterializationStrategy.FORCE_FK
 
-    with pytest.raises(MLDTransformationError, match="FORCE_FK.*N:N"):
+    with pytest.raises(MLDTransformationError, match=r"FORCE_FK.*N:N"):
         McdToMldTransformer().transform(model)
 
 
@@ -777,7 +756,7 @@ def test_historized_force_fk_contradiction_is_rejected_by_transformer() -> None:
     association.is_historized = True
     association.materialization_strategy = MaterializationStrategy.FORCE_FK
 
-    with pytest.raises(MLDTransformationError, match="historisée.*FORCE_FK"):
+    with pytest.raises(MLDTransformationError, match=r"historisée.*FORCE_FK"):
         McdToMldTransformer().transform(model)
 
 

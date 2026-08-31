@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
-from threading import Event
 import time
+from threading import Event
+from typing import Any
 
 import pytest
 from PySide6.QtCore import QPointF
@@ -14,7 +15,7 @@ from merisor.ui.ai_mcd_dialog import AiMcdDialog, MCDPreviewDialog
 from merisor.ui.canvas import DiagramScene
 
 
-def valid_mcd_data() -> dict:
+def valid_mcd_data() -> dict[str, Any]:
     return {
         "format_version": 2,
         "entities": [
@@ -79,14 +80,16 @@ def test_ai_service_rejects_invalid_json_and_reports_invalid_mcd() -> None:
     data["entities"][0]["attributes"][0]["identifier"] = False
     candidate = service.validate_json(json.dumps(data))
     assert not candidate.report.is_valid
-    assert any(issue.code == "entity.identifier_missing" for issue in candidate.report.errors)
+    assert any(
+        issue.code == "entity.identifier_missing" for issue in candidate.report.errors
+    )
 
 
 def test_openrouter_completion_extracts_assistant_content() -> None:
     client = OpenRouterClient("sk-or-test")
-    captured: dict = {}
+    captured: dict[str, Any] = {}
 
-    def fake_post(path: str, data: dict) -> dict:
+    def fake_post(path: str, data: dict[str, Any]) -> dict[str, Any]:
         captured.update(path=path, data=data)
         return {"choices": [{"message": {"content": '{"format_version": 2}'}}]}
 
@@ -145,7 +148,9 @@ def test_ai_generation_runs_outside_the_ui_thread(qapp, monkeypatch) -> None:  #
         release.wait(timeout=2)
         return json.dumps(valid_mcd_data())
 
-    monkeypatch.setattr(MCDPreviewDialog, "exec", lambda _self: QDialog.DialogCode.Rejected)
+    monkeypatch.setattr(
+        MCDPreviewDialog, "exec", lambda _self: QDialog.DialogCode.Rejected
+    )
     dialog = AiMcdDialog()
     dialog.store = FakeStore()  # type: ignore[assignment]
     monkeypatch.setattr(dialog.service, "generate", slow_generate)

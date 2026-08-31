@@ -2,15 +2,13 @@ from pathlib import Path
 
 from PySide6.QtGui import QImage
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_application_logo_and_debian_icon_are_valid_png_files() -> None:
     application_logo = PROJECT_ROOT / "src/merisor/assets/merisor.png"
     debian_icon = (
-        PROJECT_ROOT
-        / "packaging/deb/usr/share/icons/hicolor/256x256/apps/merisor.png"
+        PROJECT_ROOT / "packaging/deb/usr/share/icons/hicolor/256x256/apps/merisor.png"
     )
 
     logo_image = QImage(str(application_logo))
@@ -24,15 +22,13 @@ def test_application_logo_and_debian_icon_are_valid_png_files() -> None:
 
 def test_desktop_entry_uses_the_packaged_icon() -> None:
     desktop_entry = (
-        PROJECT_ROOT
-        / "packaging/deb/usr/share/applications/merisor.desktop"
+        PROJECT_ROOT / "packaging/deb/usr/share/applications/merisor.desktop"
     ).read_text(encoding="utf-8")
 
     assert "Icon=merisor\n" in desktop_entry
 
     appimage_desktop_entry = (
-        PROJECT_ROOT
-        / "packaging/appimage/io.github.nouhailler.merisor.desktop"
+        PROJECT_ROOT / "packaging/appimage/io.github.nouhailler.merisor.desktop"
     ).read_text(encoding="utf-8")
     assert "Exec=merisor\n" in appimage_desktop_entry
     assert "Icon=merisor\n" in appimage_desktop_entry
@@ -41,8 +37,7 @@ def test_desktop_entry_uses_the_packaged_icon() -> None:
 def test_appimage_packaging_contains_required_desktop_metadata() -> None:
     app_run = PROJECT_ROOT / "packaging/appimage/AppRun"
     metadata = (
-        PROJECT_ROOT
-        / "packaging/appimage/io.github.nouhailler.merisor.appdata.xml"
+        PROJECT_ROOT / "packaging/appimage/io.github.nouhailler.merisor.appdata.xml"
     ).read_text(encoding="utf-8")
     build_script = PROJECT_ROOT / "packaging/build_appimage.sh"
 

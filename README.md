@@ -13,6 +13,7 @@
   <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
   <img alt="PySide6" src="https://img.shields.io/badge/Interface-PySide6-41CD52?logo=qt&logoColor=white">
   <img alt="Tests pytest" src="https://img.shields.io/badge/Tests-pytest-0A9EDC?logo=pytest&logoColor=white">
+  <a href="https://github.com/nouhailler/merisor/actions/workflows/quality.yml"><img alt="Qualité Python" src="https://github.com/nouhailler/merisor/actions/workflows/quality.yml/badge.svg"></a>
   <a href="https://github.com/nouhailler/merisor/blob/main/LICENSE"><img alt="Licence MIT" src="https://img.shields.io/badge/Licence-MIT-blue.svg"></a>
   <a href="https://pypi.org/project/merisor/"><img alt="PyPI" src="https://img.shields.io/pypi/v/merisor?logo=pypi&logoColor=white"></a>
 </p>
@@ -82,6 +83,9 @@ flowchart LR
 - attributs d’entités et d’associations ;
 - types logiques explicites ou automatiques, avec longueur de `VARCHAR` et
   précision/échelle de `DECIMAL` ;
+- propriétés complètes des attributs : présence obligatoire/facultative,
+  valeur par défaut, unicité, commentaire, auto-incrémentation et expressions
+  `CHECK` ;
 - identifiants simples ou composés, repérés par `#` ;
 - cardinalités `(0,1)`, `(0,N)`, `(1,1)` et `(1,N)` ;
 - associations historisées ;
@@ -102,6 +106,51 @@ flowchart LR
 - relations incomplètes, cardinalités invalides et rôles réflexifs dupliqués ;
 - incompatibilités entre historisation, `FORCE_FK` et N:N ;
 - rapport distinguant erreurs bloquantes et avertissements.
+
+### 🧠 Analyse intelligente de la qualité
+
+La commande **Modèle → Analyser la qualité du modèle** ajoute une seconde
+couche non bloquante, entièrement locale et sans IA :
+
+- types suggérés à partir du nom (`date_naissance` → `DATE`, `prix` →
+  `DECIMAL(10,2)`, `est_actif` → `BOOLEAN`, etc.) ;
+- suggestions d'unicité pour les courriels, identifiants de connexion,
+  références et identifiants métier courants ;
+- détection d'entités aux noms proches, synonymes ou partageant de nombreux
+  attributs, en ignorant les couples mère/fille ISA ;
+- contrôle des conventions de nommage majoritaires pour les entités,
+  associations et attributs ;
+- signaux de normalisation : attributs numérotés, listes encodées dans un
+  champ, attributs composés, clés étrangères techniques présentes dans le MCD
+  et objets anormalement larges ;
+- score global pondéré et six scores détaillés, avec chaque déduction affichée
+  et expliquée.
+
+Les résultats sont des recommandations avec un niveau de confiance. Ils ne
+modifient jamais automatiquement le MCD et ne remplacent pas la validation
+structurelle MERISE.
+
+### 🎓 Assistant de normalisation
+
+La commande **Modèle → Assistant de normalisation** accompagne l'utilisateur
+sans masquer les hypothèses métier :
+
+- saisie et modification de dépendances fonctionnelles composites `X → Y` ;
+- calcul de fermeture d'attributs et recherche déterministe des clés candidates ;
+- vérification formelle de la 2NF et de la 3NF à partir des dépendances saisies ;
+- détection heuristique des listes, attributs composés et groupes répétitifs
+  susceptibles d'enfreindre la 1NF ;
+- rapport pédagogique expliquant chaque constat et son « Pourquoi ? » ;
+- aperçu d'une décomposition dans un MCD projeté, sans toucher au document ;
+- application confirmée des extractions 3NF non ambiguës en une opération
+  entièrement annulable ;
+- suggestions OpenRouter facultatives, asynchrones et toujours soumises à
+  confirmation humaine.
+
+> [!NOTE]
+> La 1NF dépend de la signification des données : MERISOR signale donc des
+> indices, pas des certitudes. Les conclusions 2NF/3NF ne sont complètes que si
+> toutes les dépendances métier pertinentes ont été déclarées.
 
 ### 🗂️ Génération du MLD
 
@@ -147,6 +196,35 @@ flowchart LR
 - appel de génération exécuté dans un thread Qt avec progression indéterminée,
   afin de conserver une interface réactive ;
 - organisation automatique du graphe après import.
+
+### 🗣️ Prochaine étape : assistant MERISE conversationnel
+
+La prochaine évolution prévue transformera la génération ponctuelle en un
+assistant de conception. À partir d'une description métier, il devra détecter
+les concepts, rendre ses hypothèses visibles puis poser les questions qui
+modifient réellement le modèle : cardinalités, historisation, distinction entre
+concept et occurrence physique, ou choix entre entité et association.
+
+Le principe de sécurité restera le même :
+
+```text
+Conversation
+    ↓
+Brouillon MCD isolé et versionné
+    ↓
+Validation déterministe MERISOR
+    ↓
+Aperçu des différences
+    ↓
+Import confirmé et annulable
+```
+
+Les réponses OpenRouter devront respecter une enveloppe JSON stricte contenant
+le message, les concepts détectés, les hypothèses, les questions et un patch du
+brouillon. Le texte de conversation ne deviendra jamais directement la source
+de vérité et aucun changement ne sera appliqué silencieusement. Cette
+fonctionnalité est documentée dans [CONTEXT.md](CONTEXT.md), mais n'est pas
+encore implémentée.
 
 ## 🚀 Installation
 
@@ -278,6 +356,24 @@ choisissez la mère, les filles et la stratégie MLD.
 La touche `Suppr` enlève la sélection. Supprimer une entité ou une association
 supprime aussi ses relations afin d’éviter les références orphelines.
 
+#### Éditer complètement un attribut
+
+Sélectionnez une entité ou une association, puis un attribut dans le panneau
+**Propriétés**. La section dédiée permet de modifier en une seule opération
+annulable :
+
+- le nom et le type logique ;
+- la longueur de `VARCHAR` ou la précision/échelle de `DECIMAL` ;
+- la présence **Obligatoire**, **Facultative** ou **Automatique** pour préserver
+  le comportement d'un ancien fichier ;
+- la valeur par défaut, l'unicité et l'auto-incrémentation ;
+- un commentaire métier ;
+- une ou plusieurs expressions `CHECK`, une par ligne.
+
+Les identifiants restent sélectionnables directement dans la première colonne
+de la liste. Une auto-incrémentation exige un identifiant simple de type
+`INTEGER` ou `BIGINT`, sans valeur par défaut explicite.
+
 ### 2. Valider et enregistrer
 
 Utilisez **Modèle → Valider le MCD**. Un modèle incomplet peut être sauvegardé
@@ -299,6 +395,20 @@ présente :
 
 Après une modification logique du MCD, le MLD passe à l’état **obsolète** et
 doit être régénéré. Déplacer seulement un objet ne le rend pas obsolète.
+
+### 3 bis. Vérifier la normalisation
+
+1. Ouvrez **Modèle → Assistant de normalisation…** (`Ctrl+Shift+N`).
+2. Choisissez une entité ou une association.
+3. Déclarez les dépendances fonctionnelles, par exemple
+   `code_service → nom_service`.
+4. Consultez les clés candidates et les contrôles 1NF, 2NF et 3NF.
+5. Prévisualisez une décomposition proposée : le MCD courant reste inchangé.
+6. Appliquez-la seulement après confirmation ; **Annuler** restaure alors le
+   modèle complet.
+
+Le bouton **Suggérer avec l'IA** n'est actif que si OpenRouter a été configuré.
+Une proposition IA n'est jamais ajoutée silencieusement.
 
 ### 4. Générer le SQL
 
@@ -356,6 +466,7 @@ courant n’est pas modifié.
 | Supprimer la sélection | `Suppr` |
 | Zoom avant / arrière / initial | `Ctrl++` / `Ctrl+-` / `Ctrl+0` |
 | Valider le MCD | `Ctrl+Shift+V` |
+| Assistant de normalisation | `Ctrl+Shift+N` |
 | Réorganiser le MCD | `Ctrl+Shift+L` |
 | Générer le MLD | `Ctrl+Shift+M` |
 | Générer SQL | `Ctrl+Alt+S` |
@@ -414,7 +525,25 @@ objets sans dépendre de leurs noms ni de leur position graphique.
           "id": "attr_pilote_id",
           "name": "id_pilote",
           "identifier": true,
-          "data_type": {"name": "BIGINT"}
+          "data_type": {"name": "BIGINT"},
+          "nullable": false,
+          "default": null,
+          "unique": false,
+          "comment": "Identifiant technique du pilote",
+          "auto_increment": true,
+          "constraints": []
+        },
+        {
+          "id": "attr_pilote_nom",
+          "name": "nom",
+          "identifier": false,
+          "data_type": {"name": "VARCHAR", "length": 100},
+          "nullable": false,
+          "default": null,
+          "unique": false,
+          "comment": "Nom usuel",
+          "auto_increment": false,
+          "constraints": ["length(nom) >= 2"]
         }
       ]
     }
@@ -438,7 +567,16 @@ objets sans dépendre de leurs noms ni de leur position graphique.
       "cardinality": {"minimum": "0", "maximum": "N"}
     }
   ],
-  "inheritances": []
+  "inheritances": [],
+  "functional_dependencies": [
+    {
+      "id": "fd_pilote_nom",
+      "owner_id": "entity_pilote",
+      "determinant_attribute_ids": ["attr_pilote_id"],
+      "dependent_attribute_ids": ["attr_pilote_nom"],
+      "origin": "USER"
+    }
+  ]
 }
 ```
 
@@ -450,8 +588,13 @@ Compatibilité :
   `is_historized = false` et `materialization_strategy = AUTO` ;
 - un attribut sans `data_type`, ou avec `data_type: null`, reste en mode
   automatique ;
+- les anciennes propriétés d'attribut absentes reçoivent les valeurs
+  rétrocompatibles `nullable = null`, `default = null`, `unique = false`,
+  `comment = ""`, `auto_increment = false` et `constraints = []` ;
 - une relation ancienne sans `role` reçoit une chaîne vide et un fichier sans
   `inheritances` reste parfaitement lisible ;
+- un fichier sans `functional_dependencies` reçoit une collection vide ; les
+  origines possibles sont `USER` et `AI` ;
 - le fichier source n’est réécrit que lors d’un enregistrement explicite ;
 - le MLD n’est pas sauvegardé : il est toujours recalculé depuis le MCD.
 
@@ -536,6 +679,8 @@ src/merisor/
 ├── domain/
 │   ├── model.py                 objets MCD
 │   ├── validation.py            validation métier
+│   ├── quality.py               analyse locale et score explicable
+│   ├── normalization.py         fermeture, clés candidates, 1NF/2NF/3NF
 │   └── mld.py                   objets MLD indépendants
 ├── application/
 │   ├── controller.py            orchestration document/scène
@@ -545,6 +690,7 @@ src/merisor/
 │   ├── ddl_importer.py           reverse-engineering DDL → MLD → MCD
 │   ├── sql_generator.py         validation et dialectes SQL
 │   ├── ai_mcd_service.py        schéma/prompt/validation IA
+│   ├── ai_normalization_service.py suggestions facultatives de DF
 │   ├── openrouter_client.py     appels HTTP OpenRouter
 │   └── openrouter_settings.py   préférences et clé locale
 ├── persistence/
@@ -555,6 +701,8 @@ src/merisor/
 │   ├── mld_view.py              MLD graphique et textuel
 │   ├── sql_dialog.py            aperçu et export SQL
 │   ├── ai_mcd_dialog.py         génération/aperçu/import IA
+│   ├── quality_dialog.py        rapport de qualité détaillé
+│   ├── normalization_dialog.py  saisie, rapport et aperçu non destructif
 │   └── main_window.py           fenêtre principale
 └── assets/
     └── merisor.png              icône de l’application
@@ -614,13 +762,21 @@ ticket GitHub ou un commit.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[test,ai]"
+python -m pip install -e ".[test,ai,quality]"
+ruff format --check .
+ruff check .
+mypy
 QT_QPA_PLATFORM=offscreen pytest
 ```
 
+`ruff format .` applique automatiquement le formatage. La CI refuse une
+contribution si le formatage, le lint, le typage strict ou les tests échouent.
+La configuration commune de Ruff et mypy se trouve dans `pyproject.toml` afin
+que les contrôles locaux et GitHub Actions restent identiques.
+
 La suite couvre le domaine MCD, la validation, la persistance et migration JSON,
 les commandes annulables, l’interface Qt, la disposition automatique, la
-génération IA, toutes les règles MCD → MLD, les trois dialectes SQL, les cycles
+normalisation formelle, la génération IA, toutes les règles MCD → MLD, les trois dialectes SQL, les cycles
 de dépendances, les exports et la chaîne MotoGP complète.
 
 Pour vérifier que l’application démarre sans ouvrir de fenêtre visible :
@@ -684,6 +840,11 @@ artefacts lors de l’envoi d’un tag `v*`.
   base existante et n'analyse pas les vues, triggers, procédures ou extensions
   propriétaires ;
 - les types SQL non portables ou inconnus sont refusés avec un message explicite.
+- les contrôles 2NF/3NF reflètent les dépendances déclarées : ils ne peuvent pas
+  deviner une règle métier absente ;
+- les décompositions 2NF nécessitant une identification relative, ainsi que les
+  transformations ambiguës d'associations, sont proposées en aperçu mais ne
+  sont pas appliquées automatiquement.
 
 ## 🤝 Contribuer et signaler un problème
 
@@ -692,7 +853,8 @@ Les contributions, propositions et rapports de bogues sont bienvenus.
 1. Consultez les [issues](https://github.com/nouhailler/merisor/issues).
 2. Créez une branche dédiée.
 3. Ajoutez ou adaptez les tests.
-4. Vérifiez `QT_QPA_PLATFORM=offscreen pytest`.
+4. Vérifiez `ruff format --check .`, `ruff check .`, `mypy` et
+   `QT_QPA_PLATFORM=offscreen pytest`.
 5. Ouvrez une pull request en expliquant le comportement attendu.
 
 Pour un problème d’affichage ou de transformation, joignez si possible un petit

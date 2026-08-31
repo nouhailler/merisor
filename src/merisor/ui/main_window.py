@@ -7,8 +7,8 @@ from pathlib import Path
 from PySide6.QtCore import QPointF, QSettings, Qt
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
-    QDockWidget,
     QDialog,
+    QDockWidget,
     QFileDialog,
     QInputDialog,
     QMainWindow,
@@ -20,22 +20,24 @@ from PySide6.QtWidgets import (
 
 from merisor import __version__
 from merisor.application import (
-    DiagramController,
     DDLImportError,
+    DiagramController,
     MLDGenerationBlocked,
     MLDTransformationError,
     SQLDDLImporter,
 )
 from merisor.domain import InheritanceStrategy, MLDModel
 from merisor.persistence import PersistenceError
-from merisor.ui.canvas import DiagramScene, DiagramView, ToolMode
 from merisor.ui.ai_mcd_dialog import AiMcdDialog
+from merisor.ui.canvas import DiagramScene, DiagramView, ToolMode
 from merisor.ui.ddl_import_dialog import DDLImportPreviewDialog
 from merisor.ui.diagram_exporter import DiagramExportError, DiagramVisualExporter
-from merisor.ui.mld_view import MLDView
 from merisor.ui.mld_properties_panel import MLDPropertiesPanel
+from merisor.ui.mld_view import MLDView
+from merisor.ui.normalization_dialog import NormalizationAssistantDialog
 from merisor.ui.openrouter_settings_dialog import OpenRouterSettingsDialog
 from merisor.ui.properties_panel import PropertiesPanel
+from merisor.ui.quality_dialog import QualityReportDialog
 from merisor.ui.sql_dialog import SQLPreviewDialog
 from merisor.ui.validation_dialog import ValidationDialog
 
@@ -111,6 +113,10 @@ class MainWindow(QMainWindow):
 
         self.validate_action = QAction("Valider le MCD…", self)
         self.validate_action.setShortcut(QKeySequence("Ctrl+Shift+V"))
+        self.quality_action = QAction("Analyser la qualité du modèle…", self)
+        self.quality_action.setShortcut(QKeySequence("Ctrl+Shift+Q"))
+        self.normalization_action = QAction("Assistant de normalisation…", self)
+        self.normalization_action.setShortcut(QKeySequence("Ctrl+Shift+N"))
         self.generate_mld_action = QAction("Générer le MLD", self)
         self.generate_mld_action.setShortcut(QKeySequence("Ctrl+Shift+M"))
         self.generate_sql_action = QAction("Générer SQL", self)
@@ -161,6 +167,8 @@ class MainWindow(QMainWindow):
 
         model_menu = self.menuBar().addMenu("Modèle")
         model_menu.addAction(self.validate_action)
+        model_menu.addAction(self.quality_action)
+        model_menu.addAction(self.normalization_action)
         model_menu.addAction(self.add_inheritance_action)
         model_menu.addSeparator()
         model_menu.addAction(self.generate_mld_action)
@@ -187,6 +195,8 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.delete_action)
         toolbar.addSeparator()
         toolbar.addAction(self.validate_action)
+        toolbar.addAction(self.quality_action)
+        toolbar.addAction(self.normalization_action)
         toolbar.addAction(self.generate_mld_action)
         toolbar.addAction(self.generate_sql_action)
         self.addToolBar(toolbar)
@@ -205,6 +215,8 @@ class MainWindow(QMainWindow):
         self.zoom_out_action.triggered.connect(self.view.zoom_out)
         self.reset_zoom_action.triggered.connect(self.view.reset_zoom)
         self.validate_action.triggered.connect(self.show_validation)
+        self.quality_action.triggered.connect(self.show_quality_report)
+        self.normalization_action.triggered.connect(self.show_normalization_assistant)
         self.generate_mld_action.triggered.connect(self.generate_mld)
         self.generate_sql_action.triggered.connect(self.generate_sql)
         self.generate_ai_mcd_action.triggered.connect(self.generate_ai_mcd)
@@ -330,6 +342,13 @@ class MainWindow(QMainWindow):
         dialog = ValidationDialog(self.controller.validate(), self)
         dialog.exec()
 
+    def show_quality_report(self, _checked: bool = False) -> None:
+        dialog = QualityReportDialog(self.controller.analyze_quality(), self)
+        dialog.exec()
+
+    def show_normalization_assistant(self, _checked: bool = False) -> None:
+        NormalizationAssistantDialog(self.controller, self).exec()
+
     def generate_mld(self, _checked: bool = False) -> None:
         try:
             self.controller.generate_mld()
@@ -367,8 +386,7 @@ class MainWindow(QMainWindow):
 
     def _update_sql_action(self) -> None:
         self.generate_sql_action.setEnabled(
-            self.controller.mld_model is not None
-            and not self.controller.mld_is_stale
+            self.controller.mld_model is not None and not self.controller.mld_is_stale
         )
 
     def generate_sql(self, _checked: bool = False) -> None:
@@ -459,7 +477,9 @@ class MainWindow(QMainWindow):
             result = SQLDDLImporter().import_text(source_sql)
         except (OSError, UnicodeError) as error:
             QMessageBox.critical(
-                self, "Import DDL impossible", f"Impossible de lire le fichier : {error}"
+                self,
+                "Import DDL impossible",
+                f"Impossible de lire le fichier : {error}",
             )
             return
         except DDLImportError as error:
@@ -527,7 +547,9 @@ class MainWindow(QMainWindow):
             if self.controller.document_path is not None
             else "diagramme"
         )
-        default_path = self._dialog_directory() / f"{project_name}_{diagram_kind.lower()}.png"
+        default_path = (
+            self._dialog_directory() / f"{project_name}_{diagram_kind.lower()}.png"
+        )
         filename, selected_filter = QFileDialog.getSaveFileName(
             self,
             f"Exporter le {diagram_kind}",

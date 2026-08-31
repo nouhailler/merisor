@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
@@ -114,9 +114,7 @@ class SQLPreviewDialog(QDialog):
             return False
         self.sql_preview.setPlainText(script)
         if report.warnings:
-            messages = "\n".join(
-                f"⚠ {issue.message}" for issue in report.warnings
-            )
+            messages = "\n".join(f"⚠ {issue.message}" for issue in report.warnings)
             self.report_label.setText(messages)
             self.report_label.setStyleSheet("color: #8a5a00;")
         else:
@@ -142,9 +140,10 @@ class SQLPreviewDialog(QDialog):
         return target
 
     def _choose_export_path(self) -> None:
-        project = re.sub(
-            r"[^0-9A-Za-z_-]+", "_", self.project_name.strip()
-        ).strip("_") or "modele"
+        project = (
+            re.sub(r"[^0-9A-Za-z_-]+", "_", self.project_name.strip()).strip("_")
+            or "modele"
+        )
         suggested = f"{project}_{self.target.value}.sql"
         filename, _filter = QFileDialog.getSaveFileName(
             self,

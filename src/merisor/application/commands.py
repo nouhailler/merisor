@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -12,9 +13,11 @@ from merisor.domain import (
     Attribute,
     Cardinality,
     Entity,
+    FunctionalDependency,
     Inheritance,
-    MLDDataType,
     MaterializationStrategy,
+    MCDModel,
+    MLDDataType,
     Position,
     Relation,
 )
@@ -28,11 +31,16 @@ class DeletionSnapshot:
     associations: tuple[Association, ...]
     relations: tuple[Relation, ...]
     inheritances: tuple[Inheritance, ...] = ()
+    functional_dependencies: tuple[FunctionalDependency, ...] = ()
 
     @property
     def empty(self) -> bool:
         return not (
-            self.entities or self.associations or self.relations or self.inheritances
+            self.entities
+            or self.associations
+            or self.relations
+            or self.inheritances
+            or self.functional_dependencies
         )
 
 
@@ -49,6 +57,18 @@ class CommandTarget(Protocol):
 
     def command_remove_inheritance(self, inheritance_id: str) -> None: ...
 
+    def command_insert_functional_dependency(
+        self, dependency: FunctionalDependency
+    ) -> None: ...
+
+    def command_remove_functional_dependency(self, dependency_id: str) -> None: ...
+
+    def command_replace_functional_dependency(
+        self, dependency_id: str, replacement: FunctionalDependency
+    ) -> None: ...
+
+    def command_replace_model_state(self, model: MCDModel) -> None: ...
+
     def command_move_node(self, node_id: str, position: Position) -> None: ...
 
     def command_remove_snapshot(self, snapshot: DeletionSnapshot) -> None: ...
@@ -62,6 +82,10 @@ class CommandTarget(Protocol):
     ) -> None: ...
 
     def command_remove_attribute(self, owner_id: str, attribute_id: str) -> None: ...
+
+    def command_replace_attribute(
+        self, owner_id: str, replacement: Attribute
+    ) -> None: ...
 
     def command_rename_attribute(
         self, owner_id: str, attribute_id: str, name: str
@@ -135,6 +159,73 @@ class AddInheritanceCommand(QUndoCommand):
 
     def undo(self) -> None:
         self._target.command_remove_inheritance(self._inheritance.id)
+
+
+class AddFunctionalDependencyCommand(QUndoCommand):
+    def __init__(self, target: CommandTarget, dependency: FunctionalDependency) -> None:
+        super().__init__("Ajouter une dépendance fonctionnelle")
+        self._target = target
+        self._dependency = dependency
+
+    def redo(self) -> None:
+        self._target.command_insert_functional_dependency(self._dependency)
+
+    def undo(self) -> None:
+        self._target.command_remove_functional_dependency(self._dependency.id)
+
+
+class RemoveFunctionalDependencyCommand(QUndoCommand):
+    def __init__(self, target: CommandTarget, dependency: FunctionalDependency) -> None:
+        super().__init__("Supprimer une dépendance fonctionnelle")
+        self._target = target
+        self._dependency = dependency
+
+    def redo(self) -> None:
+        self._target.command_remove_functional_dependency(self._dependency.id)
+
+    def undo(self) -> None:
+        self._target.command_insert_functional_dependency(self._dependency)
+
+
+class ReplaceFunctionalDependencyCommand(QUndoCommand):
+    def __init__(
+        self,
+        target: CommandTarget,
+        old_value: FunctionalDependency,
+        new_value: FunctionalDependency,
+    ) -> None:
+        super().__init__("Modifier une dépendance fonctionnelle")
+        self._target = target
+        self._old_value = old_value
+        self._new_value = new_value
+
+    def redo(self) -> None:
+        self._target.command_replace_functional_dependency(
+            self._old_value.id, self._new_value
+        )
+
+    def undo(self) -> None:
+        self._target.command_replace_functional_dependency(
+            self._new_value.id, self._old_value
+        )
+
+
+class ReplaceModelStateCommand(QUndoCommand):
+    """Applique une décomposition complète comme une seule opération annulable."""
+
+    def __init__(
+        self, target: CommandTarget, old_model: MCDModel, new_model: MCDModel
+    ) -> None:
+        super().__init__("Appliquer la décomposition normalisée")
+        self._target = target
+        self._old_model = copy.deepcopy(old_model)
+        self._new_model = copy.deepcopy(new_model)
+
+    def redo(self) -> None:
+        self._target.command_replace_model_state(copy.deepcopy(self._new_model))
+
+    def undo(self) -> None:
+        self._target.command_replace_model_state(copy.deepcopy(self._old_model))
 
 
 class MoveNodeCommand(QUndoCommand):
@@ -218,12 +309,14 @@ class RemoveAttributeCommand(QUndoCommand):
         owner_id: str,
         attribute: Attribute,
         index: int,
+        dependencies: tuple[FunctionalDependency, ...] = (),
     ) -> None:
         super().__init__("Supprimer un attribut")
         self._target = target
         self._owner_id = owner_id
         self._attribute = attribute
         self._index = index
+        self._dependencies = dependencies
 
     def redo(self) -> None:
         self._target.command_remove_attribute(self._owner_id, self._attribute.id)
@@ -232,6 +325,8 @@ class RemoveAttributeCommand(QUndoCommand):
         self._target.command_insert_attribute(
             self._owner_id, self._attribute, self._index
         )
+        for dependency in self._dependencies:
+            self._target.command_insert_functional_dependency(dependency)
 
 
 class RenameAttributeCommand(QUndoCommand):
@@ -259,6 +354,29 @@ class RenameAttributeCommand(QUndoCommand):
         self._target.command_rename_attribute(
             self._owner_id, self._attribute_id, self._old_name
         )
+
+
+class ReplaceAttributeCommand(QUndoCommand):
+    """Remplace toutes les propriétés d'un attribut en une opération."""
+
+    def __init__(
+        self,
+        target: CommandTarget,
+        owner_id: str,
+        old_value: Attribute,
+        new_value: Attribute,
+    ) -> None:
+        super().__init__("Modifier les propriétés d'un attribut")
+        self._target = target
+        self._owner_id = owner_id
+        self._old_value = old_value
+        self._new_value = new_value
+
+    def redo(self) -> None:
+        self._target.command_replace_attribute(self._owner_id, self._new_value)
+
+    def undo(self) -> None:
+        self._target.command_replace_attribute(self._owner_id, self._old_value)
 
 
 class SetIdentifierCommand(QUndoCommand):

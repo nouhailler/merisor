@@ -1,13 +1,11 @@
 from __future__ import annotations
 
+import pytest
 from PySide6.QtCore import QPointF
 
-import pytest
-
-from merisor.application import MLDGenerationBlocked
+from merisor.application import DiagramController, MLDGenerationBlocked
 from merisor.domain import Cardinality, MLDDataType, MLDDataTypeName, Position
 from merisor.ui.canvas import DiagramScene
-from merisor.application import DiagramController
 from merisor.ui.main_window import MainWindow
 from merisor.ui.mld_view import MLDTableGraphicsItem, MLDView
 
@@ -72,9 +70,7 @@ def test_controller_blocks_generation_when_mcd_has_errors(qapp) -> None:  # type
 def test_controller_blocks_historized_force_fk_contradiction(qapp) -> None:  # type: ignore[no-untyped-def]
     controller = DiagramController(DiagramScene())
     association_id = build_historized_motogp_controller(controller)
-    controller.set_association_materialization_strategy(
-        association_id, "FORCE_FK"
-    )
+    controller.set_association_materialization_strategy(association_id, "FORCE_FK")
 
     with pytest.raises(MLDGenerationBlocked) as captured:
         controller.generate_mld()
@@ -91,7 +87,9 @@ def test_controller_tracks_current_and_stale_mld(qapp) -> None:  # type: ignore[
     build_valid_controller(controller)
     generated = controller.generate_mld()
     pilot = next(
-        entity for entity in controller.model.entities.values() if entity.name == "PILOTE"
+        entity
+        for entity in controller.model.entities.values()
+        if entity.name == "PILOTE"
     )
 
     assert controller.mld_model is generated
@@ -124,7 +122,9 @@ def test_attribute_type_change_marks_mld_stale_and_is_undoable(qapp) -> None:  #
     build_valid_controller(controller)
     controller.generate_mld()
     pilot = next(
-        entity for entity in controller.model.entities.values() if entity.name == "PILOTE"
+        entity
+        for entity in controller.model.entities.values()
+        if entity.name == "PILOTE"
     )
     name_attribute = next(
         attribute for attribute in pilot.attributes if attribute.name == "nom"
@@ -147,7 +147,9 @@ def test_regeneration_replaces_stale_mld_deterministically(qapp) -> None:  # typ
     build_valid_controller(controller)
     first = controller.generate_mld()
     pilot = next(
-        entity for entity in controller.model.entities.values() if entity.name == "PILOTE"
+        entity
+        for entity in controller.model.entities.values()
+        if entity.name == "PILOTE"
     )
     controller.rename_node(pilot.id, "AVIATEUR")
 
@@ -221,6 +223,7 @@ def test_historized_motogp_generation_is_visible_in_both_mld_views(qapp) -> None
     window.generate_mld()
     qapp.processEvents()
 
+    assert window.controller.mld_model is not None
     table = window.controller.mld_model.table("ENGAGER")
     assert table.source_element_id == association_id
     assert [column.name for column in table.primary_key_columns] == ["id_engager"]

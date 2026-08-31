@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 
 from merisor.domain import (
     Association,
@@ -77,7 +77,9 @@ class SQLDDLImporter:
                 table, foreign_keys = self._parse_create_table(text, len(tables))
                 key = table.name.casefold()
                 if key in by_name:
-                    raise DDLImportError(f'La table "{table.name}" est déclarée deux fois.')
+                    raise DDLImportError(
+                        f'La table "{table.name}" est déclarée deux fois.'
+                    )
                 tables.append(table)
                 by_name[key] = table
                 pending.extend(foreign_keys)
@@ -106,7 +108,7 @@ class SQLDDLImporter:
             )
         mld = MLDModel(tables, generated_from_fingerprint="ddl-import")
         mcd, reverse_warnings = self._to_mcd(mld)
-        return DDLImportResult(mld, mcd, tuple((*warnings, *reverse_warnings)))
+        return DDLImportResult(mld, mcd, (*warnings, *reverse_warnings))
 
     def _parse_create_table(
         self, statement: str, table_index: int
@@ -194,9 +196,7 @@ class SQLDDLImporter:
                 )
             )
         pending = [
-            _PendingForeignKey(
-                table, local, target, remote, name, on_delete, on_update
-            )
+            _PendingForeignKey(table, local, target, remote, name, on_delete, on_update)
             for local, target, remote, name, on_delete, on_update in foreign_specs
         ]
         return table, pending
@@ -218,7 +218,9 @@ class SQLDDLImporter:
     ]:
         name_token, remainder = self._take_identifier(definition)
         name = self._identifier(name_token)
-        type_match = re.match(r"(?is)^\s*([A-Z][A-Z0-9_ ]*(?:\s*\([^)]*\))?)", remainder)
+        type_match = re.match(
+            r"(?is)^\s*([A-Z][A-Z0-9_ ]*(?:\s*\([^)]*\))?)", remainder
+        )
         if type_match is None:
             raise DDLImportError(f"Type absent pour {table.name}.{name}.")
         raw_type = type_match.group(1).strip()
@@ -246,11 +248,17 @@ class SQLDDLImporter:
             on_delete, on_update = self._referential_actions(constraints)
             inline_fk = (
                 self._identifier(reference.group(1)),
-                tuple(self._identifier(item) for item in self._split_top_level(reference.group(2), ",")),
+                tuple(
+                    self._identifier(item)
+                    for item in self._split_top_level(reference.group(2), ",")
+                ),
                 on_delete,
                 on_update,
             )
-        checks = [item.strip() for item in re.findall(r"(?is)\bCHECK\s*\(([^)]*)\)", constraints)]
+        checks = [
+            item.strip()
+            for item in re.findall(r"(?is)\bCHECK\s*\(([^)]*)\)", constraints)
+        ]
         default_match = re.search(
             r"(?is)\bDEFAULT\s+('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|[^\s,]+)",
             constraints,
@@ -309,13 +317,21 @@ class SQLDDLImporter:
         table_name = self._identifier(match.group(1))
         table = by_name.get(table_name.casefold())
         if table is None:
-            raise DDLImportError(f"ALTER TABLE référence la table absente {table_name}.")
+            raise DDLImportError(
+                f"ALTER TABLE référence la table absente {table_name}."
+            )
         on_delete, on_update = self._referential_actions(statement)
         return _PendingForeignKey(
             table,
-            tuple(self._identifier(item) for item in self._split_top_level(match.group(3), ",")),
+            tuple(
+                self._identifier(item)
+                for item in self._split_top_level(match.group(3), ",")
+            ),
             self._identifier(match.group(4)),
-            tuple(self._identifier(item) for item in self._split_top_level(match.group(5), ",")),
+            tuple(
+                self._identifier(item)
+                for item in self._split_top_level(match.group(5), ",")
+            ),
             self._identifier(match.group(2)) if match.group(2) else None,
             on_delete,
             on_update,
@@ -332,7 +348,10 @@ class SQLDDLImporter:
         table = by_name.get(table_name.casefold())
         if table is None:
             raise DDLImportError(f"L'index référence la table absente {table_name}.")
-        names = tuple(self._identifier(item) for item in self._split_top_level(match.group(4), ","))
+        names = tuple(
+            self._identifier(item)
+            for item in self._split_top_level(match.group(4), ",")
+        )
         table.indexes.append(
             MLDIndex(
                 id=f"index:ddl:{table.id}:{len(table.indexes)}",
@@ -349,7 +368,9 @@ class SQLDDLImporter:
             "et les intentions conceptuelles absentes du DDL doivent être vérifiées."
         ]
         fk_columns = {
-            table.id: {column_id for fk in table.foreign_keys for column_id in fk.column_ids}
+            table.id: {
+                column_id for fk in table.foreign_keys for column_id in fk.column_ids
+            }
             for table in mld.tables
         }
         inheritance_fk: dict[str, MLDForeignKey] = {}
@@ -377,6 +398,19 @@ class SQLDDLImporter:
                     identifier=column.id in table.primary_key,
                     id=f"attribute:ddl:{table.id}:{column.id}",
                     data_type=column.data_type,
+                    nullable=column.nullable,
+                    default=column.default,
+                    unique=table.is_unique(column.id),
+                    comment=column.comment,
+                    auto_increment=column.auto_increment,
+                    constraints=tuple(
+                        check.expression
+                        for check in table.check_constraints
+                        if re.search(
+                            rf"(?i)(?<!\w){re.escape(column.name)}(?!\w)",
+                            check.expression,
+                        )
+                    ),
                 )
                 for column in table.columns
                 if column.id not in fk_columns[table.id] or column.id in inherited_ids
@@ -413,6 +447,19 @@ class SQLDDLImporter:
                             identifier=column.id in table.primary_key,
                             id=f"attribute:ddl:{table.id}:{column.id}",
                             data_type=column.data_type,
+                            nullable=column.nullable,
+                            default=column.default,
+                            unique=table.is_unique(column.id),
+                            comment=column.comment,
+                            auto_increment=column.auto_increment,
+                            constraints=tuple(
+                                check.expression
+                                for check in table.check_constraints
+                                if re.search(
+                                    rf"(?i)(?<!\w){re.escape(column.name)}(?!\w)",
+                                    check.expression,
+                                )
+                            ),
                         )
                         for column in table.columns
                         if column.id not in fk_columns[table.id]
@@ -424,8 +471,17 @@ class SQLDDLImporter:
                     if target is None:
                         continue
                     role = ""
-                    if sum(1 for item in table.foreign_keys if item.referenced_table_id == fk.referenced_table_id) > 1:
-                        role = "_".join(table.column_by_id(item).name for item in fk.column_ids)
+                    if (
+                        sum(
+                            1
+                            for item in table.foreign_keys
+                            if item.referenced_table_id == fk.referenced_table_id
+                        )
+                        > 1
+                    ):
+                        role = "_".join(
+                            table.column_by_id(item).name for item in fk.column_ids
+                        )
                     model.add_relation(
                         Relation(
                             target.id,
@@ -450,7 +506,10 @@ class SQLDDLImporter:
                     id=f"association:ddl:fk:{table.id}:{fk_index}",
                 )
                 model.add_association(association)
-                nullable = any(table.column_by_id(item).nullable is not False for item in fk.column_ids)
+                nullable = any(
+                    table.column_by_id(item).nullable is not False
+                    for item in fk.column_ids
+                )
                 reflexive = target.id == holder.id
                 model.add_relation(
                     Relation(
@@ -466,9 +525,7 @@ class SQLDDLImporter:
                         holder.id,
                         association.id,
                         id=f"relation:ddl:fk:{table.id}:{fk_index}:holder",
-                        cardinality=Cardinality(
-                            "0" if nullable else "1", "1"
-                        ),
+                        cardinality=Cardinality("0" if nullable else "1", "1"),
                         role="porteur" if reflexive else "",
                     )
                 )
@@ -485,7 +542,11 @@ class SQLDDLImporter:
         if base in {"INT", "INTEGER", "INT2", "INT4", "SMALLINT", "SERIAL"}:
             return MLDDataType(MLDDataTypeName.INTEGER), serial
         if base in {"DECIMAL", "NUMERIC"}:
-            values = [int(item.strip()) for item in params.group(1).split(",")] if params else []
+            values = (
+                [int(item.strip()) for item in params.group(1).split(",")]
+                if params
+                else []
+            )
             return MLDDataType(
                 MLDDataTypeName.DECIMAL,
                 precision=values[0] if values else None,
@@ -573,7 +634,7 @@ class SQLDDLImporter:
         if "." in value:
             value = value.rsplit(".", 1)[-1]
         if len(value) >= 2 and (
-            (value[0], value[-1]) in {('"', '"'), ('`', '`'), ('[', ']')}
+            (value[0], value[-1]) in {('"', '"'), ("`", "`"), ("[", "]")}
         ):
             value = value[1:-1]
         if not value:
@@ -583,8 +644,8 @@ class SQLDDLImporter:
     @staticmethod
     def _take_identifier(text: str) -> tuple[str, str]:
         stripped = text.lstrip()
-        if stripped[0] in {'"', '`', '['}:
-            closing = ']' if stripped[0] == '[' else stripped[0]
+        if stripped[0] in {'"', "`", "["}:
+            closing = "]" if stripped[0] == "[" else stripped[0]
             end = stripped.find(closing, 1)
             if end < 0:
                 raise DDLImportError("Identifiant SQL cité non fermé.")
@@ -635,9 +696,15 @@ class SQLDDLImporter:
             raise DDLImportError("Contrainte FOREIGN KEY invalide.")
         on_delete, on_update = cls._referential_actions(core)
         return (
-            tuple(cls._identifier(item) for item in cls._split_top_level(match.group(1), ",")),
+            tuple(
+                cls._identifier(item)
+                for item in cls._split_top_level(match.group(1), ",")
+            ),
             cls._identifier(match.group(2)),
-            tuple(cls._identifier(item) for item in cls._split_top_level(match.group(3), ",")),
+            tuple(
+                cls._identifier(item)
+                for item in cls._split_top_level(match.group(3), ",")
+            ),
             name,
             on_delete,
             on_update,

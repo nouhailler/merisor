@@ -47,8 +47,7 @@ class McdAutoLayout:
             (inheritance.parent_entity_id, child_id)
             for inheritance in model.inheritances.values()
             for child_id in inheritance.child_entity_ids
-            if inheritance.parent_entity_id in coordinates
-            and child_id in coordinates
+            if inheritance.parent_entity_id in coordinates and child_id in coordinates
         )
 
         for iteration in range(self.ITERATIONS):
@@ -85,15 +84,20 @@ class McdAutoLayout:
         self._resolve_collisions(nodes, coordinates, sizes)
         self._normalize(nodes, coordinates, sizes)
         return {
-            node.id: Position(round(coordinates[node.id][0], 1), round(coordinates[node.id][1], 1))
+            node.id: Position(
+                round(coordinates[node.id][0], 1), round(coordinates[node.id][1], 1)
+            )
             for node in nodes
         }
 
     @staticmethod
     def _ordered_nodes(model: MCDModel) -> list[Entity | Association]:
-        entities = sorted(model.entities.values(), key=lambda node: (node.name.casefold(), node.id))
+        entities = sorted(
+            model.entities.values(), key=lambda node: (node.name.casefold(), node.id)
+        )
         associations = sorted(
-            model.associations.values(), key=lambda node: (node.name.casefold(), node.id)
+            model.associations.values(),
+            key=lambda node: (node.name.casefold(), node.id),
         )
         result: list[Entity | Association] = []
         for index in range(max(len(entities), len(associations))):
@@ -181,7 +185,9 @@ class McdAutoLayout:
     def _node_size(node: Entity | Association) -> _NodeSize:
         if isinstance(node, Entity):
             return _NodeSize(220.0, max(100.0, 62.0 + len(node.attributes) * 23.0))
-        attribute_panel = 0.0 if not node.attributes else 21.0 + len(node.attributes) * 22.0
+        attribute_panel = (
+            0.0 if not node.attributes else 21.0 + len(node.attributes) * 22.0
+        )
         return _NodeSize(220.0, 122.0 + attribute_panel)
 
     @staticmethod

@@ -9,7 +9,6 @@ from merisor.application.openrouter_client import OpenRouterClient
 from merisor.domain import MCDModel, ValidationReport, validate_mcd
 from merisor.persistence import JsonDiagramRepository, PersistenceError
 
-
 SYSTEM_PROMPT = """Tu es un analyste MERISE chargé de produire un MCD.
 Réponds uniquement avec un objet JSON valide, sans Markdown ni explication.
 Le format obligatoire est MERISOR JSON version 2 :
@@ -25,7 +24,13 @@ Le format obligatoire est MERISOR JSON version 2 :
           "id": "attribute_x",
           "name": "id_x",
           "identifier": true,
-          "data_type": {"name": "INTEGER"}
+          "data_type": {"name": "INTEGER"},
+          "nullable": false,
+          "default": null,
+          "unique": false,
+          "comment": "Identifiant technique",
+          "auto_increment": true,
+          "constraints": []
         }
       ]
     }
@@ -67,6 +72,11 @@ Règles obligatoires :
   VARCHAR, TEXT, DATE, TIME, DATETIME et TIMESTAMP ;
 - VARCHAR exige une longueur positive dans "length" ; DECIMAL peut utiliser
   "precision" et "scale", avec 0 <= scale <= precision ;
+- nullable vaut true (facultatif), false (obligatoire) ou null (automatique) ;
+- default vaut null ou une expression logique textuelle comme TRUE ou CURRENT_DATE ;
+- unique, identifier et auto_increment sont booléens ; auto_increment est réservé
+  à un identifiant simple INTEGER ou BIGINT sans valeur par défaut ;
+- comment est un texte libre et constraints une liste d'expressions CHECK ;
 - une association relie au moins deux entités ;
 - les cardinalités autorisées sont uniquement (0,1), (0,N), (1,1), (1,N) ;
 - une relation relie toujours une entité existante à une association existante ;
@@ -100,7 +110,9 @@ class AiMcdService:
     def __init__(self, repository: JsonDiagramRepository | None = None) -> None:
         self.repository = repository or JsonDiagramRepository()
 
-    def generate(self, client: OpenRouterClient, model_id: str, description: str) -> str:
+    def generate(
+        self, client: OpenRouterClient, model_id: str, description: str
+    ) -> str:
         description = description.strip()
         if not description:
             raise AiMcdValidationError("La description de l'application est vide.")

@@ -5,14 +5,15 @@ from merisor.application import DiagramController, SQLDDLImporter
 from merisor.domain import (
     Cardinality,
     MaterializationStrategy,
+    MCDModel,
     MLDDataType,
     MLDDataTypeName,
     Position,
 )
+from merisor.persistence import JsonDiagramRepository
 from merisor.ui.canvas import DiagramScene
 from merisor.ui.main_window import MainWindow
-from merisor.persistence import JsonDiagramRepository
-from merisor.domain import MCDModel
+from merisor.ui.normalization_dialog import NormalizationAssistantDialog
 
 
 def test_relation_graphic_follows_a_moved_node(qapp) -> None:  # type: ignore[no-untyped-def]
@@ -106,8 +107,10 @@ def test_main_window_starts_offscreen(qapp) -> None:  # type: ignore[no-untyped-
     assert window.validate_action.text() == "Valider le MCD…"
     assert window.generate_mld_action.text() == "Générer le MLD"
     assert window.generate_sql_action.text() == "Générer SQL"
+    assert window.normalization_action.text() == "Assistant de normalisation…"
     assert not window.generate_sql_action.isEnabled()
     toolbar = window.findChild(QToolBar, "diagramToolbar")
+    assert toolbar is not None
     action_texts = [action.text() for action in toolbar.actions()]
     assert action_texts.index("Générer le MLD") < action_texts.index("Générer SQL")
 
@@ -119,6 +122,52 @@ def test_main_window_starts_offscreen(qapp) -> None:  # type: ignore[no-untyped-
     qapp.processEvents()
 
 
+def test_functional_dependencies_and_decomposition_are_undoable(qapp) -> None:  # type: ignore[no-untyped-def]
+    controller = DiagramController(DiagramScene())
+    employee = controller.create_entity("EMPLOYE", QPointF())
+    employee_id = controller.add_attribute(employee.id, "id_employe", True)
+    department_code = controller.add_attribute(employee.id, "code_service")
+    department_name = controller.add_attribute(employee.id, "nom_service")
+    dependency = controller.add_functional_dependency(
+        employee.id, (department_code.id,), (department_name.id,)
+    )
+
+    assert dependency.id in controller.model.functional_dependencies
+    proposal = controller.analyze_normalization().owners[0].proposals[0]
+    controller.apply_normalization(proposal)
+    assert {entity.name for entity in controller.model.entities.values()} == {
+        "EMPLOYE",
+        "SERVICE",
+    }
+
+    controller.undo_stack.undo()
+    assert set(controller.model.entities) == {employee.id}
+    assert dependency.id in controller.model.functional_dependencies
+    assert controller.model.attribute(employee.id, employee_id.id).identifier
+
+    controller.remove_attribute(employee.id, department_name.id)
+    assert dependency.id not in controller.model.functional_dependencies
+    controller.undo_stack.undo()
+    assert dependency.id in controller.model.functional_dependencies
+
+
+def test_normalization_assistant_opens_without_mutating_model(qapp) -> None:  # type: ignore[no-untyped-def]
+    controller = DiagramController(DiagramScene())
+    entity = controller.create_entity("CLIENT", QPointF())
+    controller.add_attribute(entity.id, "id_client", True)
+    before = controller.repository.to_dict(controller.model)
+
+    dialog = NormalizationAssistantDialog(controller)
+    dialog.show()
+    qapp.processEvents()
+
+    assert dialog.isVisible()
+    assert dialog.owner_combo.count() == 1
+    assert "1NF" in dialog.report_text.toPlainText()
+    assert controller.repository.to_dict(controller.model) == before
+    dialog.close()
+
+
 def test_controller_imports_reverse_engineered_mcd_and_current_mld(qapp) -> None:  # type: ignore[no-untyped-def]
     result = SQLDDLImporter().import_text(
         "CREATE TABLE pilote (id_pilote INTEGER PRIMARY KEY, nom TEXT);"
@@ -127,9 +176,7 @@ def test_controller_imports_reverse_engineered_mcd_and_current_mld(qapp) -> None
 
     controller.import_reverse_engineered_model(result.mcd, result.mld)
 
-    assert {entity.name for entity in controller.model.entities.values()} == {
-        "pilote"
-    }
+    assert {entity.name for entity in controller.model.entities.values()} == {"pilote"}
     assert controller.mld_model is result.mld
     assert not controller.mld_is_stale
     assert controller.is_dirty
@@ -172,7 +219,9 @@ def test_attribute_and_identifier_commands_refresh_graphics_and_undo(qapp) -> No
     controller.undo_stack.undo()
     assert entity.attributes[0].name == "pilote_id"
     assert entity.attributes[0].identifier
-    assert controller._node_items[entity.id].attributes == [("pilote_id", True)]
+    assert controller._node_items[entity.id].attributes == [
+        ("pilote_id : INTEGER", True)
+    ]
     assert item.boundingRect().height() >= original_height
     controller.undo_stack.undo()
     assert entity.attributes[0].name == "id_pilote"
@@ -190,7 +239,9 @@ def test_properties_panel_edits_attribute_type_and_can_undo(qapp) -> None:  # ty
     qapp.processEvents()
 
     panel = window.properties_panel
-    panel.attribute_tree.setCurrentItem(panel.attribute_tree.topLevelItem(0))
+    first_attribute = panel.attribute_tree.topLevelItem(0)
+    assert first_attribute is not None
+    panel.attribute_tree.setCurrentItem(first_attribute)
     decimal_index = panel.attribute_type_combo.findData("DECIMAL")
     panel.attribute_type_combo.setCurrentIndex(decimal_index)
     panel.attribute_precision.setValue(12)
@@ -202,8 +253,9 @@ def test_properties_panel_edits_attribute_type_and_can_undo(qapp) -> None:  # ty
         precision=12,
         scale=2,
     )
-    assert panel.attribute_tree.currentItem() is not None
-    assert panel.attribute_tree.currentItem().text(2) == "DECIMAL(12,2)"
+    current_attribute = panel.attribute_tree.currentItem()
+    assert current_attribute is not None
+    assert current_attribute.text(2) == "DECIMAL(12,2)"
 
     window.controller.undo_stack.undo()
     assert attribute.data_type is None
@@ -259,9 +311,7 @@ def test_cardinality_label_changes_and_follows_relation(qapp) -> None:  # type: 
 def test_properties_panel_edits_name_and_cardinality(qapp) -> None:  # type: ignore[no-untyped-def]
     window = MainWindow()
     entity = window.controller.create_entity("PILOTE", QPointF())
-    association = window.controller.create_association(
-        "PARTICIPER", QPointF(250, 0)
-    )
+    association = window.controller.create_association("PARTICIPER", QPointF(250, 0))
     window.controller.create_relation(entity.id, association.id)
     relation = next(iter(window.controller.model.relations.values()))
 
@@ -287,9 +337,7 @@ def test_properties_panel_edits_name_and_cardinality(qapp) -> None:  # type: ign
 def test_association_transformation_controls_are_contextual_and_undoable(qapp) -> None:  # type: ignore[no-untyped-def]
     window = MainWindow()
     entity = window.controller.create_entity("PILOTE", QPointF())
-    association = window.controller.create_association(
-        "ENGAGER", QPointF(250, 0)
-    )
+    association = window.controller.create_association("ENGAGER", QPointF(250, 0))
 
     window.controller._node_items[entity.id].setSelected(True)
     qapp.processEvents()
@@ -309,12 +357,9 @@ def test_association_transformation_controls_are_contextual_and_undoable(qapp) -
     )
 
     assert association.is_historized
-    assert (
-        association.materialization_strategy
-        is MaterializationStrategy.FORCE_TABLE
-    )
+    assert association.materialization_strategy is MaterializationStrategy.FORCE_TABLE
     window.controller.undo_stack.undo()
-    assert association.materialization_strategy is MaterializationStrategy.AUTO
+    assert association.materialization_strategy.value == "AUTO"
     window.controller.undo_stack.undo()
     assert association.is_historized is False
 
@@ -326,19 +371,18 @@ def test_association_transformation_controls_are_contextual_and_undoable(qapp) -
 def test_association_attribute_can_be_marked_as_its_identifier(qapp) -> None:  # type: ignore[no-untyped-def]
     window = MainWindow()
     association = window.controller.create_association("ENGAGER", QPointF())
-    attribute = window.controller.add_attribute(
-        association.id, "numero_engagement"
-    )
+    attribute = window.controller.add_attribute(association.id, "numero_engagement")
     window.controller._node_items[association.id].setSelected(True)
     qapp.processEvents()
 
     item = window.properties_panel.attribute_tree.topLevelItem(0)
+    assert item is not None
     item.setCheckState(0, Qt.CheckState.Checked)
     qapp.processEvents()
 
     assert attribute.identifier
     assert window.controller._node_items[association.id].attributes == [
-        ("numero_engagement", True)
+        ("numero_engagement : INTEGER", True)
     ]
     window.controller.undo_stack.undo()
     assert not attribute.identifier

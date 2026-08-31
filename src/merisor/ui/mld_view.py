@@ -268,7 +268,7 @@ class MLDView(QWidget):
         self.status_label.setFont(font)
         header.addWidget(self.status_label)
         header.addStretch(1)
-        self.zoom_out_button = QPushButton("−")
+        self.zoom_out_button = QPushButton("-")
         self.zoom_out_button.setToolTip("Réduire le graphe")
         self.zoom_out_button.setAccessibleName("Zoom arrière MLD")
         self.zoom_in_button = QPushButton("+")
@@ -331,9 +331,7 @@ class MLDView(QWidget):
             self.status_label.setText("MLD non généré")
             self.status_label.setStyleSheet("color: #637083;")
         elif stale:
-            self.status_label.setText(
-                "⚠ MLD obsolète — le MCD doit être régénéré"
-            )
+            self.status_label.setText("⚠ MLD obsolète — le MCD doit être régénéré")
             self.status_label.setStyleSheet("color: #9a6700;")
         else:
             self.status_label.setText("✓ MLD à jour")

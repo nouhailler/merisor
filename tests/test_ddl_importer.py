@@ -6,7 +6,6 @@ from merisor.application import DDLImportError, SQLDDLImporter, SQLGenerator, SQ
 from merisor.domain import MLDDataTypeName, validate_mcd
 from merisor.persistence import JsonDiagramRepository
 
-
 POSTGRESQL_DDL = """
 CREATE TABLE pilote (
     id_pilote BIGSERIAL PRIMARY KEY,
@@ -51,9 +50,7 @@ def test_postgresql_ddl_builds_faithful_mld_and_association_mcd() -> None:
         "pilote",
         "course",
     }
-    assert {item.name for item in result.mcd.associations.values()} == {
-        "participer"
-    }
+    assert {item.name for item in result.mcd.associations.values()} == {"participer"}
     assert validate_mcd(result.mcd).is_valid
 
 
@@ -78,7 +75,11 @@ def test_sqlite_inline_foreign_key_reconstructs_one_to_many() -> None:
     assert len(result.mcd.associations) == 1
     association = next(iter(result.mcd.associations.values()))
     relations = result.mcd.connected_relations(association.id)
-    assert {relation.cardinality.label for relation in relations} == {"0,N", "0,1"}
+    cardinalities = [relation.cardinality for relation in relations]
+    assert all(cardinality is not None for cardinality in cardinalities)
+    assert {
+        cardinality.label for cardinality in cardinalities if cardinality is not None
+    } == {"0,N", "0,1"}
     assert validate_mcd(result.mcd).is_valid
 
 
@@ -100,6 +101,8 @@ def test_alter_table_foreign_key_and_unique_are_imported() -> None:
 
     assert len(passport.foreign_keys) == 1
     assert passport.foreign_keys[0].name == "fk_personne"
+    assert passport.foreign_keys[0].on_delete is not None
+    assert passport.foreign_keys[0].on_update is not None
     assert passport.foreign_keys[0].on_delete.value == "CASCADE"
     assert passport.foreign_keys[0].on_update.value == "RESTRICT"
     assert len(passport.unique_constraints) == 1

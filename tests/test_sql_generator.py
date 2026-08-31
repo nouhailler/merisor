@@ -30,7 +30,6 @@ from merisor.domain import (
     MLDUniqueConstraint,
 )
 
-
 INTEGER = MLDDataType(MLDDataTypeName.INTEGER)
 VARCHAR_100 = MLDDataType.varchar(100)
 
@@ -78,9 +77,7 @@ def simple_model(*, auto_increment: bool = False) -> MLDModel:
         "PILOTE",
         [
             mld_column("pilot.id", "id_pilote", auto_increment=auto_increment),
-            mld_column(
-                "pilot.name", "nom", VARCHAR_100, nullable=True
-            ),
+            mld_column("pilot.name", "nom", VARCHAR_100, nullable=True),
         ],
         ("pilot.id",),
     )
@@ -254,8 +251,18 @@ def relational_model() -> MLDModel:
             mld_column("engage.id", "id_engager", auto_increment=True),
             mld_column("engage.pilot", "id_pilote", nullable=True),
             mld_column("engage.team", "id_equipe", nullable=False),
-            mld_column("engage.start", "date_debut", MLDDataType(MLDDataTypeName.DATE), nullable=True),
-            mld_column("engage.end", "date_fin", MLDDataType(MLDDataTypeName.DATE), nullable=True),
+            mld_column(
+                "engage.start",
+                "date_debut",
+                MLDDataType(MLDDataTypeName.DATE),
+                nullable=True,
+            ),
+            mld_column(
+                "engage.end",
+                "date_fin",
+                MLDDataType(MLDDataTypeName.DATE),
+                nullable=True,
+            ),
         ],
         primary_key=("engage.id",),
         foreign_keys=[
@@ -405,9 +412,7 @@ def test_sqlite_cycles_keep_foreign_keys_inside_create_table() -> None:
 def test_reserved_identifiers_are_warned_and_escaped(
     target: SQLTarget, quoted: str
 ) -> None:
-    table = mld_table(
-        "user", "USER", [mld_column("user.id", "order")], ("user.id",)
-    )
+    table = mld_table("user", "USER", [mld_column("user.id", "order")], ("user.id",))
     generator = SQLGenerator()
 
     report = generator.validate(mld_model(table), target)
@@ -419,9 +424,7 @@ def test_reserved_identifiers_are_warned_and_escaped(
 
 
 def test_missing_primary_key_blocks_generation_with_business_message() -> None:
-    table = mld_table(
-        "pilot", "PILOTE", [mld_column("pilot.id", "id_pilote")], ()
-    )
+    table = mld_table("pilot", "PILOTE", [mld_column("pilot.id", "id_pilote")], ())
 
     with pytest.raises(SQLGenerationError) as captured:
         SQLGenerator().generate(mld_model(table), SQLTarget.POSTGRESQL)
@@ -586,9 +589,7 @@ def test_explicit_mcd_types_reach_each_sql_dialect(
 
 def test_joined_isa_chain_generates_pk_foreign_key_in_all_dialects() -> None:
     mcd = DiagramModel()
-    person = Entity(
-        "PERSONNE", attributes=[Attribute("id_personne", identifier=True)]
-    )
+    person = Entity("PERSONNE", attributes=[Attribute("id_personne", identifier=True)])
     client = Entity(
         "CLIENT",
         attributes=[
@@ -598,9 +599,7 @@ def test_joined_isa_chain_generates_pk_foreign_key_in_all_dialects() -> None:
     )
     mcd.add_entity(person)
     mcd.add_entity(client)
-    mcd.create_inheritance(
-        person.id, (client.id,), InheritanceStrategy.JOINED
-    )
+    mcd.create_inheritance(person.id, (client.id,), InheritanceStrategy.JOINED)
 
     mld = McdToMldTransformer().transform(mcd)
     for target in SQLTarget:

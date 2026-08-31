@@ -44,21 +44,34 @@ def _require_identifier(value: str, kind: str) -> None:
         raise MLDError(f"L'identifiant de {kind} est obligatoire.")
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class MLDDataType:
     """Type logique paramétrable traduit ensuite par un dialecte SQL."""
 
-    name: MLDDataTypeName | str
+    name: MLDDataTypeName
     length: int | None = None
     precision: int | None = None
     scale: int | None = None
 
-    def __post_init__(self) -> None:
+    def __init__(
+        self,
+        name: MLDDataTypeName | str,
+        length: int | None = None,
+        precision: int | None = None,
+        scale: int | None = None,
+    ) -> None:
         try:
-            name = MLDDataTypeName(self.name)
+            normalized_name = MLDDataTypeName(name)
         except (TypeError, ValueError) as error:
-            raise MLDError(f"Type logique inconnu : {self.name!r}.") from error
-        object.__setattr__(self, "name", name)
+            raise MLDError(f"Type logique inconnu : {name!r}.") from error
+        object.__setattr__(self, "name", normalized_name)
+        object.__setattr__(self, "length", length)
+        object.__setattr__(self, "precision", precision)
+        object.__setattr__(self, "scale", scale)
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        name = self.name
         if name is MLDDataTypeName.VARCHAR:
             if not isinstance(self.length, int) or self.length <= 0:
                 raise MLDError("VARCHAR exige une longueur entière positive.")
@@ -75,7 +88,9 @@ class MLDDataType:
                 or self.scale < 0
                 or self.scale > self.precision
             ):
-                raise MLDError("L'échelle DECIMAL doit être comprise dans la précision.")
+                raise MLDError(
+                    "L'échelle DECIMAL doit être comprise dans la précision."
+                )
         elif self.precision is not None or self.scale is not None:
             raise MLDError("Seul DECIMAL accepte précision et échelle.")
 
@@ -91,7 +106,7 @@ class MLDDataType:
             if self.scale is None:
                 return f"DECIMAL({self.precision})"
             return f"DECIMAL({self.precision},{self.scale})"
-        return self.name.value
+        return str(self.name.value)
 
 
 def _default_data_type() -> MLDDataType:
@@ -112,6 +127,7 @@ class MLDColumn:
     source_relation_id: str | None = None
     generated: bool = False
     auto_increment: bool = False
+    comment: str = ""
 
     def __post_init__(self) -> None:
         _require_identifier(self.id, "la colonne")
@@ -127,6 +143,8 @@ class MLDColumn:
             self.auto_increment, bool
         ):
             raise MLDError("Les indicateurs de génération doivent être booléens.")
+        if not isinstance(self.comment, str):
+            raise MLDError("Le commentaire logique d'une colonne doit être textuel.")
 
 
 def _normalize_action(
@@ -140,7 +158,7 @@ def _normalize_action(
         raise MLDError(f"Action référentielle inconnue : {action!r}.") from error
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class MLDForeignKey:
     """Contrainte FK simple ou composée."""
 
@@ -153,8 +171,35 @@ class MLDForeignKey:
     source_inheritance_id: str | None = None
     source_cardinality: tuple[str, str] | None = None
     name: str | None = None
-    on_delete: MLDReferentialAction | str | None = None
-    on_update: MLDReferentialAction | str | None = None
+    on_delete: MLDReferentialAction | None = None
+    on_update: MLDReferentialAction | None = None
+
+    def __init__(
+        self,
+        id: str,
+        column_ids: tuple[str, ...],
+        referenced_table_id: str,
+        referenced_column_ids: tuple[str, ...],
+        source_association_id: str,
+        source_relation_id: str | None = None,
+        source_inheritance_id: str | None = None,
+        source_cardinality: tuple[str, str] | None = None,
+        name: str | None = None,
+        on_delete: MLDReferentialAction | str | None = None,
+        on_update: MLDReferentialAction | str | None = None,
+    ) -> None:
+        object.__setattr__(self, "id", id)
+        object.__setattr__(self, "column_ids", column_ids)
+        object.__setattr__(self, "referenced_table_id", referenced_table_id)
+        object.__setattr__(self, "referenced_column_ids", referenced_column_ids)
+        object.__setattr__(self, "source_association_id", source_association_id)
+        object.__setattr__(self, "source_relation_id", source_relation_id)
+        object.__setattr__(self, "source_inheritance_id", source_inheritance_id)
+        object.__setattr__(self, "source_cardinality", source_cardinality)
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "on_delete", _normalize_action(on_delete))
+        object.__setattr__(self, "on_update", _normalize_action(on_update))
+        self.__post_init__()
 
     def __post_init__(self) -> None:
         _require_identifier(self.id, "la clé étrangère")
@@ -178,8 +223,6 @@ class MLDForeignKey:
             raise MLDError("La cardinalité MCD source d'une FK est invalide.")
         if self.name is not None and (not isinstance(self.name, str) or not self.name):
             raise MLDError("Le nom SQL optionnel d'une FK doit être non vide.")
-        object.__setattr__(self, "on_delete", _normalize_action(self.on_delete))
-        object.__setattr__(self, "on_update", _normalize_action(self.on_update))
 
 
 @dataclass(frozen=True, slots=True)
@@ -282,7 +325,9 @@ class MLDTable:
         return column_id in self.primary_key
 
     def is_foreign_key(self, column_id: str) -> bool:
-        return any(column_id in foreign_key.column_ids for foreign_key in self.foreign_keys)
+        return any(
+            column_id in foreign_key.column_ids for foreign_key in self.foreign_keys
+        )
 
     def is_unique(self, column_id: str) -> bool:
         return any(

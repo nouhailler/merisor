@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -50,9 +50,7 @@ class _AiGenerationWorker(QObject):
     def run(self) -> None:
         try:
             client = OpenRouterClient(self._api_key, timeout=60)
-            result = self._service.generate(
-                client, self._model_id, self._description
-            )
+            result = self._service.generate(client, self._model_id, self._description)
         except (OpenRouterError, AiMcdValidationError) as error:
             self.failed.emit(str(error))
         except Exception as error:  # filet de sécurité du thread réseau
@@ -64,9 +62,7 @@ class _AiGenerationWorker(QObject):
 class MCDPreviewDialog(QDialog):
     """Aperçu éditable ; l'import reste impossible tant que le MCD est invalide."""
 
-    def __init__(
-        self, json_text: str, service: AiMcdService, parent=None
-    ) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, json_text: str, service: AiMcdService, parent=None) -> None:  # type: ignore[no-untyped-def]
         super().__init__(parent)
         self.setWindowTitle("Aperçu du MCD généré")
         self.resize(900, 680)
@@ -157,7 +153,10 @@ class MCDPreviewDialog(QDialog):
             )
             QTreeWidgetItem(
                 entities,
-                [entity.name, f"{len(entity.attributes)} attribut(s), ID : {identifiers}"],
+                [
+                    entity.name,
+                    f"{len(entity.attributes)} attribut(s), ID : {identifiers}",
+                ],
             )
         associations = QTreeWidgetItem(
             ["Associations", str(len(candidate.model.associations))]
@@ -168,7 +167,7 @@ class MCDPreviewDialog(QDialog):
             if association.is_historized:
                 details += ", historisée"
             QTreeWidgetItem(associations, [association.name, details])
-        relations = QTreeWidgetItem(
+        relation_group = QTreeWidgetItem(
             ["Relations", str(len(candidate.model.relations))]
         )
         for relation in candidate.model.relations.values():
@@ -176,10 +175,10 @@ class MCDPreviewDialog(QDialog):
             association = candidate.model.associations[relation.association_id]
             cardinality = str(relation.cardinality) if relation.cardinality else "(?)"
             QTreeWidgetItem(
-                relations,
+                relation_group,
                 [f"{entity.name} ↔ {association.name}", cardinality],
             )
-        self.summary_tree.addTopLevelItems([entities, associations, relations])
+        self.summary_tree.addTopLevelItems([entities, associations, relation_group])
         self.summary_tree.expandAll()
 
 
@@ -242,9 +241,7 @@ class AiMcdDialog(QDialog):
         layout.addWidget(self.progress_bar)
 
         self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        self.close_button = self.buttons.button(
-            QDialogButtonBox.StandardButton.Close
-        )
+        self.close_button = self.buttons.button(QDialogButtonBox.StandardButton.Close)
         self.generate_button = self.buttons.addButton(
             "Générer le MCD", QDialogButtonBox.ButtonRole.ActionRole
         )

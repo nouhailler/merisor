@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import os
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 
 from PySide6.QtCore import QMarginsF, QRectF, QSize, Qt
@@ -47,7 +48,9 @@ class DiagramVisualExporter:
                 "Format non pris en charge. Utilisez PNG, SVG ou PDF."
             )
         if not scene.items():
-            raise DiagramExportError("Le diagramme est vide : aucun élément à exporter.")
+            raise DiagramExportError(
+                "Le diagramme est vide : aucun élément à exporter."
+            )
         if not target.parent.exists():
             raise DiagramExportError(
                 f"Le dossier de destination n'existe pas : {target.parent}"
@@ -82,18 +85,16 @@ class DiagramVisualExporter:
         except DiagramExportError:
             raise
         except (OSError, RuntimeError) as error:
-            raise DiagramExportError(f"Impossible d'écrire le fichier : {error}") from error
+            raise DiagramExportError(
+                f"Impossible d'écrire le fichier : {error}"
+            ) from error
         finally:
             if temporary_path is not None and temporary_path.exists():
-                try:
+                with suppress(OSError):
                     temporary_path.unlink()
-                except OSError:
-                    pass
         return target
 
-    def _export_png(
-        self, scene: QGraphicsScene, source: QRectF, path: Path
-    ) -> None:
+    def _export_png(self, scene: QGraphicsScene, source: QRectF, path: Path) -> None:
         scale = min(
             self.PNG_SCALE,
             self.MAX_PNG_DIMENSION / max(source.width(), source.height()),
@@ -104,7 +105,7 @@ class DiagramVisualExporter:
         image.fill(QColor("#ffffff"))
         painter = QPainter(image)
         self._render_scene(scene, painter, QRectF(0, 0, width, height), source)
-        if not image.save(str(path), "PNG"):
+        if not image.save(str(path)):
             raise DiagramExportError("Qt n'a pas pu encoder l'image PNG.")
 
     def _export_svg(
@@ -174,7 +175,5 @@ class DiagramVisualExporter:
             painter.end()
             scene.setBackgroundBrush(original_background)
             for item in selected_items:
-                try:
+                with suppress(RuntimeError):
                     item.setSelected(True)
-                except RuntimeError:
-                    pass

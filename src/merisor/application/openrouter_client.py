@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from typing import Any, TypeAlias
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from merisor import __version__
+
+JsonObject: TypeAlias = dict[str, Any]
+
 
 class OpenRouterError(RuntimeError):
     """Erreur réseau ou réponse OpenRouter inexploitable."""
@@ -35,7 +39,7 @@ class OpenRouterClient:
         self.api_key = api_key.strip()
         self.timeout = timeout
 
-    def _get(self, path: str) -> dict:
+    def _get(self, path: str) -> JsonObject:
         if not self.api_key:
             raise OpenRouterError("Aucune clé OpenRouter n'est configurée.")
         request = Request(
@@ -54,12 +58,14 @@ class OpenRouterClient:
                 raise OpenRouterError("La clé OpenRouter est refusée.") from error
             raise OpenRouterError(f"OpenRouter a répondu HTTP {error.code}.") from error
         except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
-            raise OpenRouterError(f"Impossible de contacter OpenRouter : {error}") from error
+            raise OpenRouterError(
+                f"Impossible de contacter OpenRouter : {error}"
+            ) from error
         if not isinstance(payload, dict):
             raise OpenRouterError("Réponse OpenRouter invalide.")
         return payload
 
-    def _post(self, path: str, data: dict) -> dict:
+    def _post(self, path: str, data: JsonObject) -> JsonObject:
         if not self.api_key:
             raise OpenRouterError("Aucune clé OpenRouter n'est configurée.")
         request = Request(
@@ -87,7 +93,9 @@ class OpenRouterClient:
                 ) from error
             raise OpenRouterError(f"OpenRouter a répondu HTTP {error.code}.") from error
         except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
-            raise OpenRouterError(f"Impossible de contacter OpenRouter : {error}") from error
+            raise OpenRouterError(
+                f"Impossible de contacter OpenRouter : {error}"
+            ) from error
         if not isinstance(payload, dict):
             raise OpenRouterError("Réponse OpenRouter invalide.")
         return payload
@@ -116,13 +124,16 @@ class OpenRouterClient:
                     name=str(raw.get("name") or raw["id"]),
                     prompt_price=float(pricing.get("prompt", 0)),
                     completion_price=float(pricing.get("completion", 0)),
-                    supports_json="response_format" in (raw.get("supported_parameters") or []),
+                    supports_json="response_format"
+                    in (raw.get("supported_parameters") or []),
                 )
             except (KeyError, TypeError, ValueError):
                 continue
             if model.is_free:
                 models.append(model)
-        return sorted(models, key=lambda model: (not model.supports_json, model.name.lower()))
+        return sorted(
+            models, key=lambda model: (not model.supports_json, model.name.lower())
+        )
 
     def complete(self, model_id: str, system_prompt: str, user_prompt: str) -> str:
         if not model_id.strip():

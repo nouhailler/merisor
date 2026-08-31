@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import cast
 
 from PySide6.QtCore import QLineF, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
@@ -23,7 +24,6 @@ from PySide6.QtWidgets import (
     QStyleOptionGraphicsItem,
     QWidget,
 )
-
 
 DEFAULT_BORDER = QColor("#283548")
 SELECTED_BORDER = QColor("#1976d2")
@@ -60,9 +60,7 @@ class NodeGraphicsItem(QGraphicsObject):
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         self.setZValue(10)
 
-    def set_content(
-        self, name: str, attributes: Iterable[AttributeDisplay]
-    ) -> None:
+    def set_content(self, name: str, attributes: Iterable[AttributeDisplay]) -> None:
         self.prepareGeometryChange()
         self.name = name
         self.attributes = list(attributes)
@@ -108,7 +106,7 @@ class NodeGraphicsItem(QGraphicsObject):
 
 
 class EntityGraphicsItem(NodeGraphicsItem):
-    WIDTH = 210.0
+    WIDTH = 320.0
     MIN_HEIGHT = 92.0
     HEADER_HEIGHT = 38.0
     ROW_HEIGHT = 23.0
@@ -207,7 +205,7 @@ class EntityGraphicsItem(NodeGraphicsItem):
 class AssociationGraphicsItem(NodeGraphicsItem):
     HALF_WIDTH = 105.0
     HALF_HEIGHT = 58.0
-    PANEL_WIDTH = 190.0
+    PANEL_WIDTH = 300.0
     ROW_HEIGHT = 22.0
     PANEL_GAP = 5.0
     PANEL_PADDING = 8.0
@@ -286,9 +284,7 @@ class AssociationGraphicsItem(NodeGraphicsItem):
             return
         painter.setPen(self._border_pen(self.isSelected()))
         painter.setBrush(QBrush(ENTITY_FILL))
-        painter.drawLine(
-            QPointF(0, self.HALF_HEIGHT), QPointF(0, panel.top())
-        )
+        painter.drawLine(QPointF(0, self.HALF_HEIGHT), QPointF(0, panel.top()))
         painter.drawRoundedRect(panel, 3, 3)
         font.setBold(False)
         painter.setFont(font)
@@ -346,7 +342,7 @@ class CardinalityLabelItem(QGraphicsSimpleTextItem):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(QColor(255, 255, 255, 225)))
         painter.drawRoundedRect(self.boundingRect(), 3, 3)
-        super().paint(painter, option, widget)
+        super().paint(painter, option, cast(QWidget, widget))
 
 
 class RelationRoleLabelItem(CardinalityLabelItem):
@@ -417,9 +413,7 @@ class RelationGraphicsItem(QGraphicsLineItem):
         base_line = QLineF(start, end)
         length = base_line.length()
         if length > 0 and self._parallel_count > 1:
-            offset = (
-                self._parallel_index - (self._parallel_count - 1) / 2
-            ) * 22.0
+            offset = (self._parallel_index - (self._parallel_count - 1) / 2) * 22.0
             normal = QPointF(
                 -base_line.dy() / length,
                 base_line.dx() / length,
@@ -446,9 +440,7 @@ class RelationGraphicsItem(QGraphicsLineItem):
         role_anchor = line.p2() - QPointF(ux * role_distance, uy * role_distance)
         role_perpendicular = QPointF(uy * 14.0, -ux * 14.0)
         role_rect = self.role_label.boundingRect()
-        self.role_label.setPos(
-            role_anchor + role_perpendicular - role_rect.center()
-        )
+        self.role_label.setPos(role_anchor + role_perpendicular - role_rect.center())
 
     def shape(self) -> QPainterPath:
         path = QPainterPath()
@@ -509,7 +501,7 @@ class InheritanceGraphicsItem(QGraphicsItem):
         parent_point = self.parent_item.connection_point_towards(junction)
         path.moveTo(parent_point)
         path.lineTo(junction)
-        for child_item, child_center in zip(
+        for child_item, _child_center in zip(
             self.child_items, child_centers, strict=True
         ):
             child_point = child_item.connection_point_towards(junction)

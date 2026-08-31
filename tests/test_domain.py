@@ -6,10 +6,10 @@ from merisor.domain import (
     Cardinality,
     DiagramError,
     DiagramModel,
-    MLDDataType,
-    MLDDataTypeName,
     InheritanceStrategy,
     MaterializationStrategy,
+    MLDDataType,
+    MLDDataTypeName,
     Position,
 )
 
@@ -81,10 +81,7 @@ def test_model_modifies_association_transformation_properties() -> None:
     )
 
     assert association.is_historized
-    assert (
-        association.materialization_strategy
-        is MaterializationStrategy.FORCE_TABLE
-    )
+    assert association.materialization_strategy is MaterializationStrategy.FORCE_TABLE
 
 
 def test_create_relation_between_entity_and_association() -> None:
@@ -107,12 +104,8 @@ def test_relation_rejects_unknown_endpoint_and_accepts_reflexive_roles() -> None
     with pytest.raises(DiagramError, match="Association inconnue"):
         model.create_relation(entity.id, "missing")
 
-    supervisor = model.create_relation(
-        entity.id, association.id, role=" superviseur "
-    )
-    supervised = model.create_relation(
-        entity.id, association.id, role="supervisé"
-    )
+    supervisor = model.create_relation(entity.id, association.id, role=" superviseur ")
+    supervised = model.create_relation(entity.id, association.id, role="supervisé")
 
     assert supervisor.role == "superviseur"
     assert supervised.role == "supervisé"

@@ -48,7 +48,12 @@ class DiagramScene(QGraphicsScene):
         self.set_mode(ToolMode.SELECT)
 
     def _node_at(self, position: QPointF) -> NodeGraphicsItem | None:
-        for item in self.items(position, Qt.ItemSelectionMode.IntersectsItemShape, Qt.SortOrder.DescendingOrder, QTransform()):
+        for item in self.items(
+            position,
+            Qt.ItemSelectionMode.IntersectsItemShape,
+            Qt.SortOrder.DescendingOrder,
+            QTransform(),
+        ):
             current = item
             while current is not None:
                 if isinstance(current, NodeGraphicsItem):
@@ -100,7 +105,9 @@ class DiagramScene(QGraphicsScene):
             )
             return
         if self._relation_start is node:
-            self.interaction_message.emit("Choisissez un autre objet comme seconde extrémité.")
+            self.interaction_message.emit(
+                "Choisissez un autre objet comme seconde extrémité."
+            )
             return
         start = self._relation_start
         start.setSelected(False)
@@ -116,7 +123,9 @@ class DiagramView(QGraphicsView):
     def __init__(self, scene: DiagramScene, parent=None) -> None:  # type: ignore[no-untyped-def]
         super().__init__(scene, parent)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
-        self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.BoundingRectViewportUpdate)
+        self.setViewportUpdateMode(
+            QGraphicsView.ViewportUpdateMode.BoundingRectViewportUpdate
+        )
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
@@ -183,8 +192,12 @@ class DiagramView(QGraphicsView):
             current = event.position().toPoint()
             delta = current - self._pan_origin
             self._pan_origin = current
-            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - delta.x())
-            self.verticalScrollBar().setValue(self.verticalScrollBar().value() - delta.y())
+            self.horizontalScrollBar().setValue(
+                self.horizontalScrollBar().value() - delta.x()
+            )
+            self.verticalScrollBar().setValue(
+                self.verticalScrollBar().value() - delta.y()
+            )
             event.accept()
             return
         super().mouseMoveEvent(event)
