@@ -211,8 +211,9 @@ Sans fonctionnalité IA, `python -m pip install -e ".[test]"` suffit.
 
 ### Option D — installation avec pipx
 
-Lorsque la version est publiée sur PyPI, `pipx` crée un environnement isolé et
-installe le raccourci `merisor` sans modifier les paquets Python du système :
+MERISOR est publié sur [PyPI](https://pypi.org/project/merisor/) depuis la
+version `0.6.1`. `pipx` crée un environnement isolé et installe le raccourci
+`merisor` sans modifier les paquets Python du système :
 
 ```bash
 pipx install merisor
@@ -227,6 +228,16 @@ Pour mettre l’application à jour ultérieurement :
 ```bash
 pipx upgrade merisor
 ```
+
+Pour vérifier la version disponible sur PyPI puis celle installée par `pipx` :
+
+```bash
+python3 -m pip index versions merisor
+pipx runpip merisor show merisor
+```
+
+La commande `pipx list` permet également de retrouver MERISOR et le chemin de
+son environnement isolé.
 
 <details>
 <summary><strong>Résoudre les problèmes d’affichage Qt sous Linux</strong></summary>
