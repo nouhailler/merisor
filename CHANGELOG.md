@@ -4,6 +4,15 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
+## [0.6.1] - 2026-08-31
+
+### Corrigé
+
+- installation de la bibliothèque EGL requise par PySide6 dans le job de
+  packaging GitHub Actions ;
+- clarification des limites ISA et de la matérialisation des associations 1:1
+  porteuses d'attributs dans le README.
+
 ## [0.6.0] - 2026-08-31
 
 ### Ajouté

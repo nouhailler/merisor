@@ -180,7 +180,7 @@ ne demande pas d’installation administrateur et ne modifie pas le système.
 3. Installez le paquet :
 
 ```bash
-sudo apt install ./merisor_0.6.0_amd64.deb
+sudo apt install ./merisor_0.6.1_amd64.deb
 ```
 
 Adaptez le nom au fichier téléchargé. MERISOR apparaît ensuite dans le menu des
@@ -656,12 +656,16 @@ artefacts lors de l’envoi d’un tag `v*`.
 
 ## ⚠️ Limites connues
 
-- l'héritage multiple et les cycles ISA sont refusés ;
+- une même entité fille ne peut pas avoir plusieurs entités mères et les cycles
+  ISA sont refusés ; une spécialisation comportant plusieurs entités filles est
+  bien prise en charge ;
 - pour éviter une transformation ambiguë, les stratégies ISA aplaties refusent
-  encore une association directement portée par une table supprimée ; utilisez
-  `JOINED` dans ce cas ;
-- une association 1:1 porteuse d’attributs doit être matérialisée avec
-  `FORCE_TABLE` pour éviter une perte d’information ;
+  encore une association directement portée par l'entité dont la table serait
+  supprimée ; utilisez `JOINED` dans ce cas ;
+- une association 1:1 porteuse d’attributs doit être matérialisée en table :
+  utilisez `FORCE_TABLE`, ou `AUTO` si l'association est historisée. Les modes
+  `AUTO` non historisé et `FORCE_FK` sont refusés pour éviter une perte
+  d’information ;
 - la génération IA dépend de la disponibilité et des quotas d’OpenRouter ;
 - MERISOR ne gère ni connexion, ni migration automatique, ni introspection
   directe d'une base en fonctionnement ;

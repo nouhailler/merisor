@@ -39,8 +39,8 @@ La version n'est définie qu'à un seul endroit : `src/merisor/__init__.py`.
 Après validation de la suite de tests :
 
 ```bash
-git tag -a v0.6.0 -m "MERISOR 0.6.0"
-git push origin v0.6.0
+git tag -a v0.6.1 -m "MERISOR 0.6.1"
+git push origin v0.6.1
 ```
 
 Le tag doit impérativement correspondre à `v` suivi de `__version__`. Le
