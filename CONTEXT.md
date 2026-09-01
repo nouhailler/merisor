@@ -30,7 +30,13 @@ Fonctionnalités déjà intégrées :
 - assistant MERISE conversationnel avec brouillon isolé, patchs stricts,
   révisions, questions structurantes et import confirmé/annulable ;
 - exploration non destructive du MCD avec recherche, filtres, focus par
-  profondeur, dépendances, zoom et masquage temporaire.
+  profondeur, dépendances, zoom et masquage temporaire ;
+- domaines et vues métier/technique persistants, composables et sélectionnables
+  dans l'explorateur.
+- comparaison non destructive du MCD courant avec une version JSON, incluant
+  les différences détaillées et leurs impacts MCD/MLD/SQL.
+- analyse d'impact ciblée sur les objets et attributs, séparant les dépendances
+  formelles des correspondances sémantiques potentielles.
 
 ## Exploration du modèle terminée
 
@@ -43,6 +49,19 @@ puis masquer temporairement certains éléments.
 Le moteur `ModelExplorer` ne dépend pas de Qt. La fenêtre graphique utilise un
 `DiagramController` transitoire : ses déplacements, son auto-layout et ses
 masquages ne rendent jamais le document principal modifié.
+
+## Sous-modèles et domaines terminés
+
+La commande **Modèle → Gérer les domaines et vues** (`Ctrl+Alt+D`) édite une
+copie de la configuration. Un domaine peut contenir des entités et des
+associations, et un même objet peut appartenir à plusieurs domaines. Une vue
+`BUSINESS` ou `TECHNICAL` combine des domaines et des objets explicites.
+
+La confirmation applique toute la configuration par une unique
+`ReplaceSubmodelsCommand`, donc annulable et sans invalider le MLD. Le JSON V2
+contient les tableaux facultatifs `domains` et `submodel_views`. Leur absence
+dans les anciens fichiers produit des collections vides sans migration
+destructive.
 
 ## Qualité logicielle
 
@@ -59,9 +78,37 @@ QT_QPA_PLATFORM=offscreen pytest
 Mypy fonctionne en mode strict. À la dernière vérification locale :
 
 - Ruff format et lint : conformes ;
-- mypy : aucune erreur sur 64 fichiers ;
-- pytest : 242 tests réussis ;
+- mypy : aucune erreur sur 75 fichiers ;
+- pytest : 261 tests réussis ;
 - démarrage Qt hors écran : application active jusqu'au timeout de contrôle.
+
+## Comparateur de versions terminé
+
+La commande **Modèle → Comparer avec une version** (`Ctrl+Alt+C`) charge un
+fichier JSON comme référence et le compare au modèle en mémoire. Le moteur
+`ModelVersionComparator` est indépendant de Qt et ne modifie aucun modèle.
+
+Il compare les entités, associations, attributs et toutes leurs propriétés,
+les relations/cardinalités/rôles ainsi que les héritages. Chaque changement
+porte un impact explicable calculé depuis la provenance du MLD de la version
+concernée : associations MCD, tables MLD, FK et index SQL touchés. Un MCD
+incomplet reste comparable ; seul le chiffrage MLD/SQL indisponible est alors
+signalé comme tel.
+
+## Analyse d'impact terminée
+
+La commande **Modèle → Analyser l'impact** (`Ctrl+Alt+I`) et le bouton présent
+dans les propriétés d'un attribut utilisent `ModelImpactAnalyzer`, indépendant
+de Qt. Le panneau affiche aussi un résumé immédiat pour l'attribut sélectionné.
+
+Le moteur suit les relations MCD, dépendances fonctionnelles, colonnes MLD
+migrées, PK/FK, UNIQUE, CHECK et index en utilisant les identifiants de
+provenance. Les attributs portant le même nom dans d'autres objets sont affichés
+séparément comme correspondances potentielles : ils ne sont jamais présentés
+comme des dépendances certaines sans référence structurelle.
+
+Si le MCD est incomplet, l'analyse MCD reste disponible et le rapport explique
+que les impacts MLD/SQL n'ont pas pu être calculés.
 
 ## Analyse intelligente locale déjà terminée
 

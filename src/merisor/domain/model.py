@@ -82,6 +82,13 @@ class FunctionalDependencyOrigin(str, Enum):
     AI = "AI"
 
 
+class SubmodelViewKind(str, Enum):
+    """Intention d'une vue enregistrée du MCD."""
+
+    BUSINESS = "BUSINESS"
+    TECHNICAL = "TECHNICAL"
+
+
 @dataclass(frozen=True, slots=True, init=False)
 class Cardinality:
     """Cardinalité MERISE portée par l'extrémité entité d'une relation."""
@@ -360,6 +367,78 @@ class FunctionalDependency:
         object.__setattr__(self, "id", dependency_id)
 
 
+@dataclass(slots=True)
+class ModelDomain:
+    """Regroupement thématique réutilisable dans plusieurs vues."""
+
+    name: str
+    node_ids: tuple[str, ...] = ()
+    id: str = field(default_factory=_new_id)
+    description: str = ""
+
+    def __post_init__(self) -> None:
+        _validate_internal_id(self.id, "ce domaine")
+        _validate_name_type(self.name, "ce domaine")
+        self.name = self.name.strip()
+        if not self.name:
+            raise DiagramError("Le nom d'un domaine est obligatoire.")
+        if not isinstance(self.node_ids, tuple):
+            self.node_ids = tuple(self.node_ids)
+        if len(self.node_ids) != len(set(self.node_ids)):
+            raise DiagramError("Un domaine contient un objet dupliqué.")
+        for node_id in self.node_ids:
+            _validate_internal_id(node_id, "l'objet du domaine")
+        if not isinstance(self.description, str):
+            raise DiagramError("La description d'un domaine doit être textuelle.")
+        self.description = self.description.strip()
+
+
+@dataclass(slots=True, init=False)
+class SubmodelView:
+    """Vue métier ou technique composée de domaines et d'objets explicites."""
+
+    name: str
+    kind: SubmodelViewKind
+    domain_ids: tuple[str, ...]
+    node_ids: tuple[str, ...]
+    id: str
+
+    def __init__(
+        self,
+        name: str,
+        kind: SubmodelViewKind | str,
+        domain_ids: Iterable[str] = (),
+        node_ids: Iterable[str] = (),
+        id: str | None = None,
+    ) -> None:
+        self.name = name
+        try:
+            self.kind = SubmodelViewKind(kind)
+        except (TypeError, ValueError) as error:
+            raise DiagramError(
+                "Le type de vue doit valoir BUSINESS ou TECHNICAL."
+            ) from error
+        self.domain_ids = tuple(domain_ids)
+        self.node_ids = tuple(node_ids)
+        self.id = _new_id() if id is None else id
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        _validate_internal_id(self.id, "cette vue")
+        _validate_name_type(self.name, "cette vue")
+        self.name = self.name.strip()
+        if not self.name:
+            raise DiagramError("Le nom d'une vue est obligatoire.")
+        if len(self.domain_ids) != len(set(self.domain_ids)):
+            raise DiagramError("Une vue contient un domaine dupliqué.")
+        if len(self.node_ids) != len(set(self.node_ids)):
+            raise DiagramError("Une vue contient un objet dupliqué.")
+        for domain_id in self.domain_ids:
+            _validate_internal_id(domain_id, "ce domaine référencé")
+        for node_id in self.node_ids:
+            _validate_internal_id(node_id, "l'objet de la vue")
+
+
 Node = Entity | Association
 
 
@@ -372,6 +451,8 @@ class MCDModel:
         self.relations: dict[str, Relation] = {}
         self.inheritances: dict[str, Inheritance] = {}
         self.functional_dependencies: dict[str, FunctionalDependency] = {}
+        self.domains: dict[str, ModelDomain] = {}
+        self.submodel_views: dict[str, SubmodelView] = {}
 
     def _all_ids(self) -> set[str]:
         attribute_ids = {
@@ -389,6 +470,8 @@ class MCDModel:
             | set(self.relations)
             | set(self.inheritances)
             | set(self.functional_dependencies)
+            | set(self.domains)
+            | set(self.submodel_views)
             | attribute_ids
         )
 
@@ -574,6 +657,68 @@ class MCDModel:
             raise DiagramError("Cette dépendance fonctionnelle existe déjà.")
         self.functional_dependencies[dependency.id] = dependency
 
+    def add_domain(self, domain: ModelDomain) -> None:
+        self._ensure_available_ids([domain.id])
+        if any(
+            item.name.casefold() == domain.name.casefold()
+            for item in self.domains.values()
+        ):
+            raise DiagramError(f"Domaine déjà présent : {domain.name}")
+        unknown = set(domain.node_ids) - (set(self.entities) | set(self.associations))
+        if unknown:
+            raise DiagramError(
+                f"Le domaine référence un objet inconnu : {sorted(unknown)[0]}"
+            )
+        self.domains[domain.id] = domain
+
+    def add_submodel_view(self, view: SubmodelView) -> None:
+        self._ensure_available_ids([view.id])
+        if any(
+            item.name.casefold() == view.name.casefold()
+            for item in self.submodel_views.values()
+        ):
+            raise DiagramError(f"Vue déjà présente : {view.name}")
+        unknown_domains = set(view.domain_ids) - set(self.domains)
+        if unknown_domains:
+            raise DiagramError(
+                f"La vue référence un domaine inconnu : {sorted(unknown_domains)[0]}"
+            )
+        unknown_nodes = set(view.node_ids) - (
+            set(self.entities) | set(self.associations)
+        )
+        if unknown_nodes:
+            raise DiagramError(
+                f"La vue référence un objet inconnu : {sorted(unknown_nodes)[0]}"
+            )
+        self.submodel_views[view.id] = view
+
+    def replace_submodels(
+        self,
+        domains: Iterable[ModelDomain],
+        views: Iterable[SubmodelView],
+    ) -> None:
+        domain_values = list(domains)
+        view_values = list(views)
+        domain_names = [domain.name.casefold() for domain in domain_values]
+        view_names = [view.name.casefold() for view in view_values]
+        if len(domain_names) != len(set(domain_names)):
+            raise DiagramError("Deux domaines ne peuvent pas porter le même nom.")
+        if len(view_names) != len(set(view_names)):
+            raise DiagramError("Deux vues ne peuvent pas porter le même nom.")
+        previous_domains = self.domains
+        previous_views = self.submodel_views
+        self.domains = {}
+        self.submodel_views = {}
+        try:
+            for domain in domain_values:
+                self.add_domain(domain)
+            for view in view_values:
+                self.add_submodel_view(view)
+        except DiagramError:
+            self.domains = previous_domains
+            self.submodel_views = previous_views
+            raise
+
     def replace_functional_dependency(
         self, dependency_id: str, replacement: FunctionalDependency
     ) -> None:
@@ -758,6 +903,7 @@ class MCDModel:
             ):
                 del self.inheritances[inheritance_id]
         self._remove_owner_dependencies(entity_id)
+        self._remove_node_from_submodels(entity_id)
         return self.entities.pop(entity_id), relations
 
     def remove_association(
@@ -769,12 +915,23 @@ class MCDModel:
         for relation in relations:
             del self.relations[relation.id]
         self._remove_owner_dependencies(association_id)
+        self._remove_node_from_submodels(association_id)
         return self.associations.pop(association_id), relations
 
     def _remove_owner_dependencies(self, owner_id: str) -> None:
         for dependency_id, dependency in list(self.functional_dependencies.items()):
             if dependency.owner_id == owner_id:
                 del self.functional_dependencies[dependency_id]
+
+    def _remove_node_from_submodels(self, node_id: str) -> None:
+        for domain in self.domains.values():
+            domain.node_ids = tuple(
+                item_id for item_id in domain.node_ids if item_id != node_id
+            )
+        for view in self.submodel_views.values():
+            view.node_ids = tuple(
+                item_id for item_id in view.node_ids if item_id != node_id
+            )
 
     def node(self, element_id: str) -> Node:
         if element_id in self.entities:

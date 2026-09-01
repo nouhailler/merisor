@@ -34,6 +34,13 @@ from merisor.application.design_session import (
     ModelDifference,
     compare_models,
 )
+from merisor.application.impact_analysis import (
+    ImpactCertainty,
+    ImpactReference,
+    ImpactReport,
+    ImpactTarget,
+    ModelImpactAnalyzer,
+)
 from merisor.application.mcd_layout import McdAutoLayout
 from merisor.application.mld_text import render_mld_text
 from merisor.application.mld_transformer import (
@@ -69,15 +76,30 @@ from merisor.application.sql_generator import (
     SQLValidationSeverity,
     sql_dialect,
 )
+from merisor.application.submodels import (
+    GLOBAL_SCOPE_ID,
+    SubmodelResolver,
+    SubmodelScope,
+)
+from merisor.application.version_comparator import (
+    ChangeImpact,
+    ChangeKind,
+    ModelVersionComparator,
+    VersionChange,
+    VersionComparison,
+)
 
 __all__ = [
     "CONVERSATIONAL_SYSTEM_PROMPT",
+    "GLOBAL_SCOPE_ID",
     "AiDependencySuggestion",
     "AiMcdCandidate",
     "AiMcdService",
     "AiMcdValidationError",
     "AiNormalizationError",
     "AiNormalizationService",
+    "ChangeImpact",
+    "ChangeKind",
     "ConceptKind",
     "ConversationalDesignService",
     "DDLImportError",
@@ -95,6 +117,10 @@ __all__ = [
     "ExplorationOptions",
     "ExplorationResult",
     "ExplorationSearchResult",
+    "ImpactCertainty",
+    "ImpactReference",
+    "ImpactReport",
+    "ImpactTarget",
     "MLDGenerationBlocked",
     "MLDNamePolicy",
     "MLDSQLValidator",
@@ -103,6 +129,8 @@ __all__ = [
     "McdToMldTransformer",
     "ModelDifference",
     "ModelExplorer",
+    "ModelImpactAnalyzer",
+    "ModelVersionComparator",
     "MySQLDialect",
     "OpenRouterClient",
     "OpenRouterError",
@@ -119,6 +147,10 @@ __all__ = [
     "SQLValidationReport",
     "SQLValidationSeverity",
     "SQLiteDialect",
+    "SubmodelResolver",
+    "SubmodelScope",
+    "VersionChange",
+    "VersionComparison",
     "compare_models",
     "mcd_logical_fingerprint",
     "render_mld_text",

@@ -21,6 +21,7 @@ class ExplorationOptions:
     query: str = ""
     restrict_to_query: bool = False
     hidden_ids: frozenset[str] = frozenset()
+    scope_ids: frozenset[str] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +69,9 @@ class ModelExplorer:
     ) -> ExplorationResult:
         all_node_ids = set(model.entities) | set(model.associations)
         visible = all_node_ids - set(options.hidden_ids)
+
+        if options.scope_ids is not None:
+            visible &= set(options.scope_ids)
 
         if not options.show_entities:
             visible -= set(model.entities)

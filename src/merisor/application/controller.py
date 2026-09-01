@@ -27,6 +27,7 @@ from merisor.application.commands import (
     ReplaceAttributeCommand,
     ReplaceFunctionalDependencyCommand,
     ReplaceModelStateCommand,
+    ReplaceSubmodelsCommand,
     SetAssociationHistorizedCommand,
     SetAssociationMaterializationStrategyCommand,
     SetAttributeDataTypeCommand,
@@ -54,11 +55,13 @@ from merisor.domain import (
     MCDModel,
     MLDDataType,
     MLDModel,
+    ModelDomain,
     ModelQualityReport,
     NormalizationProposal,
     NormalizationReport,
     Position,
     Relation,
+    SubmodelView,
     ValidationReport,
     analyze_model_quality,
     analyze_normalization,
@@ -472,6 +475,34 @@ class DiagramController(QObject):
             "Décomposition appliquée ; utilisez Annuler pour restaurer le MCD."
         )
 
+    def apply_submodel_configuration(
+        self,
+        domains: Iterable[ModelDomain],
+        views: Iterable[SubmodelView],
+    ) -> None:
+        """Applique toute la configuration comme une seule commande annulable."""
+
+        new_domains = copy.deepcopy(tuple(domains))
+        new_views = copy.deepcopy(tuple(views))
+        validation_copy = copy.deepcopy(self.model)
+        validation_copy.replace_submodels(new_domains, new_views)
+        if (
+            validation_copy.domains == self.model.domains
+            and validation_copy.submodel_views == self.model.submodel_views
+        ):
+            self.message.emit("Aucune modification des domaines ou des vues.")
+            return
+        self.undo_stack.push(
+            ReplaceSubmodelsCommand(
+                self,
+                tuple(self.model.domains.values()),
+                tuple(self.model.submodel_views.values()),
+                new_domains,
+                new_views,
+            )
+        )
+        self.message.emit("Domaines et vues enregistrés dans le MCD.")
+
     @property
     def mld_is_stale(self) -> bool:
         return (
@@ -541,6 +572,8 @@ class DiagramController(QObject):
             relations,
             inheritances,
             functional_dependencies,
+            tuple(copy.deepcopy(tuple(self.model.domains.values()))),
+            tuple(copy.deepcopy(tuple(self.model.submodel_views.values()))),
         )
 
     def new_document(self) -> None:
@@ -866,6 +899,14 @@ class DiagramController(QObject):
     def command_replace_model_state(self, model: MCDModel) -> None:
         self._install_model_state(model)
 
+    def command_replace_submodels(
+        self,
+        domains: tuple[ModelDomain, ...],
+        views: tuple[SubmodelView, ...],
+    ) -> None:
+        self.model.replace_submodels(domains, views)
+        self._model_did_change()
+
     def command_move_node(self, node_id: str, position: Position) -> None:
         self.model.move_node(node_id, position)
         item = self._node_items[node_id]
@@ -994,6 +1035,7 @@ class DiagramController(QObject):
             self._add_inheritance_item(inheritance)
         for dependency in snapshot.functional_dependencies:
             self.model.add_functional_dependency(dependency)
+        self.model.replace_submodels(snapshot.domains, snapshot.submodel_views)
         self._refresh_all_parallel_relations()
         self._model_did_change()
 

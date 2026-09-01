@@ -18,8 +18,10 @@ from merisor.domain import (
     MaterializationStrategy,
     MCDModel,
     MLDDataType,
+    ModelDomain,
     Position,
     Relation,
+    SubmodelView,
 )
 
 
@@ -32,6 +34,8 @@ class DeletionSnapshot:
     relations: tuple[Relation, ...]
     inheritances: tuple[Inheritance, ...] = ()
     functional_dependencies: tuple[FunctionalDependency, ...] = ()
+    domains: tuple[ModelDomain, ...] = ()
+    submodel_views: tuple[SubmodelView, ...] = ()
 
     @property
     def empty(self) -> bool:
@@ -68,6 +72,12 @@ class CommandTarget(Protocol):
     ) -> None: ...
 
     def command_replace_model_state(self, model: MCDModel) -> None: ...
+
+    def command_replace_submodels(
+        self,
+        domains: tuple[ModelDomain, ...],
+        views: tuple[SubmodelView, ...],
+    ) -> None: ...
 
     def command_move_node(self, node_id: str, position: Position) -> None: ...
 
@@ -230,6 +240,35 @@ class ReplaceModelStateCommand(QUndoCommand):
 
     def undo(self) -> None:
         self._target.command_replace_model_state(copy.deepcopy(self._old_model))
+
+
+class ReplaceSubmodelsCommand(QUndoCommand):
+    """Remplace uniquement les métadonnées de vues, sans invalider le MLD."""
+
+    def __init__(
+        self,
+        target: CommandTarget,
+        old_domains: tuple[ModelDomain, ...],
+        old_views: tuple[SubmodelView, ...],
+        new_domains: tuple[ModelDomain, ...],
+        new_views: tuple[SubmodelView, ...],
+    ) -> None:
+        super().__init__("Modifier les domaines et sous-modèles")
+        self._target = target
+        self._old_domains = copy.deepcopy(old_domains)
+        self._old_views = copy.deepcopy(old_views)
+        self._new_domains = copy.deepcopy(new_domains)
+        self._new_views = copy.deepcopy(new_views)
+
+    def redo(self) -> None:
+        self._target.command_replace_submodels(
+            copy.deepcopy(self._new_domains), copy.deepcopy(self._new_views)
+        )
+
+    def undo(self) -> None:
+        self._target.command_replace_submodels(
+            copy.deepcopy(self._old_domains), copy.deepcopy(self._old_views)
+        )
 
 
 class MoveNodeCommand(QUndoCommand):

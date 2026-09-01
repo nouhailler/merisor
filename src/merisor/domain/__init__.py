@@ -30,8 +30,11 @@ from merisor.domain.model import (
     InheritanceStrategy,
     MaterializationStrategy,
     MCDModel,
+    ModelDomain,
     Position,
     Relation,
+    SubmodelView,
+    SubmodelViewKind,
 )
 from merisor.domain.normalization import (
     NormalFormAssessment,
@@ -89,6 +92,7 @@ __all__ = [
     "MLDTableSource",
     "MLDUniqueConstraint",
     "MaterializationStrategy",
+    "ModelDomain",
     "ModelQualityReport",
     "NormalFormAssessment",
     "NormalFormStatus",
@@ -103,6 +107,8 @@ __all__ = [
     "QualityDimensionScore",
     "QualityFinding",
     "Relation",
+    "SubmodelView",
+    "SubmodelViewKind",
     "ValidationIssue",
     "ValidationReport",
     "ValidationSeverity",

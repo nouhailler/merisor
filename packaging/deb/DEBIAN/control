@@ -3,7 +3,7 @@ Version: 0.6.1
 Section: graphics
 Priority: optional
 Architecture: all
-Depends: python3 (>= 3.10), python3-pyside6.qtcore, python3-pyside6.qtgui, python3-pyside6.qtwidgets
+Depends: python3 (>= 3.10), python3-pyside6.qtcore, python3-pyside6.qtgui, python3-pyside6.qtwidgets, python3-pyside6.qtsvg
 Maintainer: Nouhailler <patrick.nouhailler@gmail.com>
 Description: Editeur graphique de modeles MERISE
  MERISOR permet de construire un MCD, de generer un MLD et de produire

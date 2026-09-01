@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from merisor.application import DiagramController
+from merisor.application import DiagramController, ModelImpactAnalyzer
 from merisor.domain import (
     Association,
     Attribute,
@@ -39,6 +39,8 @@ from merisor.domain import (
 
 class PropertiesPanel(QWidget):
     """Panneau d'édition ; toute mutation passe par le contrôleur annulable."""
+
+    impact_requested = Signal(str)
 
     def __init__(self, controller: DiagramController, parent=None) -> None:  # type: ignore[no-untyped-def]
         super().__init__(parent)
@@ -225,6 +227,11 @@ class PropertiesPanel(QWidget):
         attribute_type_form.addRow("Contraintes CHECK", self.attribute_constraints_edit)
         self.apply_attribute_type_button = QPushButton("Appliquer les propriétés")
         attribute_type_form.addRow(self.apply_attribute_type_button)
+        self.attribute_impact_summary = QLabel("—")
+        self.attribute_impact_summary.setWordWrap(True)
+        attribute_type_form.addRow("Impact", self.attribute_impact_summary)
+        self.analyze_attribute_impact_button = QPushButton("Analyser l'impact…")
+        attribute_type_form.addRow(self.analyze_attribute_impact_button)
         self.attribute_type_group.setEnabled(False)
         layout.addWidget(self.attribute_type_group)
 
@@ -253,6 +260,9 @@ class PropertiesPanel(QWidget):
         )
         self.attribute_precision.valueChanged.connect(self._decimal_precision_changed)
         self.apply_attribute_type_button.clicked.connect(self._apply_attribute_type)
+        self.analyze_attribute_impact_button.clicked.connect(
+            self._request_attribute_impact
+        )
         self.historized_checkbox.toggled.connect(self._historization_changed)
         self.materialization_combo.currentIndexChanged.connect(
             self._materialization_changed
@@ -427,6 +437,7 @@ class PropertiesPanel(QWidget):
             self.attribute_type_group.setEnabled(False)
             self.attribute_type_combo.setCurrentIndex(0)
             self.attribute_name_edit.clear()
+            self.attribute_impact_summary.setText("—")
             self._attribute_type_selection_changed(0)
             return
         try:
@@ -456,6 +467,12 @@ class PropertiesPanel(QWidget):
         self.attribute_auto_increment_checkbox.setChecked(attribute.auto_increment)
         self.attribute_comment_edit.setPlainText(attribute.comment)
         self.attribute_constraints_edit.setPlainText("\n".join(attribute.constraints))
+        impact = ModelImpactAnalyzer().analyze(self._controller.model, attribute.id)
+        self.attribute_impact_summary.setText(
+            f"{len(impact.certain)} dépendance(s) certaine(s), "
+            f"{impact.relation_count} relation(s), "
+            f"{impact.constraint_count} contrainte(s)"
+        )
         self._attribute_type_selection_changed(self.attribute_type_combo.currentIndex())
 
     def _attribute_type_selection_changed(self, _index: int) -> None:
@@ -586,6 +603,11 @@ class PropertiesPanel(QWidget):
         if attribute_id is not None:
             self._controller.remove_attribute(self._current_node_id, attribute_id)
 
+    def _request_attribute_impact(self) -> None:
+        attribute_id = self._selected_attribute_id()
+        if attribute_id is not None:
+            self.impact_requested.emit(attribute_id)
+
     def _identifier_changed(self, item: QTreeWidgetItem, column: int) -> None:
         if self._updating or column != 0 or self._current_node_id is None:
             return
@@ -655,3 +677,4 @@ class PropertiesPanel(QWidget):
         self.remove_attribute_button.setEnabled(has_attribute)
         self.attribute_type_group.setEnabled(has_attribute)
         self.apply_attribute_type_button.setEnabled(has_attribute)
+        self.analyze_attribute_impact_button.setEnabled(has_attribute)

@@ -24,7 +24,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from merisor.application import DiagramController, McdAutoLayout
+from merisor.application import (
+    GLOBAL_SCOPE_ID,
+    DiagramController,
+    McdAutoLayout,
+    SubmodelResolver,
+)
 from merisor.application.model_explorer import ExplorationOptions, ModelExplorer
 from merisor.domain import Association, Entity, MCDModel
 from merisor.ui.canvas import DiagramScene, DiagramView
@@ -39,11 +44,25 @@ class ModelExplorerDialog(QDialog):
         self.resize(1320, 820)
         self.source_model = copy.deepcopy(model)
         self.explorer = ModelExplorer()
+        self.submodels = SubmodelResolver()
         self.focus_id: str | None = None
         self.hidden_ids: set[str] = set()
 
         root = QVBoxLayout(self)
         toolbar = QHBoxLayout()
+        toolbar.addWidget(QLabel("Vue :"))
+        self.scope_combo = QComboBox()
+        category_labels = {
+            "GLOBAL": "Globale",
+            "DOMAIN": "Domaine",
+            "BUSINESS": "Métier",
+            "TECHNICAL": "Technique",
+        }
+        for scope in self.submodels.scopes(self.source_model):
+            self.scope_combo.addItem(
+                f"{category_labels[scope.category]} — {scope.label}", scope.id
+            )
+        toolbar.addWidget(self.scope_combo)
         toolbar.addWidget(QLabel("Recherche :"))
         self.search_edit = QLineEdit()
         self.search_edit.setClearButtonEnabled(True)
@@ -81,6 +100,7 @@ class ModelExplorerDialog(QDialog):
         root.addLayout(footer)
 
         self.search_edit.textChanged.connect(self._search_changed)
+        self.scope_combo.currentIndexChanged.connect(self._scope_changed)
         self.entity_filter.toggled.connect(self._rebuild)
         self.association_filter.toggled.connect(self._rebuild)
         self.links_filter.toggled.connect(self._rebuild)
@@ -167,6 +187,9 @@ class ModelExplorerDialog(QDialog):
         return panel
 
     def _options(self) -> ExplorationOptions:
+        scope = self.submodels.resolve(
+            self.source_model, str(self.scope_combo.currentData() or GLOBAL_SCOPE_ID)
+        )
         return ExplorationOptions(
             show_entities=self.entity_filter.isChecked(),
             show_associations=self.association_filter.isChecked(),
@@ -176,6 +199,7 @@ class ModelExplorerDialog(QDialog):
             query=self.search_edit.text(),
             restrict_to_query=self.restrict_search.isChecked(),
             hidden_ids=frozenset(self.hidden_ids),
+            scope_ids=None if scope.id == GLOBAL_SCOPE_ID else scope.node_ids,
         )
 
     def _rebuild(self, _value: object = None) -> None:
@@ -189,8 +213,12 @@ class ModelExplorerDialog(QDialog):
         )
         self.view.fit_scene()
         total = len(self.source_model.entities) + len(self.source_model.associations)
+        scope = self.submodels.resolve(
+            self.source_model, str(self.scope_combo.currentData() or GLOBAL_SCOPE_ID)
+        )
         self.status_label.setText(
-            f"{len(result.visible_ids)} objet(s) affiché(s) sur {total} — "
+            f"{scope.label} — {len(result.visible_ids)} objet(s) affiché(s) "
+            f"sur {total} — "
             f"{len(self.hidden_ids)} masqué(s) temporairement"
         )
         self._refresh_hidden_list()
@@ -200,9 +228,24 @@ class ModelExplorerDialog(QDialog):
         if self.restrict_search.isChecked():
             self._rebuild()
 
+    def _scope_changed(self, _index: int) -> None:
+        scope = self.submodels.resolve(
+            self.source_model, str(self.scope_combo.currentData() or GLOBAL_SCOPE_ID)
+        )
+        if scope.id != GLOBAL_SCOPE_ID and self.focus_id not in scope.node_ids:
+            self.focus_id = None
+            self.focus_label.setText("Focus : tout le sous-modèle")
+        self._refresh_results()
+        self._rebuild()
+
     def _refresh_results(self) -> None:
         self.results.clear()
+        scope = self.submodels.resolve(
+            self.source_model, str(self.scope_combo.currentData() or GLOBAL_SCOPE_ID)
+        )
         for result in self.explorer.search(self.source_model, self.search_edit.text()):
+            if scope.id != GLOBAL_SCOPE_ID and result.element_id not in scope.node_ids:
+                continue
             details = result.kind
             if result.matched_attributes:
                 details += " — " + ", ".join(result.matched_attributes)

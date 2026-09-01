@@ -4,6 +4,8 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
+## [0.7.0] - 2026-09-01
+
 ### Ajouté
 
 - workflow GitHub Actions de qualité exécutant Ruff, mypy en mode strict et la
@@ -42,13 +44,41 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 - panneau de dépendances affichant relations, cardinalités, rôles, héritages ISA
   et dépendances fonctionnelles ;
 - masquage temporaire et restauration d'éléments sur une projection qui ne
-  modifie jamais le MCD courant.
+  modifie jamais le MCD courant ;
+- domaines persistants regroupant entités et associations, avec appartenance
+  multiple possible ;
+- vues enregistrées de type métier (`BUSINESS`) ou technique (`TECHNICAL`),
+  composées de domaines et d'objets explicites ;
+- gestion graphique des domaines et vues, application globale annulable et
+  sélection directe de chaque sous-modèle dans l'explorateur ;
+- persistance JSON V2 rétrocompatible des champs `domains` et
+  `submodel_views`.
+- comparateur de versions JSON accessible depuis le menu **Modèle**, avec
+  recherche et filtres sur les ajouts, modifications et suppressions ;
+- comparaison détaillée des attributs, cardinalités, rôles, propriétés
+  d'association et héritages ISA ;
+- analyse d'impact fondée sur la provenance MCD → MLD, recensant associations,
+  tables logiques, contraintes FK et index SQL touchés ;
+- dialogue de comparaison non destructif avec rapport copiable et indication
+  explicite lorsqu'un MLD ne peut pas être dérivé d'une version incomplète.
+- analyse d'impact accessible depuis le menu **Modèle** et depuis l'attribut
+  sélectionné dans le panneau de propriétés ;
+- suivi des colonnes migrées, relations, dépendances fonctionnelles, PK, FK,
+  contraintes UNIQUE/CHECK et index explicites ;
+- séparation visible entre dépendances structurelles certaines et
+  correspondances de noms à confirmer, avec niveau de risque et rapport
+  copiable.
 
 ### Modifié
 
 - normalisation du formatage de tous les fichiers Python ;
-- annotations renforcées pour que les 57 modules source et tests passent le
+- annotations renforcées pour que les 75 modules source et tests passent le
   contrôle `mypy --strict` sans erreur.
+
+### Corrigé
+
+- déclaration de la dépendance Debian `python3-pyside6.qtsvg`, nécessaire au
+  démarrage lorsque l'export SVG est disponible.
 
 ## [0.6.1] - 2026-08-31
 

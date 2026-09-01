@@ -24,15 +24,17 @@ from merisor.application import (
     DiagramController,
     MLDGenerationBlocked,
     MLDTransformationError,
+    ModelVersionComparator,
     SQLDDLImporter,
 )
 from merisor.domain import InheritanceStrategy, MLDModel
-from merisor.persistence import PersistenceError
+from merisor.persistence import JsonDiagramRepository, PersistenceError
 from merisor.ui.ai_mcd_dialog import AiMcdDialog
 from merisor.ui.canvas import DiagramScene, DiagramView, ToolMode
 from merisor.ui.conversational_design_dialog import ConversationalDesignDialog
 from merisor.ui.ddl_import_dialog import DDLImportPreviewDialog
 from merisor.ui.diagram_exporter import DiagramExportError, DiagramVisualExporter
+from merisor.ui.impact_analysis_dialog import ImpactAnalysisDialog
 from merisor.ui.mld_properties_panel import MLDPropertiesPanel
 from merisor.ui.mld_view import MLDView
 from merisor.ui.model_explorer_dialog import ModelExplorerDialog
@@ -41,7 +43,9 @@ from merisor.ui.openrouter_settings_dialog import OpenRouterSettingsDialog
 from merisor.ui.properties_panel import PropertiesPanel
 from merisor.ui.quality_dialog import QualityReportDialog
 from merisor.ui.sql_dialog import SQLPreviewDialog
+from merisor.ui.submodel_dialog import SubmodelManagerDialog
 from merisor.ui.validation_dialog import ValidationDialog
+from merisor.ui.version_comparison_dialog import VersionComparisonDialog
 
 
 class MainWindow(QMainWindow):
@@ -117,7 +121,11 @@ class MainWindow(QMainWindow):
 
         self.validate_action = QAction("Valider le MCD…", self)
         self.validate_action.setShortcut(QKeySequence("Ctrl+Shift+V"))
+        self.compare_version_action = QAction("Comparer avec une version…", self)
+        self.compare_version_action.setShortcut(QKeySequence("Ctrl+Alt+C"))
         self.quality_action = QAction("Analyser la qualité du modèle…", self)
+        self.impact_analysis_action = QAction("Analyser l'impact…", self)
+        self.impact_analysis_action.setShortcut(QKeySequence("Ctrl+Alt+I"))
         self.quality_action.setShortcut(QKeySequence("Ctrl+Shift+Q"))
         self.normalization_action = QAction("Assistant de normalisation…", self)
         self.normalization_action.setShortcut(QKeySequence("Ctrl+Shift+N"))
@@ -133,6 +141,8 @@ class MainWindow(QMainWindow):
         self.conversational_assistant_action.setShortcut(QKeySequence("Ctrl+Alt+M"))
         self.auto_layout_action = QAction("Réorganiser automatiquement le MCD", self)
         self.add_inheritance_action = QAction("Ajouter une spécialisation ISA…", self)
+        self.manage_submodels_action = QAction("Gérer les domaines et vues…", self)
+        self.manage_submodels_action.setShortcut(QKeySequence("Ctrl+Alt+D"))
         self.auto_layout_action.setShortcut(QKeySequence("Ctrl+Shift+L"))
 
         self.tool_group = QActionGroup(self)
@@ -175,9 +185,12 @@ class MainWindow(QMainWindow):
 
         model_menu = self.menuBar().addMenu("Modèle")
         model_menu.addAction(self.validate_action)
+        model_menu.addAction(self.compare_version_action)
         model_menu.addAction(self.quality_action)
+        model_menu.addAction(self.impact_analysis_action)
         model_menu.addAction(self.normalization_action)
         model_menu.addAction(self.add_inheritance_action)
+        model_menu.addAction(self.manage_submodels_action)
         model_menu.addSeparator()
         model_menu.addAction(self.generate_mld_action)
         model_menu.addAction(self.generate_sql_action)
@@ -227,7 +240,9 @@ class MainWindow(QMainWindow):
         self.reset_zoom_action.triggered.connect(self.view.reset_zoom)
         self.explore_model_action.triggered.connect(self.show_model_explorer)
         self.validate_action.triggered.connect(self.show_validation)
+        self.compare_version_action.triggered.connect(self.compare_with_version)
         self.quality_action.triggered.connect(self.show_quality_report)
+        self.impact_analysis_action.triggered.connect(self.show_impact_analysis)
         self.normalization_action.triggered.connect(self.show_normalization_assistant)
         self.generate_mld_action.triggered.connect(self.generate_mld)
         self.generate_sql_action.triggered.connect(self.generate_sql)
@@ -237,6 +252,7 @@ class MainWindow(QMainWindow):
         )
         self.auto_layout_action.triggered.connect(self.auto_layout_mcd)
         self.add_inheritance_action.triggered.connect(self.add_inheritance)
+        self.manage_submodels_action.triggered.connect(self.manage_submodels)
         self.tool_group.triggered.connect(self._tool_triggered)
 
         self.scene.entity_creation_requested.connect(self._request_entity)
@@ -244,6 +260,7 @@ class MainWindow(QMainWindow):
         self.scene.interaction_message.connect(self.statusBar().showMessage)
         self.controller.message.connect(self.statusBar().showMessage)
         self.controller.selection_changed.connect(self.properties_panel.display)
+        self.properties_panel.impact_requested.connect(self.show_impact_analysis)
         self.controller.model_changed.connect(self._refresh_properties)
         self.controller.dirty_changed.connect(self._update_title)
         self.controller.document_path_changed.connect(self._update_title)
@@ -357,12 +374,47 @@ class MainWindow(QMainWindow):
         dialog = ValidationDialog(self.controller.validate(), self)
         dialog.exec()
 
+    def compare_with_version(self, _checked: bool = False) -> None:
+        filename, _filter = QFileDialog.getOpenFileName(
+            self,
+            "Choisir la version MERISOR de référence",
+            str(self._dialog_directory()),
+            "Modèles MERISOR (*.json);;Tous les fichiers (*)",
+        )
+        if not filename:
+            return
+        try:
+            reference = JsonDiagramRepository().load(filename)
+        except PersistenceError as error:
+            QMessageBox.critical(
+                self, "Comparaison impossible", f"Version illisible : {error}"
+            )
+            return
+        comparison = ModelVersionComparator().compare(reference, self.controller.model)
+        VersionComparisonDialog(comparison, Path(filename).name, self).exec()
+
     def show_quality_report(self, _checked: bool = False) -> None:
         dialog = QualityReportDialog(self.controller.analyze_quality(), self)
         dialog.exec()
 
+    def show_impact_analysis(self, selected: bool | str = False) -> None:
+        selected_id = selected if isinstance(selected, str) else None
+        if selected_id is None:
+            elements = self.controller.selected_elements()
+            if len(elements) == 1:
+                selected_id = elements[0].id
+        ImpactAnalysisDialog(self.controller.model, selected_id, self).exec()
+
     def show_model_explorer(self, _checked: bool = False) -> None:
         ModelExplorerDialog(self.controller.model, self).exec()
+
+    def manage_submodels(self, _checked: bool = False) -> None:
+        dialog = SubmodelManagerDialog(self.controller.model, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self.controller.apply_submodel_configuration(
+            dialog.domains.values(), dialog.views.values()
+        )
 
     def show_normalization_assistant(self, _checked: bool = False) -> None:
         NormalizationAssistantDialog(self.controller, self).exec()

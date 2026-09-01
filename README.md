@@ -115,6 +115,84 @@ de navigation indépendante du canvas d'édition :
 Cette exploration travaille sur une projection en mémoire : déplacer, filtrer
 ou masquer un objet dans cette fenêtre ne modifie jamais le MCD enregistré.
 
+### 🗃️ Sous-modèles et domaines
+
+La commande **Modèle → Gérer les domaines et vues…** (`Ctrl+Alt+D`) permet de
+structurer un grand MCD sans le découper en plusieurs fichiers :
+
+- un domaine regroupe librement des entités et des associations ;
+- un objet peut appartenir à plusieurs domaines ;
+- une vue métier compose un ou plusieurs domaines et des objets additionnels ;
+- une vue technique utilise le même mécanisme pour présenter l'implémentation ;
+- la vue globale reste toujours disponible ;
+- les domaines et vues sont enregistrés dans le JSON du projet ;
+- toute la configuration est appliquée comme une seule opération annulable.
+
+Les vues enregistrées apparaissent automatiquement dans la liste **Vue** de
+l'explorateur. Choisir un domaine, une vue métier ou une vue technique limite
+immédiatement le graphe tout en conservant la recherche, le focus et les filtres.
+
+### 🔀 Comparateur de versions
+
+La commande **Modèle → Comparer avec une version…** (`Ctrl+Alt+C`) compare le
+MCD actuellement ouvert à un ancien fichier JSON MERISOR. Le fichier choisi
+sert de référence : le rapport décrit donc son évolution vers l'état courant.
+
+- ajouts, modifications et suppressions d'entités, associations et attributs ;
+- différences de type, identifiant, nullabilité, valeur par défaut, unicité,
+  commentaire, auto-incrémentation et contraintes ;
+- changements de cardinalité, de rôle, d'historisation, de matérialisation et
+  d'héritage ISA ;
+- recherche et filtre par nature du changement ;
+- rapport copiable, sans modification d'aucune des deux versions ;
+- impact détaillé sur les associations MCD, les tables MLD, les contraintes FK
+  et les index SQL grâce à la provenance MCD → MLD.
+
+Exemple de rapport :
+
+```text
++ CLIENT.telephone [attribut]
++ CLIENT.date_naissance [attribut]
+~ CLIENT.email [type] : VARCHAR(100) → VARCHAR(255)
+- CLIENT.adresse [attribut]
+```
+
+Si une version est structurellement incomplète, ses changements MCD restent
+consultables. Le dialogue indique alors clairement que ses impacts MLD/SQL ne
+peuvent pas être calculés, plutôt que de produire une estimation trompeuse.
+
+### 🧬 Analyse d'impact
+
+La commande **Modèle → Analyser l'impact…** (`Ctrl+Alt+I`) suit les dépendances
+d'une entité, d'une association ou d'un attribut avant sa modification. Le même
+rapport est accessible directement par **Analyser l'impact…** sous les
+propriétés de l'attribut sélectionné, où un résumé est affiché en permanence.
+
+L'analyse recense notamment :
+
+- les relations et cardinalités MCD concernées ;
+- les colonnes migrées dans d'autres tables grâce à la provenance MCD → MLD ;
+- les PK, FK, contraintes UNIQUE et CHECK ;
+- les index explicites ;
+- les dépendances fonctionnelles déclarées ;
+- les attributs homonymes présents dans d'autres objets.
+
+Les résultats distinguent toujours les **impacts certains**, issus des
+références structurelles du modèle, des **correspondances à confirmer** fondées
+sur un nom identique. Par exemple, `FACTURE.prix` peut être signalé comme une
+correspondance potentielle de `PRODUIT.prix`, mais ne devient une dépendance
+certaine que si le modèle contient effectivement une référence ou une
+contrainte qui les relie.
+
+```text
+ANALYSE D'IMPACT — CLIENT.id_client
+├── COMMANDE.id_client       colonne migrée
+├── ADRESSE.id_client        colonne migrée
+├── FACTURE.id_client        colonne migrée
+├── 3 contraintes FK
+└── 3 relations MCD
+```
+
 ### ✅ Validation MERISE
 
 - noms manquants ou dupliqués ;
@@ -448,13 +526,16 @@ courant n’est pas modifié.
 
 ### 6. Explorer un modèle volumineux
 
-1. Ouvrez **Affichage → Explorer le modèle…** (`Ctrl+Alt+E`).
-2. Recherchez un objet ou un attribut dans la barre supérieure.
-3. Double-cliquez sur un résultat ou utilisez **Centrer et isoler**.
-4. Choisissez la profondeur du voisinage et les types d'objets visibles.
-5. Sélectionnez un objet dans le graphe pour consulter ses relations,
+1. Facultatif : ouvrez **Modèle → Gérer les domaines et vues…** (`Ctrl+Alt+D`)
+   pour créer les regroupements du projet.
+2. Ouvrez **Affichage → Explorer le modèle…** (`Ctrl+Alt+E`).
+3. Choisissez la vue globale, un domaine, une vue métier ou une vue technique.
+4. Recherchez un objet ou un attribut dans la barre supérieure.
+5. Double-cliquez sur un résultat ou utilisez **Centrer et isoler**.
+6. Choisissez la profondeur du voisinage et les types d'objets visibles.
+7. Sélectionnez un objet dans le graphe pour consulter ses relations,
    cardinalités, héritages et dépendances fonctionnelles.
-6. Utilisez **Masquer la sélection** pour simplifier temporairement la vue ; un
+8. Utilisez **Masquer la sélection** pour simplifier temporairement la vue ; un
    double-clic dans la liste des éléments masqués les restaure individuellement.
 
 ### 7. Générer un MCD avec OpenRouter
@@ -515,6 +596,7 @@ courant n’est pas modifié.
 | Supprimer la sélection | `Suppr` |
 | Zoom avant / arrière / initial | `Ctrl++` / `Ctrl+-` / `Ctrl+0` |
 | Explorer le modèle | `Ctrl+Alt+E` |
+| Gérer les domaines et vues | `Ctrl+Alt+D` |
 | Valider le MCD | `Ctrl+Shift+V` |
 | Assistant de normalisation | `Ctrl+Shift+N` |
 | Assistant MERISE conversationnel | `Ctrl+Alt+M` |
@@ -627,6 +709,23 @@ objets sans dépendre de leurs noms ni de leur position graphique.
       "dependent_attribute_ids": ["attr_pilote_nom"],
       "origin": "USER"
     }
+  ],
+  "domains": [
+    {
+      "id": "domain_course",
+      "name": "Gestion des courses",
+      "description": "Pilotes, courses et participations",
+      "node_ids": ["entity_pilote", "association_participer"]
+    }
+  ],
+  "submodel_views": [
+    {
+      "id": "view_metier_course",
+      "name": "Parcours course",
+      "kind": "BUSINESS",
+      "domain_ids": ["domain_course"],
+      "node_ids": []
+    }
   ]
 }
 ```
@@ -646,6 +745,8 @@ Compatibilité :
   `inheritances` reste parfaitement lisible ;
 - un fichier sans `functional_dependencies` reçoit une collection vide ; les
   origines possibles sont `USER` et `AI` ;
+- un fichier sans `domains` ou `submodel_views` reste une vue globale ordinaire ;
+  les types de vue enregistrés sont `BUSINESS` et `TECHNICAL` ;
 - le fichier source n’est réécrit que lors d’un enregistrement explicite ;
 - le MLD n’est pas sauvegardé : il est toujours recalculé depuis le MCD.
 
@@ -738,6 +839,7 @@ src/merisor/
 │   ├── commands.py              annuler/rétablir
 │   ├── mcd_layout.py            disposition automatique
 │   ├── model_explorer.py        recherche et projections de navigation
+│   ├── submodels.py             résolution des domaines et vues enregistrées
 │   ├── mld_transformer.py       transformation MCD → MLD
 │   ├── ddl_importer.py           reverse-engineering DDL → MLD → MCD
 │   ├── sql_generator.py         validation et dialectes SQL
@@ -754,6 +856,7 @@ src/merisor/
 │   ├── properties_panel.py      édition contextuelle
 │   ├── mld_view.py              MLD graphique et textuel
 │   ├── model_explorer_dialog.py exploration non destructive du MCD
+│   ├── submodel_dialog.py       gestion des domaines et sous-modèles
 │   ├── sql_dialog.py            aperçu et export SQL
 │   ├── ai_mcd_dialog.py         génération/aperçu/import IA
 │   ├── conversational_design_dialog.py conversation/aperçu/import

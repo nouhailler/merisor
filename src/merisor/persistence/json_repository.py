@@ -22,8 +22,11 @@ from merisor.domain import (
     MCDModel,
     MLDDataType,
     MLDError,
+    ModelDomain,
     Position,
     Relation,
+    SubmodelView,
+    SubmodelViewKind,
 )
 
 FORMAT_VERSION = 2
@@ -131,6 +134,27 @@ class JsonDiagramRepository:
                     model.functional_dependencies.values(), key=lambda item: item.id
                 )
             ],
+            "domains": [
+                {
+                    "id": domain.id,
+                    "name": domain.name,
+                    "description": domain.description,
+                    "node_ids": list(domain.node_ids),
+                }
+                for domain in sorted(model.domains.values(), key=lambda item: item.id)
+            ],
+            "submodel_views": [
+                {
+                    "id": view.id,
+                    "name": view.name,
+                    "kind": view.kind.value,
+                    "domain_ids": list(view.domain_ids),
+                    "node_ids": list(view.node_ids),
+                }
+                for view in sorted(
+                    model.submodel_views.values(), key=lambda item: item.id
+                )
+            ],
         }
 
     def from_dict(self, data: Any) -> MCDModel:
@@ -182,6 +206,7 @@ class JsonDiagramRepository:
                 )
             self._load_inheritances(model, data)
             self._load_functional_dependencies(model, data)
+            self._load_submodels(model, data)
         except DiagramError as error:
             raise PersistenceError(f"Diagramme V0.1 incohérent : {error}") from error
         return model
@@ -224,6 +249,7 @@ class JsonDiagramRepository:
                 )
             self._load_inheritances(model, data)
             self._load_functional_dependencies(model, data)
+            self._load_submodels(model, data)
         except DiagramError as error:
             raise PersistenceError(f"Diagramme V0.2 incohérent : {error}") from error
         return model
@@ -290,6 +316,54 @@ class JsonDiagramRepository:
                     determinant_attribute_ids=determinant_ids,
                     dependent_attribute_ids=dependent_ids,
                     origin=origin,
+                )
+            )
+
+    def _load_submodels(self, model: MCDModel, data: dict[str, Any]) -> None:
+        raw_domains = data.get("domains", [])
+        if not isinstance(raw_domains, list):
+            raise PersistenceError("Le champ 'domains' doit être une liste.")
+        for raw in raw_domains:
+            item = self._required_object(raw, "domaine")
+            node_ids = tuple(
+                self._required_id({"value": value}, "value")
+                for value in self._required_list(item, "node_ids")
+            )
+            model.add_domain(
+                ModelDomain(
+                    id=self._required_id(item, "id"),
+                    name=self._required_text(item, "name"),
+                    description=self._optional_text(item, "description"),
+                    node_ids=node_ids,
+                )
+            )
+
+        raw_views = data.get("submodel_views", [])
+        if not isinstance(raw_views, list):
+            raise PersistenceError("Le champ 'submodel_views' doit être une liste.")
+        for raw in raw_views:
+            item = self._required_object(raw, "vue de sous-modèle")
+            domain_ids = tuple(
+                self._required_id({"value": value}, "value")
+                for value in self._required_list(item, "domain_ids")
+            )
+            node_ids = tuple(
+                self._required_id({"value": value}, "value")
+                for value in self._required_list(item, "node_ids")
+            )
+            try:
+                kind = SubmodelViewKind(self._required_text(item, "kind"))
+            except ValueError as error:
+                raise PersistenceError(
+                    "Le champ 'kind' d'une vue doit valoir BUSINESS ou TECHNICAL."
+                ) from error
+            model.add_submodel_view(
+                SubmodelView(
+                    id=self._required_id(item, "id"),
+                    name=self._required_text(item, "name"),
+                    kind=kind,
+                    domain_ids=domain_ids,
+                    node_ids=node_ids,
                 )
             )
 
