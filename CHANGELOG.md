@@ -26,7 +26,7 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 - propagation de ces propriétés vers le MLD, les trois dialectes SQL et le
   reverse-engineering DDL, avec commentaires SQL adaptés au dialecte ;
 - affichage du type et des principales contraintes directement dans les objets
-  du graphe MCD.
+  du graphe MCD ;
 - assistant MERISE conversationnel accessible depuis le menu **Modèle**, avec
   détection de concepts, hypothèses visibles et questions structurantes ;
 - brouillon MCD local isolé du document, réponses OpenRouter sous enveloppe JSON
@@ -36,7 +36,13 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 - aperçu graphique, comparaison avec le MCD courant et import final confirmé
   comme une seule commande annulable ;
 - appel conversationnel asynchrone avec progression et messages lisibles en cas
-  de quota, d'erreur réseau ou de réponse JSON invalide.
+  de quota, d'erreur réseau ou de réponse JSON invalide ;
+- vue **Exploration du modèle** avec recherche par objet ou attribut, filtres,
+  focus par profondeur, zoom et ajustement du graphe ;
+- panneau de dépendances affichant relations, cardinalités, rôles, héritages ISA
+  et dépendances fonctionnelles ;
+- masquage temporaire et restauration d'éléments sur une projection qui ne
+  modifie jamais le MCD courant.
 
 ### Modifié
 

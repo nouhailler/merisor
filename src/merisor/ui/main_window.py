@@ -35,6 +35,7 @@ from merisor.ui.ddl_import_dialog import DDLImportPreviewDialog
 from merisor.ui.diagram_exporter import DiagramExportError, DiagramVisualExporter
 from merisor.ui.mld_properties_panel import MLDPropertiesPanel
 from merisor.ui.mld_view import MLDView
+from merisor.ui.model_explorer_dialog import ModelExplorerDialog
 from merisor.ui.normalization_dialog import NormalizationAssistantDialog
 from merisor.ui.openrouter_settings_dialog import OpenRouterSettingsDialog
 from merisor.ui.properties_panel import PropertiesPanel
@@ -111,6 +112,8 @@ class MainWindow(QMainWindow):
         self.zoom_out_action.setShortcut(QKeySequence("Ctrl+-"))
         self.reset_zoom_action = QAction("Réinitialiser le zoom", self)
         self.reset_zoom_action.setShortcut(QKeySequence("Ctrl+0"))
+        self.explore_model_action = QAction("Explorer le modèle…", self)
+        self.explore_model_action.setShortcut(QKeySequence("Ctrl+Alt+E"))
 
         self.validate_action = QAction("Valider le MCD…", self)
         self.validate_action.setShortcut(QKeySequence("Ctrl+Shift+V"))
@@ -187,6 +190,8 @@ class MainWindow(QMainWindow):
         view_menu.addAction(self.zoom_in_action)
         view_menu.addAction(self.zoom_out_action)
         view_menu.addAction(self.reset_zoom_action)
+        view_menu.addSeparator()
+        view_menu.addAction(self.explore_model_action)
 
     def _create_toolbar(self) -> None:
         toolbar = QToolBar("Outils du diagramme", self)
@@ -220,6 +225,7 @@ class MainWindow(QMainWindow):
         self.zoom_in_action.triggered.connect(self.view.zoom_in)
         self.zoom_out_action.triggered.connect(self.view.zoom_out)
         self.reset_zoom_action.triggered.connect(self.view.reset_zoom)
+        self.explore_model_action.triggered.connect(self.show_model_explorer)
         self.validate_action.triggered.connect(self.show_validation)
         self.quality_action.triggered.connect(self.show_quality_report)
         self.normalization_action.triggered.connect(self.show_normalization_assistant)
@@ -354,6 +360,9 @@ class MainWindow(QMainWindow):
     def show_quality_report(self, _checked: bool = False) -> None:
         dialog = QualityReportDialog(self.controller.analyze_quality(), self)
         dialog.exec()
+
+    def show_model_explorer(self, _checked: bool = False) -> None:
+        ModelExplorerDialog(self.controller.model, self).exec()
 
     def show_normalization_assistant(self, _checked: bool = False) -> None:
         NormalizationAssistantDialog(self.controller, self).exec()

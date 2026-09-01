@@ -42,6 +42,12 @@ from merisor.application.mld_transformer import (
     MLDTransformationError,
     mcd_logical_fingerprint,
 )
+from merisor.application.model_explorer import (
+    ExplorationOptions,
+    ExplorationResult,
+    ExplorationSearchResult,
+    ModelExplorer,
+)
 from merisor.application.openrouter_client import (
     OpenRouterClient,
     OpenRouterError,
@@ -86,6 +92,9 @@ __all__ = [
     "DraftPatch",
     "DraftPatchApplier",
     "DraftRevision",
+    "ExplorationOptions",
+    "ExplorationResult",
+    "ExplorationSearchResult",
     "MLDGenerationBlocked",
     "MLDNamePolicy",
     "MLDSQLValidator",
@@ -93,6 +102,7 @@ __all__ = [
     "McdAutoLayout",
     "McdToMldTransformer",
     "ModelDifference",
+    "ModelExplorer",
     "MySQLDialect",
     "OpenRouterClient",
     "OpenRouterError",

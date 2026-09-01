@@ -97,6 +97,24 @@ flowchart LR
 - export visuel du MCD ou du MLD actif en PNG haute résolution, SVG ou PDF ;
 - sauvegarde JSON versionnée, chargement V1/V2 et fichiers récents.
 
+### 🧭 Exploration des grands modèles
+
+La commande **Affichage → Explorer le modèle…** (`Ctrl+Alt+E`) ouvre une vue
+de navigation indépendante du canvas d'édition :
+
+- recherche par nom d'entité, d'association ou d'attribut ;
+- filtres séparés pour les entités, associations, relations et héritages ;
+- focus sur un objet avec voisinage direct, deux niveaux, objet seul ou modèle
+  complet ;
+- zoom, recentrage automatique et ajustement à la fenêtre ;
+- affichage des cardinalités, rôles, héritages ISA et dépendances
+  fonctionnelles de l'objet sélectionné ;
+- masquage temporaire d'éléments et restauration individuelle ou globale ;
+- filtrage du graphe par les résultats de recherche et leur contexte direct.
+
+Cette exploration travaille sur une projection en mémoire : déplacer, filtrer
+ou masquer un objet dans cette fenêtre ne modifie jamais le MCD enregistré.
+
 ### ✅ Validation MERISE
 
 - noms manquants ou dupliqués ;
@@ -428,7 +446,18 @@ indépendamment du zoom affiché, et propose :
 Les marques de sélection ne figurent pas dans le fichier exporté et le modèle
 courant n’est pas modifié.
 
-### 6. Générer un MCD avec OpenRouter
+### 6. Explorer un modèle volumineux
+
+1. Ouvrez **Affichage → Explorer le modèle…** (`Ctrl+Alt+E`).
+2. Recherchez un objet ou un attribut dans la barre supérieure.
+3. Double-cliquez sur un résultat ou utilisez **Centrer et isoler**.
+4. Choisissez la profondeur du voisinage et les types d'objets visibles.
+5. Sélectionnez un objet dans le graphe pour consulter ses relations,
+   cardinalités, héritages et dépendances fonctionnelles.
+6. Utilisez **Masquer la sélection** pour simplifier temporairement la vue ; un
+   double-clic dans la liste des éléments masqués les restaure individuellement.
+
+### 7. Générer un MCD avec OpenRouter
 
 1. Ouvrez **Paramètres → Paramètres OpenRouter…**.
 2. Saisissez votre clé, testez-la puis actualisez les modèles gratuits.
@@ -443,7 +472,7 @@ courant n’est pas modifié.
 > les identifiants, les cardinalités et les besoins d’historisation. Les
 > modèles gratuits OpenRouter peuvent être soumis à des quotas.
 
-### 7. Concevoir un MCD avec l'assistant conversationnel
+### 8. Concevoir un MCD avec l'assistant conversationnel
 
 1. Configurez OpenRouter comme pour la génération ponctuelle.
 2. Ouvrez **Modèle → Assistant MERISE conversationnel…** (`Ctrl+Alt+M`).
@@ -463,7 +492,7 @@ courant n’est pas modifié.
 > document ouvert. Seul le patch JSON strict, rechargé par le dépôt MERISOR et
 > validé par les règles MCD, peut faire évoluer le brouillon isolé.
 
-### 8. Importer un schéma SQL existant
+### 9. Importer un schéma SQL existant
 
 1. Ouvrez **Fichier → Importer SQL / DDL…** (`Ctrl+Shift+O`).
 2. Choisissez un fichier PostgreSQL ou SQLite.
@@ -485,6 +514,7 @@ courant n’est pas modifié.
 | Annuler / Rétablir | `Ctrl+Z` / `Ctrl+Shift+Z` |
 | Supprimer la sélection | `Suppr` |
 | Zoom avant / arrière / initial | `Ctrl++` / `Ctrl+-` / `Ctrl+0` |
+| Explorer le modèle | `Ctrl+Alt+E` |
 | Valider le MCD | `Ctrl+Shift+V` |
 | Assistant de normalisation | `Ctrl+Shift+N` |
 | Assistant MERISE conversationnel | `Ctrl+Alt+M` |
@@ -707,6 +737,7 @@ src/merisor/
 │   ├── controller.py            orchestration document/scène
 │   ├── commands.py              annuler/rétablir
 │   ├── mcd_layout.py            disposition automatique
+│   ├── model_explorer.py        recherche et projections de navigation
 │   ├── mld_transformer.py       transformation MCD → MLD
 │   ├── ddl_importer.py           reverse-engineering DDL → MLD → MCD
 │   ├── sql_generator.py         validation et dialectes SQL
@@ -722,6 +753,7 @@ src/merisor/
 │   ├── canvas.py, items.py      scène et objets graphiques MCD
 │   ├── properties_panel.py      édition contextuelle
 │   ├── mld_view.py              MLD graphique et textuel
+│   ├── model_explorer_dialog.py exploration non destructive du MCD
 │   ├── sql_dialog.py            aperçu et export SQL
 │   ├── ai_mcd_dialog.py         génération/aperçu/import IA
 │   ├── conversational_design_dialog.py conversation/aperçu/import

@@ -26,9 +26,23 @@ Fonctionnalités déjà intégrées :
 - import et reverse-engineering de DDL PostgreSQL/SQLite ;
 - paquets Debian, AppImage et publication PyPI/pipx ;
 - génération d'un MCD depuis une description via OpenRouter, avec aperçu et
-  confirmation avant remplacement du document courant.
+  confirmation avant remplacement du document courant ;
 - assistant MERISE conversationnel avec brouillon isolé, patchs stricts,
-  révisions, questions structurantes et import confirmé/annulable.
+  révisions, questions structurantes et import confirmé/annulable ;
+- exploration non destructive du MCD avec recherche, filtres, focus par
+  profondeur, dépendances, zoom et masquage temporaire.
+
+## Exploration du modèle terminée
+
+La commande **Affichage → Explorer le modèle** (`Ctrl+Alt+E`) construit une
+copie projetée du MCD courant. Elle permet de rechercher des objets ou des
+attributs, filtrer les types de nœuds et les liens, isoler un voisinage, afficher
+les relations, cardinalités, rôles, héritages et dépendances fonctionnelles,
+puis masquer temporairement certains éléments.
+
+Le moteur `ModelExplorer` ne dépend pas de Qt. La fenêtre graphique utilise un
+`DiagramController` transitoire : ses déplacements, son auto-layout et ses
+masquages ne rendent jamais le document principal modifié.
 
 ## Qualité logicielle
 
@@ -45,8 +59,8 @@ QT_QPA_PLATFORM=offscreen pytest
 Mypy fonctionne en mode strict. À la dernière vérification locale :
 
 - Ruff format et lint : conformes ;
-- mypy : aucune erreur sur 61 fichiers ;
-- pytest : 234 tests réussis ;
+- mypy : aucune erreur sur 64 fichiers ;
+- pytest : 242 tests réussis ;
 - démarrage Qt hors écran : application active jusqu'au timeout de contrôle.
 
 ## Analyse intelligente locale déjà terminée
