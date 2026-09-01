@@ -4,6 +4,10 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
+Aucune modification pour le moment.
+
+## [0.8.0] - 2026-09-01
+
 ### Modifié
 
 - documentation des associations réflexives et n-aires alignée sur leur prise

@@ -462,7 +462,7 @@ ne demande pas d’installation administrateur et ne modifie pas le système.
 3. Installez le paquet :
 
 ```bash
-sudo apt install ./merisor_0.6.1_amd64.deb
+sudo apt install ./merisor_0.8.0_amd64.deb
 ```
 
 Adaptez le nom au fichier téléchargé. MERISOR apparaît ensuite dans le menu des
