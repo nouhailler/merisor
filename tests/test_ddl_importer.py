@@ -162,14 +162,46 @@ def test_reverse_engineering_is_deterministic() -> None:
     assert repository.to_dict(first.mcd) == repository.to_dict(second.mcd)
 
 
-@pytest.mark.parametrize(
-    ("ddl", "message"),
-    [
-        ("SELECT 1;", "Aucune instruction CREATE TABLE"),
-        ("CREATE TABLE sans_pk (nom TEXT);", "PK absente"),
-        ("CREATE TABLE x (id UUID PRIMARY KEY);", "Type SQL non pris en charge"),
-    ],
-)
-def test_invalid_or_unsupported_ddl_is_rejected(ddl: str, message: str) -> None:
-    with pytest.raises(DDLImportError, match=message):
-        SQLDDLImporter().import_text(ddl)
+def test_sql_without_create_table_is_rejected() -> None:
+    with pytest.raises(DDLImportError, match="Aucune instruction CREATE TABLE"):
+        SQLDDLImporter().import_text("SELECT 1;")
+
+
+def test_table_without_primary_key_is_imported_with_an_actionable_warning() -> None:
+    result = SQLDDLImporter().import_text("CREATE TABLE journal (message TEXT);")
+
+    assert result.mld.table("journal").primary_key == ()
+    entity = next(iter(result.mcd.entities.values()))
+    assert entity.name == "journal"
+    assert not entity.identifier_attributes
+    assert any("Clé primaire absente" in warning for warning in result.warnings)
+    assert not validate_mcd(result.mcd).is_valid
+
+
+def test_non_portable_types_are_preserved_with_explicit_fallback_warnings() -> None:
+    ddl = """
+    CREATE TABLE document (
+        id UUID PRIMARY KEY,
+        contenu JSONB,
+        empreinte TYPE_PROPRIETAIRE
+    );
+    """
+
+    result = SQLDDLImporter().import_text(ddl)
+    table = result.mld.table("document")
+
+    assert table.column("id").data_type.label == "VARCHAR(36)"
+    assert table.column("contenu").data_type.name is MLDDataTypeName.TEXT
+    assert table.column("empreinte").data_type.name is MLDDataTypeName.TEXT
+    assert sum("pas représentable exactement" in item for item in result.warnings) == 3
+
+
+def test_mysql_unsigned_integer_is_imported_and_reported_as_lossy() -> None:
+    result = SQLDDLImporter().import_text(
+        "CREATE TABLE client (id INT UNSIGNED PRIMARY KEY AUTO_INCREMENT);"
+    )
+
+    identifier = result.mld.table("client").column("id")
+    assert identifier.data_type.name is MLDDataTypeName.INTEGER
+    assert identifier.auto_increment
+    assert any("UNSIGNED" in warning for warning in result.warnings)

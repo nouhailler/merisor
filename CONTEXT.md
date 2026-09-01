@@ -20,9 +20,17 @@ Fonctionnalités déjà intégrées :
 - associations réflexives et n-aires avec rôles de branche ;
 - héritages ISA `PARENT_ONLY`, `CHILDREN_ONLY` et `JOINED` ;
 - disposition automatique, zoom, export PNG/SVG/PDF et fichiers récents ;
+- exports documentaires Mermaid et Graphviz/DOT du MCD ou du MLD actif ;
+- génération d'une documentation MCD/MLD en Markdown, HTML autonome ou PDF,
+  avec diagrammes, dictionnaire des objets, contraintes et fiches YAML ;
 - sauvegarde JSON V2 rétrocompatible avec les anciens fichiers V1/V2 ;
 - transformation MCD → MLD, dont provenance, PK/FK composées et contraintes ;
 - génération SQL PostgreSQL, SQLite et MariaDB/MySQL ;
+- génération de scripts INSERT de données de test depuis le MLD, avec
+  quantités par table, respect des FK/PK/UNIQUE, aperçu et export sans
+  exécution ;
+- génération locale de requêtes SELECT depuis une intention métier, avec
+  jointures exclusivement dérivées des FK et explication des tables utilisées ;
 - import et reverse-engineering de DDL PostgreSQL/SQLite ;
 - paquets Debian, AppImage et publication PyPI/pipx ;
 - génération d'un MCD depuis une description via OpenRouter, avec aperçu et
@@ -37,6 +45,56 @@ Fonctionnalités déjà intégrées :
   les différences détaillées et leurs impacts MCD/MLD/SQL.
 - analyse d'impact ciblée sur les objets et attributs, séparant les dépendances
   formelles des correspondances sémantiques potentielles.
+
+Les associations complexes sont déjà supportées de bout en bout. Une réflexive
+répète la même entité avec des rôles obligatoires et distincts ; en 1:N elle
+produit une FK vers sa propre table, en 1:1 une FK UNIQUE et en N:N une table à
+deux FK différenciées par les rôles. Une association de degré trois ou plus est
+matérialisée en table, avec une FK par branche et une PK composée de ces FK,
+sauf si l'association possède son propre identifiant conceptuel. `FORCE_FK` est
+refusé pour une n-aire. Les tests de référence `SUPERVISER` et `FOURNIR`
+vérifient désormais toute la chaîne MCD → MLD → SQL.
+
+Le reverse-engineering de fichier est déjà disponible via **Fichier → Importer
+SQL / DDL** et suit `SQL → MLD → MCD`. Il comprend les contraintes FK inline ou
+ajoutées par `ALTER TABLE`, les PK composées, UNIQUE, CHECK et index. Les tables
+sans PK sont conservées avec avertissement plutôt que rejetées. Les types non
+représentables exactement utilisent un repli documenté (`UUID` vers
+`VARCHAR(36)`, autres types propriétaires vers `TEXT`). La connexion et
+l'introspection directe d'une base restent hors périmètre.
+
+Les exports **Fichier → Exporter le diagramme** comprennent PNG, SVG, PDF,
+Mermaid et Graphviz/DOT. Les deux formats textuels sont déterministes et dérivés
+du modèle, pas de la géométrie du canvas. Ils conservent les objets et
+attributs MCD, cardinalités, rôles, ISA, ainsi que les colonnes et FK du MLD.
+Le CSV reste volontairement hors périmètre tant qu'un assistant ne peut pas
+faire confirmer les clés et la sémantique par l'utilisateur.
+
+La commande **Fichier → Générer la documentation** (`Ctrl+Shift+D`) produit un
+rapport Markdown, HTML ou PDF. Le moteur `ModelDocumentationGenerator` reste
+indépendant de Qt et reconstruit au besoin un MLD temporaire depuis un MCD
+valide. `DocumentationFileExporter` réalise l'écriture atomique et le PDF via
+Qt. Les diagrammes du canvas sont embarqués en HTML/PDF ; Markdown utilise des
+blocs Mermaid déterministes. Un MCD invalide produit tout de même sa partie
+conceptuelle et un avertissement, sans mutation du modèle courant.
+
+La commande **Outils → Générer des données de test** (`Ctrl+Alt+T`) n'est active
+que si le MLD est présent et à jour. `TestDataGenerator`, indépendant de Qt,
+produit des valeurs déterministes adaptées aux types et ordonne les INSERT
+selon les FK. Il vérifie les PK et UNIQUE générées, construit des combinaisons
+cartésiennes pour les tables N:N, bloque les cycles obligatoires et met à NULL
+une branche facultative avec avertissement. `TestDataDialog` configure les
+quantités et le dialecte, puis permet aperçu, copie et export `.sql`. Aucun code
+de connexion ou d'exécution SQL n'a été ajouté.
+
+La commande **Outils → Générer une requête SQL** (`Ctrl+Alt+R`) utilise
+`SQLQueryGenerator`, sans Qt ni IA, pour reconnaître les tables citées, une
+mesure numérique, un comptage, un classement et une limite. Le moteur construit
+le plus court chemin de FK, prend en charge les clés composées et refuse les
+tables déconnectées. `QueryGeneratorDialog` propose PostgreSQL, SQLite, MySQL et
+MariaDB séparément, affiche les tables utilisées et les hypothèses, puis permet
+copie et export. Cette première version couvre les SELECT/JOIN/agrégats simples,
+pas les filtres complexes, sous-requêtes ou fonctions fenêtres.
 
 ## Exploration du modèle terminée
 
@@ -78,8 +136,8 @@ QT_QPA_PLATFORM=offscreen pytest
 Mypy fonctionne en mode strict. À la dernière vérification locale :
 
 - Ruff format et lint : conformes ;
-- mypy : aucune erreur sur 75 fichiers ;
-- pytest : 261 tests réussis ;
+- mypy : aucune erreur sur 90 fichiers ;
+- pytest : 304 tests réussis ;
 - démarrage Qt hors écran : application active jusqu'au timeout de contrôle.
 
 ## Comparateur de versions terminé

@@ -56,7 +56,7 @@ class _PendingForeignKey:
 
 
 class SQLDDLImporter:
-    """Parse un sous-ensemble portable et courant des DDL SQLite/PostgreSQL."""
+    """Parse un DDL courant SQLite/PostgreSQL et des constructions MySQL simples."""
 
     def import_text(self, sql: str) -> DDLImportResult:
         if not isinstance(sql, str) or not sql.strip():
@@ -74,7 +74,9 @@ class SQLDDLImporter:
             if not text:
                 continue
             if re.match(r"(?is)^CREATE\s+TABLE\b", text):
-                table, foreign_keys = self._parse_create_table(text, len(tables))
+                table, foreign_keys = self._parse_create_table(
+                    text, len(tables), warnings
+                )
                 key = table.name.casefold()
                 if key in by_name:
                     raise DDLImportError(
@@ -102,16 +104,18 @@ class SQLDDLImporter:
             self._parse_index(statement, by_name)
         missing_pk = [table.name for table in tables if not table.primary_key]
         if missing_pk:
-            raise DDLImportError(
-                "Chaque table doit posséder une clé primaire pour reconstruire "
-                "un MCD. PK absente : " + ", ".join(missing_pk)
+            warnings.append(
+                "Clé primaire absente : "
+                + ", ".join(missing_pk)
+                + ". Les entités correspondantes sont importées sans identifiant "
+                "et devront être complétées avant de générer un MLD."
             )
         mld = MLDModel(tables, generated_from_fingerprint="ddl-import")
         mcd, reverse_warnings = self._to_mcd(mld)
         return DDLImportResult(mld, mcd, (*warnings, *reverse_warnings))
 
     def _parse_create_table(
-        self, statement: str, table_index: int
+        self, statement: str, table_index: int, warnings: list[str]
     ) -> tuple[MLDTable, list[_PendingForeignKey]]:
         match = re.match(
             r"(?is)^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(.+?)\s*\(",
@@ -158,7 +162,7 @@ class SQLDDLImporter:
                 checks.append(self._parenthesized_content(core))
             else:
                 column, inline_pk, inline_unique, inline_fk, inline_checks = (
-                    self._parse_column(part, table, len(table.columns))
+                    self._parse_column(part, table, len(table.columns), warnings)
                 )
                 table.columns.append(column)
                 if inline_pk:
@@ -202,7 +206,11 @@ class SQLDDLImporter:
         return table, pending
 
     def _parse_column(
-        self, definition: str, table: MLDTable, column_index: int
+        self,
+        definition: str,
+        table: MLDTable,
+        column_index: int,
+        warnings: list[str],
     ) -> tuple[
         MLDColumn,
         bool,
@@ -230,15 +238,20 @@ class SQLDDLImporter:
             raw_type,
             maxsplit=1,
         )[0]
-        constraints = remainder[type_match.start() + len(raw_type) :]
-        data_type, serial = self._logical_type(raw_type)
+        constraints = remainder[type_match.start(1) + len(raw_type) :]
+        data_type, serial = self._logical_type(
+            raw_type, warnings=warnings, context=f"{table.name}.{name}"
+        )
         inline_pk = bool(re.search(r"(?i)\bPRIMARY\s+KEY\b", constraints))
         nullable = not bool(re.search(r"(?i)\bNOT\s+NULL\b", constraints))
         if inline_pk:
             nullable = False
         inline_unique = bool(re.search(r"(?i)\bUNIQUE\b", constraints))
         auto_increment = serial or bool(
-            re.search(r"(?i)\bAUTOINCREMENT\b|\bGENERATED\b.+\bIDENTITY\b", constraints)
+            re.search(
+                r"(?i)\bAUTO_?INCREMENT\b|\bGENERATED\b.+\bIDENTITY\b",
+                constraints,
+            )
         )
         reference = re.search(
             r"(?is)\bREFERENCES\s+([^\s(]+)\s*\(([^)]*)\)", constraints
@@ -532,14 +545,35 @@ class SQLDDLImporter:
         return model, warnings
 
     @staticmethod
-    def _logical_type(raw: str) -> tuple[MLDDataType, bool]:
+    def _logical_type(
+        raw: str,
+        *,
+        warnings: list[str] | None = None,
+        context: str = "colonne inconnue",
+    ) -> tuple[MLDDataType, bool]:
         normalized = re.sub(r"\s+", " ", raw.strip().upper())
+        unsigned = bool(re.search(r"\bUNSIGNED\b", normalized))
+        normalized = re.sub(r"\s+UNSIGNED\b", "", normalized).strip()
         params = re.search(r"\(([^)]*)\)", normalized)
         base = normalized.split("(", 1)[0].strip()
         serial = base in {"SERIAL", "BIGSERIAL"}
         if base in {"BIGINT", "INT8", "BIGSERIAL"}:
             return MLDDataType(MLDDataTypeName.BIGINT), serial
-        if base in {"INT", "INTEGER", "INT2", "INT4", "SMALLINT", "SERIAL"}:
+        if base in {
+            "INT",
+            "INTEGER",
+            "INT2",
+            "INT4",
+            "SMALLINT",
+            "TINYINT",
+            "MEDIUMINT",
+            "SERIAL",
+        }:
+            if unsigned and warnings is not None:
+                warnings.append(
+                    f"{context} : le modificateur UNSIGNED n'existe pas dans le "
+                    "modèle logique MERISOR et n'a pas été conservé."
+                )
             return MLDDataType(MLDDataTypeName.INTEGER), serial
         if base in {"DECIMAL", "NUMERIC"}:
             values = (
@@ -571,6 +605,23 @@ class SQLDDLImporter:
         }
         if base in mapping:
             return MLDDataType(mapping[base]), False
+        fallbacks = {
+            "UUID": (MLDDataType.varchar(36), "VARCHAR(36)"),
+            "JSON": (MLDDataType(MLDDataTypeName.TEXT), "TEXT"),
+            "JSONB": (MLDDataType(MLDDataTypeName.TEXT), "TEXT"),
+            "XML": (MLDDataType(MLDDataTypeName.TEXT), "TEXT"),
+            "BYTEA": (MLDDataType(MLDDataTypeName.TEXT), "TEXT"),
+            "BLOB": (MLDDataType(MLDDataTypeName.TEXT), "TEXT"),
+        }
+        if warnings is not None:
+            fallback, label = fallbacks.get(
+                base, (MLDDataType(MLDDataTypeName.TEXT), "TEXT")
+            )
+            warnings.append(
+                f"{context} : le type SQL {raw!r} n'est pas représentable "
+                f"exactement ; il a été importé comme {label}."
+            )
+            return fallback, False
         raise DDLImportError(f"Type SQL non pris en charge : {raw}.")
 
     @staticmethod

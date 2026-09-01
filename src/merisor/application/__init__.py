@@ -34,6 +34,15 @@ from merisor.application.design_session import (
     ModelDifference,
     compare_models,
 )
+from merisor.application.diagram_text_exporter import (
+    DiagramTextExporter,
+    DiagramTextExportError,
+    DiagramTextFormat,
+)
+from merisor.application.documentation_generator import (
+    ModelDocumentation,
+    ModelDocumentationGenerator,
+)
 from merisor.application.impact_analysis import (
     ImpactCertainty,
     ImpactReference,
@@ -61,6 +70,12 @@ from merisor.application.openrouter_client import (
     OpenRouterModel,
 )
 from merisor.application.openrouter_settings import OpenRouterKeyStore
+from merisor.application.query_generator import (
+    QueryGenerationError,
+    QueryGenerationResult,
+    QueryTarget,
+    SQLQueryGenerator,
+)
 from merisor.application.sql_generator import (
     MLDSQLValidator,
     MySQLDialect,
@@ -80,6 +95,12 @@ from merisor.application.submodels import (
     GLOBAL_SCOPE_ID,
     SubmodelResolver,
     SubmodelScope,
+)
+from merisor.application.test_data_generator import (
+    TestDataGenerationError,
+    TestDataGenerationResult,
+    TestDataGenerator,
+    TestDataIssue,
 )
 from merisor.application.version_comparator import (
     ChangeImpact,
@@ -111,6 +132,9 @@ __all__ = [
     "DesignStep",
     "DetectedConcept",
     "DiagramController",
+    "DiagramTextExportError",
+    "DiagramTextExporter",
+    "DiagramTextFormat",
     "DraftPatch",
     "DraftPatchApplier",
     "DraftRevision",
@@ -128,6 +152,8 @@ __all__ = [
     "McdAutoLayout",
     "McdToMldTransformer",
     "ModelDifference",
+    "ModelDocumentation",
+    "ModelDocumentationGenerator",
     "ModelExplorer",
     "ModelImpactAnalyzer",
     "ModelVersionComparator",
@@ -137,11 +163,15 @@ __all__ = [
     "OpenRouterKeyStore",
     "OpenRouterModel",
     "PostgreSQLDialect",
+    "QueryGenerationError",
+    "QueryGenerationResult",
+    "QueryTarget",
     "SQLDDLImporter",
     "SQLDialect",
     "SQLGenerationError",
     "SQLGenerationOptions",
     "SQLGenerator",
+    "SQLQueryGenerator",
     "SQLTarget",
     "SQLValidationIssue",
     "SQLValidationReport",
@@ -149,6 +179,10 @@ __all__ = [
     "SQLiteDialect",
     "SubmodelResolver",
     "SubmodelScope",
+    "TestDataGenerationError",
+    "TestDataGenerationResult",
+    "TestDataGenerator",
+    "TestDataIssue",
     "VersionChange",
     "VersionComparison",
     "compare_models",

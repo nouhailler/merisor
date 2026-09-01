@@ -22,8 +22,11 @@ from merisor import __version__
 from merisor.application import (
     DDLImportError,
     DiagramController,
+    DiagramTextExporter,
+    DiagramTextExportError,
     MLDGenerationBlocked,
     MLDTransformationError,
+    ModelDocumentationGenerator,
     ModelVersionComparator,
     SQLDDLImporter,
 )
@@ -34,6 +37,10 @@ from merisor.ui.canvas import DiagramScene, DiagramView, ToolMode
 from merisor.ui.conversational_design_dialog import ConversationalDesignDialog
 from merisor.ui.ddl_import_dialog import DDLImportPreviewDialog
 from merisor.ui.diagram_exporter import DiagramExportError, DiagramVisualExporter
+from merisor.ui.documentation_exporter import (
+    DocumentationExportError,
+    DocumentationFileExporter,
+)
 from merisor.ui.impact_analysis_dialog import ImpactAnalysisDialog
 from merisor.ui.mld_properties_panel import MLDPropertiesPanel
 from merisor.ui.mld_view import MLDView
@@ -42,8 +49,10 @@ from merisor.ui.normalization_dialog import NormalizationAssistantDialog
 from merisor.ui.openrouter_settings_dialog import OpenRouterSettingsDialog
 from merisor.ui.properties_panel import PropertiesPanel
 from merisor.ui.quality_dialog import QualityReportDialog
+from merisor.ui.query_generator_dialog import QueryGeneratorDialog
 from merisor.ui.sql_dialog import SQLPreviewDialog
 from merisor.ui.submodel_dialog import SubmodelManagerDialog
+from merisor.ui.test_data_dialog import TestDataDialog
 from merisor.ui.validation_dialog import ValidationDialog
 from merisor.ui.version_comparison_dialog import VersionComparisonDialog
 
@@ -97,6 +106,8 @@ class MainWindow(QMainWindow):
         self.save_as_action.setShortcut(QKeySequence.StandardKey.SaveAs)
         self.export_visual_action = QAction("Exporter le diagramme…", self)
         self.export_visual_action.setShortcut(QKeySequence("Ctrl+Shift+E"))
+        self.generate_documentation_action = QAction("Générer la documentation…", self)
+        self.generate_documentation_action.setShortcut(QKeySequence("Ctrl+Shift+D"))
         self.quit_action = QAction("Quitter", self)
         self.quit_action.setShortcut(QKeySequence.StandardKey.Quit)
         self.openrouter_settings_action = QAction("Paramètres OpenRouter…", self)
@@ -134,6 +145,12 @@ class MainWindow(QMainWindow):
         self.generate_sql_action = QAction("Générer SQL", self)
         self.generate_sql_action.setShortcut(QKeySequence("Ctrl+Alt+S"))
         self.generate_sql_action.setEnabled(False)
+        self.generate_test_data_action = QAction("Générer des données de test…", self)
+        self.generate_test_data_action.setShortcut(QKeySequence("Ctrl+Alt+T"))
+        self.generate_test_data_action.setEnabled(False)
+        self.generate_query_action = QAction("Générer une requête SQL…", self)
+        self.generate_query_action.setShortcut(QKeySequence("Ctrl+Alt+R"))
+        self.generate_query_action.setEnabled(False)
         self.generate_ai_mcd_action = QAction("Générer un MCD avec l'IA…", self)
         self.conversational_assistant_action = QAction(
             "Assistant MERISE conversationnel…", self
@@ -171,6 +188,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.save_action)
         file_menu.addAction(self.save_as_action)
         file_menu.addAction(self.export_visual_action)
+        file_menu.addAction(self.generate_documentation_action)
         file_menu.addSeparator()
         file_menu.addAction(self.quit_action)
 
@@ -198,6 +216,10 @@ class MainWindow(QMainWindow):
         model_menu.addAction(self.conversational_assistant_action)
         model_menu.addAction(self.generate_ai_mcd_action)
         model_menu.addAction(self.auto_layout_action)
+
+        tools_menu = self.menuBar().addMenu("Outils")
+        tools_menu.addAction(self.generate_test_data_action)
+        tools_menu.addAction(self.generate_query_action)
 
         view_menu = self.menuBar().addMenu("Affichage")
         view_menu.addAction(self.zoom_in_action)
@@ -232,6 +254,9 @@ class MainWindow(QMainWindow):
         self.save_action.triggered.connect(self.save_document)
         self.save_as_action.triggered.connect(self.save_document_as)
         self.export_visual_action.triggered.connect(self.export_visual)
+        self.generate_documentation_action.triggered.connect(
+            self.generate_documentation
+        )
         self.quit_action.triggered.connect(self.close)
         self.openrouter_settings_action.triggered.connect(self.show_openrouter_settings)
         self.delete_action.triggered.connect(self.controller.delete_selected)
@@ -246,6 +271,8 @@ class MainWindow(QMainWindow):
         self.normalization_action.triggered.connect(self.show_normalization_assistant)
         self.generate_mld_action.triggered.connect(self.generate_mld)
         self.generate_sql_action.triggered.connect(self.generate_sql)
+        self.generate_test_data_action.triggered.connect(self.generate_test_data)
+        self.generate_query_action.triggered.connect(self.generate_query)
         self.generate_ai_mcd_action.triggered.connect(self.generate_ai_mcd)
         self.conversational_assistant_action.triggered.connect(
             self.show_conversational_assistant
@@ -455,9 +482,12 @@ class MainWindow(QMainWindow):
         self._update_sql_action()
 
     def _update_sql_action(self) -> None:
-        self.generate_sql_action.setEnabled(
+        mld_available = (
             self.controller.mld_model is not None and not self.controller.mld_is_stale
         )
+        self.generate_sql_action.setEnabled(mld_available)
+        self.generate_test_data_action.setEnabled(mld_available)
+        self.generate_query_action.setEnabled(mld_available)
 
     def generate_sql(self, _checked: bool = False) -> None:
         model = self.controller.mld_model
@@ -475,6 +505,40 @@ class MainWindow(QMainWindow):
             else "Sans titre"
         )
         SQLPreviewDialog(model, project_name, self).exec()
+
+    def generate_test_data(self, _checked: bool = False) -> None:
+        model = self.controller.mld_model
+        if model is None or self.controller.mld_is_stale:
+            QMessageBox.warning(
+                self,
+                "MLD requis",
+                "Aucun MLD valide et à jour n'est disponible. "
+                "Générez ou régénérez d'abord le MLD.",
+            )
+            return
+        project_name = (
+            self.controller.document_path.stem
+            if self.controller.document_path is not None
+            else "Sans titre"
+        )
+        TestDataDialog(model, project_name, self).exec()
+
+    def generate_query(self, _checked: bool = False) -> None:
+        model = self.controller.mld_model
+        if model is None or self.controller.mld_is_stale:
+            QMessageBox.warning(
+                self,
+                "MLD requis",
+                "Aucun MLD valide et à jour n'est disponible. "
+                "Générez ou régénérez d'abord le MLD.",
+            )
+            return
+        project_name = (
+            self.controller.document_path.stem
+            if self.controller.document_path is not None
+            else "Sans titre"
+        )
+        QueryGeneratorDialog(model, project_name, self).exec()
 
     def generate_ai_mcd(self, _checked: bool = False) -> None:
         dialog = AiMcdDialog(self)
@@ -635,31 +699,98 @@ class MainWindow(QMainWindow):
             self,
             f"Exporter le {diagram_kind}",
             str(default_path),
-            "Image PNG (*.png);;Image vectorielle SVG (*.svg);;Document PDF (*.pdf)",
+            "Image PNG (*.png);;Image vectorielle SVG (*.svg);;Document PDF (*.pdf);;"
+            "Diagramme Mermaid (*.mmd *.mermaid);;Graphviz DOT (*.dot *.gv)",
         )
         if not filename:
             return
         path = Path(filename)
-        if not path.suffix:
-            suffixes = {
-                "Image PNG (*.png)": ".png",
-                "Image vectorielle SVG (*.svg)": ".svg",
-                "Document PDF (*.pdf)": ".pdf",
-            }
-            path = path.with_suffix(suffixes.get(selected_filter, ".png"))
+        format_suffixes = {
+            "Image PNG (*.png)": (".png",),
+            "Image vectorielle SVG (*.svg)": (".svg",),
+            "Document PDF (*.pdf)": (".pdf",),
+            "Diagramme Mermaid (*.mmd *.mermaid)": (".mmd", ".mermaid"),
+            "Graphviz DOT (*.dot *.gv)": (".dot", ".gv"),
+        }
+        selected_suffixes = format_suffixes.get(selected_filter, (".png",))
+        if path.suffix.casefold() not in selected_suffixes:
+            path = path.with_suffix(selected_suffixes[0])
         try:
-            DiagramVisualExporter().export(
-                scene,
-                path,
-                title=f"{diagram_kind} — {project_name}",
-            )
-        except DiagramExportError as error:
+            if path.suffix.casefold() in DiagramTextExporter.SUPPORTED_SUFFIXES:
+                exporter = DiagramTextExporter()
+                if exporting_mld:
+                    if self.controller.mld_model is None:
+                        raise DiagramTextExportError(
+                            "Aucun MLD n'est disponible. Générez d'abord le MLD."
+                        )
+                    exporter.export_mld(self.controller.mld_model, path)
+                else:
+                    exporter.export_mcd(self.controller.model, path)
+            else:
+                DiagramVisualExporter().export(
+                    scene,
+                    path,
+                    title=f"{diagram_kind} — {project_name}",
+                )
+        except (DiagramExportError, DiagramTextExportError) as error:
             QMessageBox.critical(self, "Export impossible", str(error))
             return
         self.statusBar().showMessage(
             f"{diagram_kind} exporté : {path}",
             5000,
         )
+
+    def generate_documentation(self, _checked: bool = False) -> None:
+        project_name = (
+            self.controller.document_path.stem
+            if self.controller.document_path is not None
+            else "Sans titre"
+        )
+        default_path = self._dialog_directory() / f"{project_name}_documentation.md"
+        filename, selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Générer la documentation du modèle",
+            str(default_path),
+            "Markdown (*.md *.markdown);;Page HTML (*.html *.htm);;Document PDF (*.pdf)",
+        )
+        if not filename:
+            return
+        path = Path(filename)
+        format_suffixes = {
+            "Markdown (*.md *.markdown)": (".md", ".markdown"),
+            "Page HTML (*.html *.htm)": (".html", ".htm"),
+            "Document PDF (*.pdf)": (".pdf",),
+        }
+        selected_suffixes = format_suffixes.get(selected_filter, (".md",))
+        if path.suffix.casefold() not in selected_suffixes:
+            path = path.with_suffix(selected_suffixes[0])
+
+        current_mld = (
+            self.controller.mld_model if not self.controller.mld_is_stale else None
+        )
+        file_exporter = DocumentationFileExporter()
+        mcd_image = file_exporter.scene_data_uri(self.scene)
+        mld_image = None
+        if current_mld is not None:
+            mld_image = file_exporter.scene_data_uri(
+                self.mld_view.graphics_view.mld_scene
+            )
+        documentation = ModelDocumentationGenerator().generate(
+            self.controller.model,
+            project_name=project_name,
+            mld=current_mld,
+            mcd_image_data_uri=mcd_image,
+            mld_image_data_uri=mld_image,
+        )
+        try:
+            file_exporter.export(documentation, path)
+        except DocumentationExportError as error:
+            QMessageBox.critical(self, "Documentation impossible", str(error))
+            return
+        message = f"Documentation générée : {path}"
+        if documentation.warnings:
+            message += f" — {len(documentation.warnings)} avertissement(s)"
+        self.statusBar().showMessage(message, 7000)
 
     def _dialog_directory(self) -> Path:
         if self.controller.document_path is not None:

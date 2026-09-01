@@ -94,7 +94,9 @@ flowchart LR
 - spécialisations ISA avec stratégies mère seule, filles seules ou jointes ;
 - annuler/rétablir pour les principales opérations ;
 - zoom, déplacement du canvas et disposition automatique du graphe ;
-- export visuel du MCD ou du MLD actif en PNG haute résolution, SVG ou PDF ;
+- export du MCD ou du MLD actif en PNG haute résolution, SVG, PDF, Mermaid ou
+  Graphviz/DOT ;
+- génération d'une documentation complète en Markdown, HTML ou PDF ;
 - sauvegarde JSON versionnée, chargement V1/V2 et fichiers récents.
 
 ### 🧭 Exploration des grands modèles
@@ -269,17 +271,123 @@ sans masquer les hypothèses métier :
 - aperçu, copie et export en `.sql` ;
 - aucune connexion et aucune exécution automatique.
 
+### 🧪 Génération de données de test
+
+La commande **Outils → Générer des données de test…** (`Ctrl+Alt+T`) travaille
+exclusivement depuis le MLD valide et à jour :
+
+- nombre de lignes configurable séparément pour chaque table, de zéro à
+  10 000 depuis l'interface ;
+- scripts `INSERT` pour PostgreSQL, SQLite et MariaDB/MySQL ;
+- valeurs synthétiques adaptées aux types logiques : nombres, décimaux,
+  booléens, textes, courriels, dates, heures et horodatages ;
+- ordre d'insertion calculé depuis les dépendances FK ;
+- reprise réelle des valeurs de clés référencées, y compris pour les FK
+  composées ;
+- parcours cartésien déterministe des FK des tables d'association afin de
+  préserver leurs PK composées ;
+- contrôle des PK et contraintes UNIQUE avant production du script ;
+- aperçu, copie et export en `.sql` ;
+- **aucune connexion et aucune exécution automatique**.
+
+Un cycle composé uniquement de FK facultatives est résolu avec des valeurs
+`NULL` et un avertissement. Un cycle de FK obligatoires bloque la génération,
+car une suite de simples `INSERT` ne pourrait pas le satisfaire de façon
+portable. Les expressions `CHECK` libres étant du SQL arbitraire, MERISOR les
+signale lorsqu'il ne peut pas démontrer que les valeurs synthétiques les
+respectent : le script doit alors être relu avant utilisation.
+
+### 🔎 Générateur de requêtes SQL
+
+La commande **Outils → Générer une requête SQL…** (`Ctrl+Alt+R`) transforme une
+intention de consultation en `SELECT`, toujours depuis le MLD valide et à jour.
+Elle prend en charge séparément PostgreSQL, SQLite, MySQL et MariaDB.
+
+Exemple :
+
+```text
+Afficher les 10 meilleurs clients selon le montant total de leurs commandes.
+```
+
+MERISOR reconnaît la table principale, recherche une mesure numérique métier,
+calcule le plus court chemin dans le graphe des FK, puis produit les `JOIN`,
+`SUM`, `COUNT`, `GROUP BY`, `ORDER BY` et `LIMIT` simples correspondants. Le
+dialogue affiche explicitement :
+
+```text
+Cette requête utilise les tables : CLIENT, COMMANDE, LIGNE_COMMANDE.
+```
+
+Chaque résultat fournit aussi les hypothèses et avertissements ayant conduit au
+SQL. Deux tables déconnectées sont refusées : MERISOR ne fabrique jamais une
+condition de jointure absente du MLD. Si aucun agrégat n'est reconnu, il génère
+une sélection simple des tables citées et le signale.
+
+Cette première version locale ne cherche pas encore à interpréter tout le
+langage SQL : filtres métier complexes, sous-requêtes, fonctions fenêtres et
+expressions libres devront être exprimés plus précisément ou complétés après
+génération. Aucune IA, connexion ou exécution de requête n'intervient.
+
 ### 🔄 Reverse-engineering SQL / DDL
 
 - import de fichiers `.sql` et `.ddl` PostgreSQL ou SQLite ;
-- reconstruction fidèle du MLD : tables, colonnes, types, PK simples ou
+- reconstruction structurée du MLD : tables, colonnes, types, PK simples ou
   composées, FK, UNIQUE, CHECK et index ;
 - reconnaissance des tables de jointure comme associations MCD ;
 - reconstruction des relations 1:N et des FK réflexives ;
 - détection d'une spécialisation ISA `JOINED` lorsqu'une PK est également une
   FK vers une table mère ;
+- import conservé même lorsqu'une table n'a pas de PK : l'entité est alors
+  signalée sans identifiant et doit être corrigée avant une nouvelle génération ;
+- adaptation documentée des types non portables (`UUID` → `VARCHAR(36)`,
+  `JSONB` ou type propriétaire → `TEXT`) avec avertissement de perte ;
 - aperçu du MLD, du MCD heuristique et du DDL source avant confirmation ;
 - aucun changement du document courant sans validation explicite.
+
+### 📦 Formats d'import et d'export
+
+| Format | Import | Export | Remarques |
+|---|:---:|:---:|---|
+| JSON MERISOR V1/V2 | ✓ | ✓ | Format natif, rétrocompatible |
+| PostgreSQL DDL | ✓ | ✓ | `CREATE TABLE`, FK, `ALTER TABLE`, contraintes et index |
+| SQLite DDL | ✓ | ✓ | Syntaxe inline et `AUTOINCREMENT` |
+| MariaDB/MySQL | Partiel | ✓ | Constructions portables, `AUTO_INCREMENT`, entiers courants |
+| PNG | — | ✓ | Image haute résolution |
+| SVG | — | ✓ | Vectoriel, recommandé pour la documentation |
+| PDF | — | ✓ | A4 paysage |
+| Mermaid | — | ✓ | Texte `.mmd`, intégrable dans Markdown et Git |
+| Graphviz/DOT | — | ✓ | Texte `.dot`, automatisable avec Graphviz |
+| Documentation Markdown | — | ✓ | MCD, MLD, tables et blocs techniques YAML |
+| Documentation HTML | — | ✓ | Document autonome avec diagrammes embarqués |
+| Documentation PDF | — | ✓ | Rapport A4 prêt à transmettre ou imprimer |
+
+L'import CSV n'est pas activé : un tableau de données ne décrit ni les clés,
+ni les cardinalités, ni la distinction entité/association. Une future version
+pourra proposer un assistant pédagogique demandant explicitement ces choix,
+sans prétendre reconstruire automatiquement un MCD depuis quelques lignes.
+
+### 📚 Générateur de documentation
+
+La commande **Fichier → Générer la documentation…** (`Ctrl+Shift+D`) construit
+un dossier de modèle lisible aussi bien par une équipe métier que technique :
+
+- diagramme conceptuel, entités, attributs, associations, rôles et
+  cardinalités ;
+- héritages ISA, historisation et stratégie de matérialisation ;
+- MLD dérivé avec tables, colonnes, PK, FK, UNIQUE, CHECK et index ;
+- fiches techniques par entité dans une représentation YAML lisible ;
+- formats **Markdown**, **HTML autonome** et **PDF A4**.
+
+Le Markdown contient des diagrammes Mermaid afin de rester versionnable et
+facile à intégrer à Git. Le HTML et le PDF embarquent les rendus du canvas
+lorsqu'ils sont disponibles. Si le MLD affiché est absent ou obsolète,
+MERISOR tente de le recalculer sans modifier le document courant. Un MCD
+invalide reste documentable, mais la section logique est alors marquée comme
+indisponible avec un avertissement explicite.
+
+Les descriptions métier ne sont pas devinées : tant qu'aucun champ de
+description n'existe dans le modèle, le rapport affiche **non renseignée**.
+Les commentaires réellement saisis sur les attributs sont, eux, conservés.
 
 ### ✨ Génération assistée par IA
 
@@ -511,6 +619,29 @@ Une proposition IA n'est jamais ajoutée silencieusement.
 Lorsque le MLD est valide et à jour, cliquez sur **Générer SQL**, choisissez le
 SGBD, vérifiez l’aperçu puis utilisez **Copier** ou **Enregistrer sous…**.
 
+### 4 bis. Générer des données de test
+
+1. Générez ou régénérez d'abord le MLD.
+2. Ouvrez **Outils → Générer des données de test…** (`Ctrl+Alt+T`).
+3. Choisissez PostgreSQL, SQLite ou MariaDB/MySQL.
+4. Saisissez le nombre de lignes souhaité pour chaque table ; zéro exclut la
+   table lorsque ses lignes ne sont requises par aucune FK obligatoire.
+5. Cliquez sur **Générer**, vérifiez l'aperçu, puis copiez ou enregistrez le
+   script `.sql`.
+
+MERISOR ne contacte aucune base et n'exécute jamais les `INSERT` produits.
+
+### 4 ter. Générer une requête SQL
+
+1. Ouvrez **Outils → Générer une requête SQL…** (`Ctrl+Alt+R`).
+2. Décrivez le résultat en citant les concepts présents dans le modèle.
+3. Choisissez PostgreSQL, SQLite, MySQL ou MariaDB.
+4. Cliquez sur **Générer la requête**.
+5. Vérifiez la liste des tables utilisées, les explications et le SQL.
+6. Copiez la requête ou exportez-la en `.sql`.
+
+La requête n'est jamais envoyée à une base de données.
+
 ### 5. Exporter un diagramme
 
 Activez l’onglet **MCD** ou **MLD**, puis choisissez **Fichier → Exporter le
@@ -520,9 +651,24 @@ indépendamment du zoom affiché, et propose :
 - **PNG** haute résolution pour une insertion immédiate dans un document ;
 - **SVG** vectoriel pour conserver une netteté parfaite à toute taille ;
 - **PDF** vectoriel en page A4 paysage pour les rapports et l’impression.
+- **Mermaid** (`.mmd` ou `.mermaid`) pour les dépôts Markdown et les outils de
+  documentation compatibles ;
+- **Graphviz/DOT** (`.dot` ou `.gv`) pour les chaînes documentaires automatisées.
 
 Les marques de sélection ne figurent pas dans le fichier exporté et le modèle
-courant n’est pas modifié.
+courant n’est pas modifié. Les exports Mermaid et DOT sont générés depuis le
+modèle métier et ne dépendent donc ni du zoom ni de la disposition du canvas.
+
+### 5 bis. Générer la documentation du projet
+
+1. Choisissez **Fichier → Générer la documentation…** (`Ctrl+Shift+D`).
+2. Sélectionnez Markdown, HTML ou PDF.
+3. Choisissez le fichier de destination.
+4. Consultez les éventuels avertissements dans la barre d'état.
+
+Cette opération ne modifie ni le MCD ni le MLD. Le document obtenu rassemble
+le diagramme, le dictionnaire des entités, les associations et cardinalités,
+les tables logiques et une synthèse technique par entité.
 
 ### 6. Explorer un modèle volumineux
 
@@ -584,8 +730,9 @@ courant n’est pas modifié.
 > [!WARNING]
 > Un DDL ne contient pas toutes les intentions d'un MCD : les cardinalités
 > minimales, l'historisation et certaines associations métier ne peuvent pas
-> toujours être déduites. MERISOR conserve fidèlement le MLD et signale que le
-> MCD obtenu doit être relu.
+> toujours être déduites. MERISOR signale chaque approximation connue. Un type
+> SQL non représentable est adapté à un type logique révisable ; une table sans
+> PK reste importable, mais son entité est volontairement signalée invalide.
 
 ## ⌨️ Raccourcis utiles
 
@@ -603,7 +750,10 @@ courant n’est pas modifié.
 | Réorganiser le MCD | `Ctrl+Shift+L` |
 | Générer le MLD | `Ctrl+Shift+M` |
 | Générer SQL | `Ctrl+Alt+S` |
+| Générer des données de test | `Ctrl+Alt+T` |
+| Générer une requête SQL | `Ctrl+Alt+R` |
 | Exporter le MCD ou MLD actif | `Ctrl+Shift+E` |
+| Générer la documentation | `Ctrl+Shift+D` |
 | Importer SQL / DDL | `Ctrl+Shift+O` |
 | Zoom MLD | `Ctrl` + molette ou boutons `+` / `−` |
 
@@ -785,6 +935,8 @@ Compatibilité :
 
 ### Associations n-aires et réflexives
 
+- elles sont prises en charge de bout en bout : édition MCD, validation,
+  sauvegarde JSON, transformation MLD et génération SQL ;
 - une association de degré trois ou plus devient une table indépendante ;
 - ses FK forment la PK composée, sauf identifiant explicite d'association ;
 - `FORCE_FK` est refusé pour une association n-aire ;
@@ -792,6 +944,44 @@ Compatibilité :
   (`id_employe_superviseur`, `id_employe_supervise`) ;
 - les règles N:N, 1:N et 1:1 restent ensuite identiques aux associations
   binaires ordinaires.
+
+Exemple réflexif :
+
+```text
+EMPLOYE (0,N, rôle superviseur)
+    └── SUPERVISER
+          └── EMPLOYE (0,1, rôle supervisé)
+
+EMPLOYE(
+    id_employe PK,
+    id_employe_superviseur FK NULL → EMPLOYE.id_employe
+)
+```
+
+Chaque branche répétée doit posséder un rôle non vide et distinct. MERISOR
+propose automatiquement des rôles temporaires lors de la création graphique ;
+ils restent modifiables dans le panneau de propriétés.
+
+Exemple ternaire :
+
+```text
+FOURNISSEUR ─┐
+PRODUIT ─────┼── FOURNIR ── quantite, prix_achat
+ENTREPOT ────┘
+
+FOURNIR(
+    id_fournisseur PK/FK,
+    id_produit PK/FK,
+    id_entrepot PK/FK,
+    quantite,
+    prix_achat
+)
+```
+
+Si l'association n-aire définit son propre attribut identifiant, celui-ci
+devient sa PK et les clés migrées restent des FK ordinaires. Les cardinalités
+originales sont conservées dans la provenance MCD → MLD, même si une table
+d'association ne peut pas exprimer à elle seule toutes les contraintes MERISE.
 
 ### Héritages ISA
 
@@ -1005,7 +1195,8 @@ artefacts lors de l’envoi d’un tag `v*`.
 - le reverse-engineering importe un fichier DDL, mais ne se connecte pas à une
   base existante et n'analyse pas les vues, triggers, procédures ou extensions
   propriétaires ;
-- les types SQL non portables ou inconnus sont refusés avec un message explicite.
+- les types SQL non portables ou inconnus sont adaptés à un type logique proche
+  avec un avertissement explicite ; cette approximation doit être vérifiée ;
 - les contrôles 2NF/3NF reflètent les dépendances déclarées : ils ne peuvent pas
   deviner une règle métier absente ;
 - les décompositions 2NF nécessitant une identification relative, ainsi que les

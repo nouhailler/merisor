@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QRectF
+from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
     QApplication,
@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from merisor.application import DiagramTextExporter
 from merisor.ui.diagram_exporter import DiagramExportError, DiagramVisualExporter
 from merisor.ui.main_window import MainWindow
 
@@ -82,6 +83,34 @@ def test_main_window_exports_the_scene_of_the_active_workspace(
 
     assert selected_scenes == [window.scene, window.mld_view.graphics_view.mld_scene]
     assert window.export_visual_action.shortcut().toString() == "Ctrl+Shift+E"
+    window.controller.undo_stack.setClean()
+    window.close()
+    qapp.processEvents()
+
+
+def test_main_window_exports_current_mcd_as_mermaid(
+    qapp: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    window = MainWindow()
+    window.controller.create_entity("CLIENT", QPointF())
+    destination = tmp_path / "modele.mmd"
+    exported_models = []
+
+    monkeypatch.setattr(
+        "merisor.ui.main_window.QFileDialog.getSaveFileName",
+        lambda *_args: (str(destination), "Diagramme Mermaid (*.mmd *.mermaid)"),
+    )
+
+    def record_export(self, model, path):  # type: ignore[no-untyped-def]
+        del self
+        exported_models.append(model)
+        return Path(path)
+
+    monkeypatch.setattr(DiagramTextExporter, "export_mcd", record_export)
+
+    window.export_visual()
+
+    assert exported_models == [window.controller.model]
     window.controller.undo_stack.setClean()
     window.close()
     qapp.processEvents()

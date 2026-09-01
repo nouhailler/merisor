@@ -4,6 +4,55 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
+### Modifié
+
+- documentation des associations réflexives et n-aires alignée sur leur prise
+  en charge réelle de bout en bout, avec exemples `SUPERVISER` et `FOURNIR` ;
+- tests d'intégration renforcés pour vérifier leurs transformations complètes
+  `MCD → MLD → SQL` dans les trois dialectes SQL ;
+- le reverse-engineering conserve désormais les tables sans clé primaire dans
+  le MLD/MCD et signale l'identifiant manquant au lieu de bloquer tout l'import ;
+- les types SQL non portables ou propriétaires reçoivent un type logique de
+  repli accompagné d'un avertissement explicite (`UUID`, `JSONB`, `BLOB`, etc.) ;
+- prise en charge des entiers MySQL `TINYINT`, `MEDIUMINT` et `UNSIGNED`, avec
+  signalement lorsque la sémantique non signée ne peut pas être conservée.
+
+### Ajouté
+
+- générateur local et explicable de requêtes `SELECT` depuis une description
+  métier et le MLD, sans IA ni exécution ;
+- reconnaissance des tables, mesures numériques, classements, sommes,
+  comptages, regroupements et limites simples ;
+- résolution des chemins de jointure exclusivement depuis les FK, y compris
+  les FK composées, avec refus des concepts déconnectés ;
+- cibles distinctes PostgreSQL, SQLite, MySQL et MariaDB, liste visible des
+  tables utilisées, explications, avertissements, copie et export `.sql` via
+  **Outils → Générer une requête SQL…** (`Ctrl+Alt+R`) ;
+- générateur déterministe de données synthétiques exclusivement fondé sur le
+  MLD, produisant des scripts `INSERT` PostgreSQL, SQLite ou MariaDB/MySQL ;
+- quantités configurables par table, aperçu, copie et export `.sql` depuis
+  **Outils → Générer des données de test…** (`Ctrl+Alt+T`) ;
+- ordonnancement selon les FK, conservation des références simples/composées,
+  parcours cartésien des clés d'association et contrôle des PK/UNIQUE ;
+- détection des cycles de FK obligatoires et résolution documentée des cycles
+  facultatifs par `NULL`, sans aucune connexion ni exécution automatique ;
+- générateur de documentation complet fondé sur le MCD et le MLD, avec
+  entités, attributs, associations, cardinalités, héritages, tables, PK, FK et
+  contraintes ;
+- fiches techniques déterministes par entité dans une représentation YAML,
+  sans invention de descriptions métier absentes du modèle ;
+- export de la documentation en Markdown avec diagrammes Mermaid, en HTML
+  autonome avec images embarquées et en PDF A4 ;
+- commande **Fichier → Générer la documentation…** (`Ctrl+Shift+D`), capable de
+  recalculer un MLD obsolète sans modifier le document courant et de documenter
+  un MCD invalide avec avertissements ;
+- export documentaire du MCD et du MLD en Mermaid (`.mmd`, `.mermaid`) ;
+- export documentaire du MCD et du MLD en Graphviz/DOT (`.dot`, `.gv`) ;
+- conservation des attributs, types, PK/FK, cardinalités, rôles et héritages
+  dans les formats textuels, avec génération déterministe et écriture atomique ;
+- matrice des formats d'import/export et clarification du périmètre CSV dans le
+  README.
+
 ## [0.7.0] - 2026-09-01
 
 ### Ajouté
