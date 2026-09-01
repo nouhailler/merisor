@@ -27,21 +27,22 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
   reverse-engineering DDL, avec commentaires SQL adaptés au dialecte ;
 - affichage du type et des principales contraintes directement dans les objets
   du graphe MCD.
+- assistant MERISE conversationnel accessible depuis le menu **Modèle**, avec
+  détection de concepts, hypothèses visibles et questions structurantes ;
+- brouillon MCD local isolé du document, réponses OpenRouter sous enveloppe JSON
+  stricte et évolutions exprimées uniquement par patchs contrôlés ;
+- révisions du brouillon, retour à la version précédente et validation MERISE
+  après chaque échange ;
+- aperçu graphique, comparaison avec le MCD courant et import final confirmé
+  comme une seule commande annulable ;
+- appel conversationnel asynchrone avec progression et messages lisibles en cas
+  de quota, d'erreur réseau ou de réponse JSON invalide.
 
 ### Modifié
 
 - normalisation du formatage de tous les fichiers Python ;
 - annotations renforcées pour que les 57 modules source et tests passent le
   contrôle `mypy --strict` sans erreur.
-
-### Prévu pour la prochaine reprise
-
-- assistant MERISE conversationnel fondé sur un `DesignSession` local ;
-- détection de concepts, hypothèses explicites et questions de clarification ;
-- évolution du brouillon par patchs JSON stricts et révisions versionnées ;
-- validation du brouillon après chaque tour, comparaison avec le MCD courant et
-  import final confirmé/annulable ;
-- aucune application directe d'une réponse textuelle de l'IA.
 
 ## [0.6.1] - 2026-08-31
 

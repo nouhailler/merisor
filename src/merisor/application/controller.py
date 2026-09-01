@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Iterable
 from contextlib import suppress
 from dataclasses import replace
@@ -558,6 +559,29 @@ class DiagramController(QObject):
         self._replace_model(model, None)
         self.undo_stack.resetClean()
         self.message.emit("MCD généré par l'IA importé ; enregistrez le document.")
+
+    def import_conversational_model(self, model: MCDModel) -> None:
+        """Importe un brouillon confirmé comme une seule commande annulable."""
+
+        candidate = copy.deepcopy(model)
+        for node_id, position in self.mcd_layout.calculate(candidate).items():
+            candidate.move_node(node_id, position)
+        self.undo_stack.push(
+            ReplaceModelStateCommand(
+                self,
+                self.model,
+                candidate,
+                "Importer le MCD conversationnel",
+            )
+        )
+        self.message.emit(
+            "Brouillon conversationnel importé ; utilisez Annuler pour le retirer."
+        )
+
+    def load_transient_model(self, model: MCDModel) -> None:
+        """Installe une copie dans un contrôleur d'aperçu sans document associé."""
+
+        self._replace_model(copy.deepcopy(model), None)
 
     def import_reverse_engineered_model(
         self, model: MCDModel, mld_model: MLDModel

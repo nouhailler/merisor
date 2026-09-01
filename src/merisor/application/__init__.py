@@ -11,10 +11,28 @@ from merisor.application.ai_normalization_service import (
     AiNormalizationService,
 )
 from merisor.application.controller import DiagramController, MLDGenerationBlocked
+from merisor.application.conversational_design_service import (
+    CONVERSATIONAL_SYSTEM_PROMPT,
+    ConversationalDesignService,
+)
 from merisor.application.ddl_importer import (
     DDLImportError,
     DDLImportResult,
     SQLDDLImporter,
+)
+from merisor.application.design_session import (
+    ConceptKind,
+    DesignAssistantResponse,
+    DesignQuestion,
+    DesignSession,
+    DesignSessionError,
+    DesignStep,
+    DetectedConcept,
+    DraftPatch,
+    DraftPatchApplier,
+    DraftRevision,
+    ModelDifference,
+    compare_models,
 )
 from merisor.application.mcd_layout import McdAutoLayout
 from merisor.application.mld_text import render_mld_text
@@ -47,21 +65,34 @@ from merisor.application.sql_generator import (
 )
 
 __all__ = [
+    "CONVERSATIONAL_SYSTEM_PROMPT",
     "AiDependencySuggestion",
     "AiMcdCandidate",
     "AiMcdService",
     "AiMcdValidationError",
     "AiNormalizationError",
     "AiNormalizationService",
+    "ConceptKind",
+    "ConversationalDesignService",
     "DDLImportError",
     "DDLImportResult",
+    "DesignAssistantResponse",
+    "DesignQuestion",
+    "DesignSession",
+    "DesignSessionError",
+    "DesignStep",
+    "DetectedConcept",
     "DiagramController",
+    "DraftPatch",
+    "DraftPatchApplier",
+    "DraftRevision",
     "MLDGenerationBlocked",
     "MLDNamePolicy",
     "MLDSQLValidator",
     "MLDTransformationError",
     "McdAutoLayout",
     "McdToMldTransformer",
+    "ModelDifference",
     "MySQLDialect",
     "OpenRouterClient",
     "OpenRouterError",
@@ -78,6 +109,7 @@ __all__ = [
     "SQLValidationReport",
     "SQLValidationSeverity",
     "SQLiteDialect",
+    "compare_models",
     "mcd_logical_fingerprint",
     "render_mld_text",
     "sql_dialect",

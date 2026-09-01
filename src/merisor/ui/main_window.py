@@ -30,6 +30,7 @@ from merisor.domain import InheritanceStrategy, MLDModel
 from merisor.persistence import PersistenceError
 from merisor.ui.ai_mcd_dialog import AiMcdDialog
 from merisor.ui.canvas import DiagramScene, DiagramView, ToolMode
+from merisor.ui.conversational_design_dialog import ConversationalDesignDialog
 from merisor.ui.ddl_import_dialog import DDLImportPreviewDialog
 from merisor.ui.diagram_exporter import DiagramExportError, DiagramVisualExporter
 from merisor.ui.mld_properties_panel import MLDPropertiesPanel
@@ -123,6 +124,10 @@ class MainWindow(QMainWindow):
         self.generate_sql_action.setShortcut(QKeySequence("Ctrl+Alt+S"))
         self.generate_sql_action.setEnabled(False)
         self.generate_ai_mcd_action = QAction("Générer un MCD avec l'IA…", self)
+        self.conversational_assistant_action = QAction(
+            "Assistant MERISE conversationnel…", self
+        )
+        self.conversational_assistant_action.setShortcut(QKeySequence("Ctrl+Alt+M"))
         self.auto_layout_action = QAction("Réorganiser automatiquement le MCD", self)
         self.add_inheritance_action = QAction("Ajouter une spécialisation ISA…", self)
         self.auto_layout_action.setShortcut(QKeySequence("Ctrl+Shift+L"))
@@ -174,6 +179,7 @@ class MainWindow(QMainWindow):
         model_menu.addAction(self.generate_mld_action)
         model_menu.addAction(self.generate_sql_action)
         model_menu.addSeparator()
+        model_menu.addAction(self.conversational_assistant_action)
         model_menu.addAction(self.generate_ai_mcd_action)
         model_menu.addAction(self.auto_layout_action)
 
@@ -220,6 +226,9 @@ class MainWindow(QMainWindow):
         self.generate_mld_action.triggered.connect(self.generate_mld)
         self.generate_sql_action.triggered.connect(self.generate_sql)
         self.generate_ai_mcd_action.triggered.connect(self.generate_ai_mcd)
+        self.conversational_assistant_action.triggered.connect(
+            self.show_conversational_assistant
+        )
         self.auto_layout_action.triggered.connect(self.auto_layout_mcd)
         self.add_inheritance_action.triggered.connect(self.add_inheritance)
         self.tool_group.triggered.connect(self._tool_triggered)
@@ -417,6 +426,17 @@ class MainWindow(QMainWindow):
             return
         self.controller.import_generated_model(candidate.model)
         self.controller.auto_layout()
+        self.workspace_tabs.setCurrentWidget(self.view)
+        self.select_action.setChecked(True)
+        self.view.fit_scene()
+
+    def show_conversational_assistant(self, _checked: bool = False) -> None:
+        dialog = ConversationalDesignDialog(self.controller.model, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        if dialog.imported_model is None:
+            return
+        self.controller.import_conversational_model(dialog.imported_model)
         self.workspace_tabs.setCurrentWidget(self.view)
         self.select_action.setChecked(True)
         self.view.fit_scene()

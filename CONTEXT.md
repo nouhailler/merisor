@@ -1,7 +1,7 @@
 # Contexte de reprise du projet MERISOR
 
-Ce document décrit l'état réel du dépôt au 31 août 2026 et la prochaine
-fonctionnalité retenue. Il doit être lu avant toute nouvelle évolution afin de
+Ce document décrit l'état réel du dépôt au 1er septembre 2026 et les évolutions
+déjà terminées. Il doit être lu avant toute nouvelle évolution afin de
 ne pas réimplémenter les versions précédentes.
 
 ## État global
@@ -27,6 +27,8 @@ Fonctionnalités déjà intégrées :
 - paquets Debian, AppImage et publication PyPI/pipx ;
 - génération d'un MCD depuis une description via OpenRouter, avec aperçu et
   confirmation avant remplacement du document courant.
+- assistant MERISE conversationnel avec brouillon isolé, patchs stricts,
+  révisions, questions structurantes et import confirmé/annulable.
 
 ## Qualité logicielle
 
@@ -43,8 +45,8 @@ QT_QPA_PLATFORM=offscreen pytest
 Mypy fonctionne en mode strict. À la dernière vérification locale :
 
 - Ruff format et lint : conformes ;
-- mypy : aucune erreur sur 57 fichiers ;
-- pytest : 224 tests réussis ;
+- mypy : aucune erreur sur 61 fichiers ;
+- pytest : 234 tests réussis ;
 - démarrage Qt hors écran : application active jusqu'au timeout de contrôle.
 
 ## Analyse intelligente locale déjà terminée
@@ -151,10 +153,10 @@ Les appels de génération et de suggestion de dépendances fonctionnelles
 s'exécutent dans un `QThread`. Aucun worker réseau ne manipule directement un
 widget Qt.
 
-## Prochaine fonctionnalité : Assistant MERISE conversationnel
+## Assistant MERISE conversationnel terminé
 
-La prochaine évolution retenue doit transformer la génération ponctuelle en
-assistant de conception. Elle n'est **pas encore implémentée**.
+La commande **Modèle → Assistant MERISE conversationnel** (`Ctrl+Alt+M`)
+transforme la génération ponctuelle en assistant de conception itératif.
 
 ### Objectif utilisateur
 
@@ -238,27 +240,25 @@ MERISOR doit impérativement :
 - ne modifier le document qu'après confirmation explicite ;
 - appliquer l'import final comme une opération annulable.
 
-### Ordre d'implémentation recommandé pour la prochaine reprise
+### État de l'implémentation
 
-1. créer le modèle local `DesignSession` et ses révisions ;
-2. définir et valider le schéma JSON des réponses conversationnelles ;
-3. implémenter le premier tour d'analyse d'une description ;
-4. afficher concepts, hypothèses et questions ;
-5. enregistrer les réponses de l'utilisateur ;
-6. appliquer les `draft_patch` au brouillon isolé ;
-7. valider le brouillon après chaque tour ;
-8. créer l'aperçu graphique et la comparaison MCD courant/brouillon ;
-9. importer après confirmation comme une commande annulable ;
-10. ajouter éventuellement la sauvegarde et la reprise locale d'une session.
+Les étapes 1 à 9 sont terminées : modèle `DesignSession`, enveloppe JSON
+stricte, premier tour, concepts/hypothèses/questions, réponses structurées,
+patchs contrôlés, validation à chaque tour, aperçu graphique et différentiel,
+puis import confirmé en une commande annulable.
 
-### Interface envisagée
+La sauvegarde et la reprise locale d'une session conversationnelle (ancienne
+étape 10) restent facultatives et ne sont pas encore implémentées. Fermer la
+fenêtre abandonne le brouillon sans toucher au MCD.
+
+### Interface livrée
 
 - conversation et réponses à gauche ;
 - brouillon MCD et état de validation à droite ;
 - section « Hypothèses retenues » ;
 - liste des questions en attente ;
-- boutons **Voir les changements**, **Version précédente**, **Régénérer la
-  proposition** et **Importer dans le MCD** ;
+- boutons **Aperçu et import**, **Révision précédente**, envoi libre et
+  poursuite avec les réponses structurées ;
 - indicateur de progression pendant les appels OpenRouter ;
 - gestion compréhensible des quotas, erreurs réseau et JSON invalides.
 

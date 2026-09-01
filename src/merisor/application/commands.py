@@ -214,9 +214,13 @@ class ReplaceModelStateCommand(QUndoCommand):
     """Applique une décomposition complète comme une seule opération annulable."""
 
     def __init__(
-        self, target: CommandTarget, old_model: MCDModel, new_model: MCDModel
+        self,
+        target: CommandTarget,
+        old_model: MCDModel,
+        new_model: MCDModel,
+        label: str = "Appliquer la décomposition normalisée",
     ) -> None:
-        super().__init__("Appliquer la décomposition normalisée")
+        super().__init__(label)
         self._target = target
         self._old_model = copy.deepcopy(old_model)
         self._new_model = copy.deepcopy(new_model)

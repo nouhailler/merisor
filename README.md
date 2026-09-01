@@ -197,13 +197,13 @@ sans masquer les hypothèses métier :
   afin de conserver une interface réactive ;
 - organisation automatique du graphe après import.
 
-### 🗣️ Prochaine étape : assistant MERISE conversationnel
+### 🗣️ Assistant MERISE conversationnel
 
-La prochaine évolution prévue transformera la génération ponctuelle en un
-assistant de conception. À partir d'une description métier, il devra détecter
-les concepts, rendre ses hypothèses visibles puis poser les questions qui
-modifient réellement le modèle : cardinalités, historisation, distinction entre
-concept et occurrence physique, ou choix entre entité et association.
+En complément de la génération ponctuelle, MERISOR propose un véritable
+assistant de conception. À partir d'une description métier, il détecte les
+concepts, rend ses hypothèses visibles puis pose les questions qui modifient
+réellement le modèle : cardinalités, historisation, distinction entre concept
+et occurrence physique, ou choix entre entité et association.
 
 Le principe de sécurité restera le même :
 
@@ -219,12 +219,12 @@ Aperçu des différences
 Import confirmé et annulable
 ```
 
-Les réponses OpenRouter devront respecter une enveloppe JSON stricte contenant
+Les réponses OpenRouter respectent une enveloppe JSON stricte contenant
 le message, les concepts détectés, les hypothèses, les questions et un patch du
 brouillon. Le texte de conversation ne deviendra jamais directement la source
-de vérité et aucun changement ne sera appliqué silencieusement. Cette
-fonctionnalité est documentée dans [CONTEXT.md](CONTEXT.md), mais n'est pas
-encore implémentée.
+de vérité et aucun changement n'est appliqué silencieusement. Le brouillon est
+validé à chaque tour, peut revenir à sa révision précédente, puis s'affiche sous
+forme de graphe et de différences avant un import confirmé et annulable.
 
 ## 🚀 Installation
 
@@ -443,7 +443,27 @@ courant n’est pas modifié.
 > les identifiants, les cardinalités et les besoins d’historisation. Les
 > modèles gratuits OpenRouter peuvent être soumis à des quotas.
 
-### 7. Importer un schéma SQL existant
+### 7. Concevoir un MCD avec l'assistant conversationnel
+
+1. Configurez OpenRouter comme pour la génération ponctuelle.
+2. Ouvrez **Modèle → Assistant MERISE conversationnel…** (`Ctrl+Alt+M`).
+3. Décrivez le besoin métier dans vos propres mots.
+4. Examinez les concepts détectés et les hypothèses retenues.
+5. Répondez aux questions structurantes, puis cliquez sur **Continuer avec les
+   réponses**.
+6. Consultez la validation et, si nécessaire, envoyez une correction ou
+   revenez à la révision précédente.
+7. Lorsque le brouillon est prêt, ouvrez **Aperçu et import…** pour contrôler le
+   graphe, les différences et le JSON.
+8. Confirmez l'import. Une seule commande est ajoutée à l'historique :
+   **Édition → Annuler** restaure le MCD précédent.
+
+> [!IMPORTANT]
+> La conversation et les réponses de l'IA ne modifient jamais directement le
+> document ouvert. Seul le patch JSON strict, rechargé par le dépôt MERISOR et
+> validé par les règles MCD, peut faire évoluer le brouillon isolé.
+
+### 8. Importer un schéma SQL existant
 
 1. Ouvrez **Fichier → Importer SQL / DDL…** (`Ctrl+Shift+O`).
 2. Choisissez un fichier PostgreSQL ou SQLite.
@@ -467,6 +487,7 @@ courant n’est pas modifié.
 | Zoom avant / arrière / initial | `Ctrl++` / `Ctrl+-` / `Ctrl+0` |
 | Valider le MCD | `Ctrl+Shift+V` |
 | Assistant de normalisation | `Ctrl+Shift+N` |
+| Assistant MERISE conversationnel | `Ctrl+Alt+M` |
 | Réorganiser le MCD | `Ctrl+Shift+L` |
 | Générer le MLD | `Ctrl+Shift+M` |
 | Générer SQL | `Ctrl+Alt+S` |
@@ -690,6 +711,8 @@ src/merisor/
 │   ├── ddl_importer.py           reverse-engineering DDL → MLD → MCD
 │   ├── sql_generator.py         validation et dialectes SQL
 │   ├── ai_mcd_service.py        schéma/prompt/validation IA
+│   ├── design_session.py        brouillon et révisions conversationnelles
+│   ├── conversational_design_service.py patchs stricts OpenRouter
 │   ├── ai_normalization_service.py suggestions facultatives de DF
 │   ├── openrouter_client.py     appels HTTP OpenRouter
 │   └── openrouter_settings.py   préférences et clé locale
@@ -701,6 +724,7 @@ src/merisor/
 │   ├── mld_view.py              MLD graphique et textuel
 │   ├── sql_dialog.py            aperçu et export SQL
 │   ├── ai_mcd_dialog.py         génération/aperçu/import IA
+│   ├── conversational_design_dialog.py conversation/aperçu/import
 │   ├── quality_dialog.py        rapport de qualité détaillé
 │   ├── normalization_dialog.py  saisie, rapport et aperçu non destructif
 │   └── main_window.py           fenêtre principale
@@ -749,8 +773,11 @@ anciens fichiers produisent le même MLD et le même SQL qu’avant cette évolu
 - avec `keyring`, elle est stockée dans le trousseau du système ;
 - sans `keyring`, QSettings est utilisé avec un avertissement : ce repli n’est
   pas chiffré ;
-- seule la description envoyée lors d’une génération IA est transmise à
-  OpenRouter et au fournisseur du modèle sélectionné ;
+- la génération ponctuelle transmet la description ; l'assistant
+  conversationnel transmet aussi le brouillon MCD courant, les derniers tours,
+  les hypothèses et les réponses nécessaires pour poursuivre la conception ;
+- ces données ne sont envoyées qu'après une action explicite de l'utilisateur,
+  à OpenRouter et au fournisseur du modèle sélectionné ;
 - le JSON reçu est validé avant de pouvoir remplacer le document courant ;
 - le SQL est seulement affiché ou enregistré localement.
 
@@ -776,8 +803,9 @@ que les contrôles locaux et GitHub Actions restent identiques.
 
 La suite couvre le domaine MCD, la validation, la persistance et migration JSON,
 les commandes annulables, l’interface Qt, la disposition automatique, la
-normalisation formelle, la génération IA, toutes les règles MCD → MLD, les trois dialectes SQL, les cycles
-de dépendances, les exports et la chaîne MotoGP complète.
+normalisation formelle, la génération IA ponctuelle et conversationnelle,
+toutes les règles MCD → MLD, les trois dialectes SQL, les cycles de dépendances,
+les exports et la chaîne MotoGP complète.
 
 Pour vérifier que l’application démarre sans ouvrir de fenêtre visible :
 
@@ -834,6 +862,9 @@ artefacts lors de l’envoi d’un tag `v*`.
   `AUTO` non historisé et `FORCE_FK` sont refusés pour éviter une perte
   d’information ;
 - la génération IA dépend de la disponibilité et des quotas d’OpenRouter ;
+- les sessions conversationnelles sont conservées en mémoire pendant
+  l'ouverture de la fenêtre ; leur sauvegarde et reprise entre deux lancements
+  restent une évolution future ;
 - MERISOR ne gère ni connexion, ni migration automatique, ni introspection
   directe d'une base en fonctionnement ;
 - le reverse-engineering importe un fichier DDL, mais ne se connecte pas à une
