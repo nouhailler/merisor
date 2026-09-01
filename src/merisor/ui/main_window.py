@@ -28,6 +28,8 @@ from merisor.application import (
     MLDTransformationError,
     ModelDocumentationGenerator,
     ModelVersionComparator,
+    PwaImportError,
+    PwaSourceImporter,
     SQLDDLImporter,
 )
 from merisor.domain import InheritanceStrategy, MLDModel
@@ -48,6 +50,7 @@ from merisor.ui.model_explorer_dialog import ModelExplorerDialog
 from merisor.ui.normalization_dialog import NormalizationAssistantDialog
 from merisor.ui.openrouter_settings_dialog import OpenRouterSettingsDialog
 from merisor.ui.properties_panel import PropertiesPanel
+from merisor.ui.pwa_import_dialog import PwaImportPreviewDialog
 from merisor.ui.quality_dialog import QualityReportDialog
 from merisor.ui.query_generator_dialog import QueryGeneratorDialog
 from merisor.ui.sql_dialog import SQLPreviewDialog
@@ -100,6 +103,8 @@ class MainWindow(QMainWindow):
         self.open_action.setShortcut(QKeySequence.StandardKey.Open)
         self.import_ddl_action = QAction("Importer SQL / DDL…", self)
         self.import_ddl_action.setShortcut(QKeySequence("Ctrl+Shift+O"))
+        self.import_pwa_action = QAction("Importer un projet PWA / IndexedDB…", self)
+        self.import_pwa_action.setShortcut(QKeySequence("Ctrl+Alt+P"))
         self.save_action = QAction("Enregistrer", self)
         self.save_action.setShortcut(QKeySequence.StandardKey.Save)
         self.save_as_action = QAction("Enregistrer sous…", self)
@@ -182,6 +187,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.new_action)
         file_menu.addAction(self.open_action)
         file_menu.addAction(self.import_ddl_action)
+        file_menu.addAction(self.import_pwa_action)
         self.recent_menu = file_menu.addMenu("Ouvrir récent")
         self._refresh_recent_menu()
         file_menu.addSeparator()
@@ -251,6 +257,7 @@ class MainWindow(QMainWindow):
         self.new_action.triggered.connect(self.new_document)
         self.open_action.triggered.connect(self.open_document)
         self.import_ddl_action.triggered.connect(self.import_ddl)
+        self.import_pwa_action.triggered.connect(self.import_pwa_project)
         self.save_action.triggered.connect(self.save_document)
         self.save_as_action.triggered.connect(self.save_document_as)
         self.export_visual_action.triggered.connect(self.export_visual)
@@ -642,6 +649,51 @@ class MainWindow(QMainWindow):
             return
         self.controller.import_reverse_engineered_model(result.mcd, result.mld)
         self.controller.auto_layout()
+        self.workspace_tabs.setCurrentWidget(self.view)
+        self.select_action.setChecked(True)
+        self.view.fit_scene()
+
+    def import_pwa_project(self, _checked: bool = False) -> None:
+        source_kind, accepted = QInputDialog.getItem(
+            self,
+            "Importer un projet PWA / IndexedDB",
+            "Source à analyser :",
+            ["Dossier local cloné", "Archive ZIP"],
+            0,
+            False,
+        )
+        if not accepted:
+            return
+        if source_kind == "Archive ZIP":
+            source, _filter = QFileDialog.getOpenFileName(
+                self,
+                "Choisir l'archive du projet PWA",
+                str(self._dialog_directory()),
+                "Archives ZIP (*.zip)",
+            )
+        else:
+            source = QFileDialog.getExistingDirectory(
+                self,
+                "Choisir le dossier du projet PWA",
+                str(self._dialog_directory()),
+            )
+        if not source:
+            return
+        try:
+            result = PwaSourceImporter().import_path(source)
+        except PwaImportError as error:
+            QMessageBox.critical(
+                self,
+                "Analyse PWA impossible",
+                f"Aucun MCD exploitable n'a pu être proposé.\n\n{error}",
+            )
+            return
+        preview = PwaImportPreviewDialog(result, source, self)
+        if preview.exec() != QDialog.DialogCode.Accepted:
+            return
+        if not self._maybe_save():
+            return
+        self.controller.import_pwa_source_model(result.mcd)
         self.workspace_tabs.setCurrentWidget(self.view)
         self.select_action.setChecked(True)
         self.view.fit_scene()

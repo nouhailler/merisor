@@ -32,6 +32,9 @@ Fonctionnalités déjà intégrées :
 - génération locale de requêtes SELECT depuis une intention métier, avec
   jointures exclusivement dérivées des FK et explication des tables utilisées ;
 - import et reverse-engineering de DDL PostgreSQL/SQLite ;
+- import statique d’un projet PWA depuis un dossier ou ZIP, avec détection
+  Dexie/IndexedDB, enrichissement TypeScript, preuves source, validation,
+  aperçu et import annulable ;
 - paquets Debian, AppImage et publication PyPI/pipx ;
 - génération d'un MCD depuis une description via OpenRouter, avec aperçu et
   confirmation avant remplacement du document courant ;
@@ -62,6 +65,16 @@ sans PK sont conservées avec avertissement plutôt que rejetées. Les types non
 représentables exactement utilisent un repli documenté (`UUID` vers
 `VARCHAR(36)`, autres types propriétaires vers `TEXT`). La connexion et
 l'introspection directe d'une base restent hors périmètre.
+
+Le reverse-engineering PWA est disponible via **Fichier → Importer un projet
+PWA / IndexedDB**. Il inspecte localement les appels `version().stores()` de
+Dexie, `createObjectStore`/`createIndex` de l’API native et les types TypeScript
+associés. Chaque proposition conserve un fichier, une ligne et un niveau de
+confiance. Le candidat est validé et affiché avant confirmation, puis importé
+avec disposition automatique comme une commande annulable. Le moteur ne lit
+pas les enregistrements IndexedDB d’un téléphone : le dépôt ne contient en
+général que la définition du schéma. Les schémas dynamiques et les relations
+métier sans champ de référence explicite restent à modéliser manuellement.
 
 Les exports **Fichier → Exporter le diagramme** comprennent PNG, SVG, PDF,
 Mermaid et Graphviz/DOT. Les deux formats textuels sont déterministes et dérivés

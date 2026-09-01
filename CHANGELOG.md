@@ -6,6 +6,29 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 Aucune modification pour le moment.
 
+## [0.9.0] - 2026-09-01
+
+### Ajouté
+
+- reverse-engineering local de projets PWA depuis un dossier cloné ou une
+  archive ZIP, sans IA ni transfert réseau ;
+- analyse des schémas Dexie et IndexedDB natifs, enrichis par les interfaces et
+  alias objet TypeScript ;
+- déduction prudente des identifiants, index, unicités, types et références,
+  avec identifiants techniques explicitement signalés lorsqu’aucun `keyPath`
+  n’est disponible ;
+- aperçu obligatoire du MCD proposé, preuves `fichier:ligne`, niveaux de
+  confiance, avertissements et rapport de validation ;
+- import confirmé, automatiquement disposé et annulable en une seule commande
+  via **Fichier → Importer un projet PWA / IndexedDB…** (`Ctrl+Alt+P`).
+
+### Sécurité
+
+- limites sur le nombre et la taille des fichiers analysés ;
+- exclusion de `node_modules`, répertoires de build et fichiers binaires ;
+- lecture locale uniquement et extraction ZIP interdite, évitant toute écriture
+  de contenu non fiable hors du projet.
+
 ## [0.8.0] - 2026-09-01
 
 ### Modifié

@@ -70,6 +70,13 @@ from merisor.application.openrouter_client import (
     OpenRouterModel,
 )
 from merisor.application.openrouter_settings import OpenRouterKeyStore
+from merisor.application.pwa_source_importer import (
+    InferenceConfidence,
+    PwaImportError,
+    PwaImportResult,
+    PwaSourceImporter,
+    SourceEvidence,
+)
 from merisor.application.query_generator import (
     QueryGenerationError,
     QueryGenerationResult,
@@ -145,6 +152,7 @@ __all__ = [
     "ImpactReference",
     "ImpactReport",
     "ImpactTarget",
+    "InferenceConfidence",
     "MLDGenerationBlocked",
     "MLDNamePolicy",
     "MLDSQLValidator",
@@ -163,6 +171,9 @@ __all__ = [
     "OpenRouterKeyStore",
     "OpenRouterModel",
     "PostgreSQLDialect",
+    "PwaImportError",
+    "PwaImportResult",
+    "PwaSourceImporter",
     "QueryGenerationError",
     "QueryGenerationResult",
     "QueryTarget",
@@ -177,6 +188,7 @@ __all__ = [
     "SQLValidationReport",
     "SQLValidationSeverity",
     "SQLiteDialect",
+    "SourceEvidence",
     "SubmodelResolver",
     "SubmodelScope",
     "TestDataGenerationError",

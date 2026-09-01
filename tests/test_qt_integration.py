@@ -100,6 +100,8 @@ def test_main_window_starts_offscreen(qapp) -> None:  # type: ignore[no-untyped-
 
     assert window.isVisible()
     assert window.import_ddl_action.text() == "Importer SQL / DDL…"
+    assert window.import_pwa_action.text() == "Importer un projet PWA / IndexedDB…"
+    assert window.import_pwa_action.shortcut().toString() == "Ctrl+Alt+P"
     assert window.centralWidget() is window.workspace_tabs
     assert window.workspace_tabs.widget(0) is window.view
     assert window.workspace_tabs.widget(1) is window.mld_view

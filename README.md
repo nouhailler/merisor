@@ -344,11 +344,36 @@ génération. Aucune IA, connexion ou exécution de requête n'intervient.
 - aperçu du MLD, du MCD heuristique et du DDL source avant confirmation ;
 - aucun changement du document courant sans validation explicite.
 
+### 📱 Reverse-engineering d’une PWA / IndexedDB
+
+MERISOR peut proposer un MCD à partir des sources locales d’une PWA, sans IA,
+sans envoyer le dépôt sur Internet et sans lire les données personnelles d’un
+navigateur :
+
+- import d’un dossier cloné ou d’une archive `.zip` ;
+- détection des schémas **Dexie** (`version().stores()`) ;
+- détection d’IndexedDB natif (`createObjectStore`, `createIndex`, `keyPath`) ;
+- enrichissement des attributs et types depuis les interfaces et alias objet
+  TypeScript associés ;
+- proposition des relations à partir des champs de référence tels que
+  `clientId`, `id_client` ou `managerId` ;
+- preuve `fichier:ligne` et niveau de confiance pour chaque déduction ;
+- validation MERISE, aperçu obligatoire, disposition automatique et import en
+  une seule commande annulable.
+
+> [!IMPORTANT]
+> Le dépôt contient généralement le **code qui définit le schéma** IndexedDB,
+> pas les enregistrements créés sur le téléphone. Ceux-ci restent dans le
+> stockage du navigateur de l’appareil, sauf si l’application les synchronise
+> explicitement avec un serveur ou les exporte. Les cardinalités et relations
+> proposées par analyse statique doivent donc être vérifiées par un humain.
+
 ### 📦 Formats d'import et d'export
 
 | Format | Import | Export | Remarques |
 |---|:---:|:---:|---|
 | JSON MERISOR V1/V2 | ✓ | ✓ | Format natif, rétrocompatible |
+| Projet PWA / IndexedDB | ✓ | — | Dossier ou ZIP ; Dexie, API native et types TypeScript |
 | PostgreSQL DDL | ✓ | ✓ | `CREATE TABLE`, FK, `ALTER TABLE`, contraintes et index |
 | SQLite DDL | ✓ | ✓ | Syntaxe inline et `AUTOINCREMENT` |
 | MariaDB/MySQL | Partiel | ✓ | Constructions portables, `AUTO_INCREMENT`, entiers courants |
@@ -462,7 +487,7 @@ ne demande pas d’installation administrateur et ne modifie pas le système.
 3. Installez le paquet :
 
 ```bash
-sudo apt install ./merisor_0.8.0_amd64.deb
+sudo apt install ./merisor_0.9.0_amd64.deb
 ```
 
 Adaptez le nom au fichier téléchargé. MERISOR apparaît ensuite dans le menu des
@@ -734,6 +759,20 @@ les tables logiques et une synthèse technique par entité.
 > SQL non représentable est adapté à un type logique révisable ; une table sans
 > PK reste importable, mais son entité est volontairement signalée invalide.
 
+### 10. Proposer un MCD depuis une PWA
+
+1. Clonez le dépôt GitHub localement ou téléchargez son archive ZIP.
+2. Ouvrez **Fichier → Importer un projet PWA / IndexedDB…** (`Ctrl+Alt+P`).
+3. Choisissez **Dossier local cloné** ou **Archive ZIP**.
+4. Contrôlez les onglets **MCD proposé**, **Preuves**, **Validation** et
+   **Portée de l’analyse**.
+5. Confirmez avec **Importer le MCD proposé**. Le MCD précédent peut être
+   restauré immédiatement avec **Édition → Annuler**.
+
+Les répertoires générés ou volumineux (`node_modules`, `dist`, `build`, etc.)
+sont ignorés. Si aucun schéma Dexie ou IndexedDB natif n’est déclaré dans les
+sources, MERISOR n’invente pas de modèle et explique pourquoi l’analyse échoue.
+
 ## ⌨️ Raccourcis utiles
 
 | Action | Raccourci |
@@ -755,6 +794,7 @@ les tables logiques et une synthèse technique par entité.
 | Exporter le MCD ou MLD actif | `Ctrl+Shift+E` |
 | Générer la documentation | `Ctrl+Shift+D` |
 | Importer SQL / DDL | `Ctrl+Shift+O` |
+| Importer une PWA / IndexedDB | `Ctrl+Alt+P` |
 | Zoom MLD | `Ctrl` + molette ou boutons `+` / `−` |
 
 ## 🧪 Exemple MotoGP
@@ -1195,6 +1235,10 @@ artefacts lors de l’envoi d’un tag `v*`.
 - le reverse-engineering importe un fichier DDL, mais ne se connecte pas à une
   base existante et n'analyse pas les vues, triggers, procédures ou extensions
   propriétaires ;
+- le reverse-engineering PWA analyse les déclarations Dexie/IndexedDB et les
+  types TypeScript statiques ; il ne lit ni les données présentes sur un
+  téléphone, ni les schémas construits dynamiquement à l’exécution, et les
+  relations proposées restent des inférences à confirmer ;
 - les types SQL non portables ou inconnus sont adaptés à un type logique proche
   avec un avertissement explicite ; cette approximation doit être vérifiée ;
 - les contrôles 2NF/3NF reflètent les dépendances déclarées : ils ne peuvent pas

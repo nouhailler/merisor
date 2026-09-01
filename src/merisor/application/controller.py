@@ -611,6 +611,24 @@ class DiagramController(QObject):
             "Brouillon conversationnel importé ; utilisez Annuler pour le retirer."
         )
 
+    def import_pwa_source_model(self, model: MCDModel) -> None:
+        """Importe une proposition issue de sources PWA comme commande annulable."""
+
+        candidate = copy.deepcopy(model)
+        for node_id, position in self.mcd_layout.calculate(candidate).items():
+            candidate.move_node(node_id, position)
+        self.undo_stack.push(
+            ReplaceModelStateCommand(
+                self,
+                self.model,
+                candidate,
+                "Importer le MCD depuis un projet PWA",
+            )
+        )
+        self.message.emit(
+            "MCD proposé depuis le projet PWA importé ; utilisez Annuler pour le retirer."
+        )
+
     def load_transient_model(self, model: MCDModel) -> None:
         """Installe une copie dans un contrôleur d'aperçu sans document associé."""
 
