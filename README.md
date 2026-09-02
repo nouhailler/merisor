@@ -27,20 +27,80 @@ préparé par une IA via OpenRouter, avec validation et confirmation avant impor
 > MERISOR génère du SQL, mais ne se connecte à aucune base de données et
 > n’exécute jamais le script. Le MCD reste toujours la source de vérité.
 
+## 🗺️ Du besoin métier aux livrables
+
+MERISOR conserve une séparation stricte entre la description du besoin, le
+modèle conceptuel, le modèle logique et les scripts propres aux différents
+SGBD. L'assistant IA est facultatif : son résultat passe toujours par un aperçu,
+une validation et une confirmation avant de rejoindre le MCD.
+
+```mermaid
+flowchart TB
+    DESCRIPTION["📝 Description métier"]
+    AI["🤖 Assistant IA<br/>facultatif"]
+    PREVIEW["👁️ Aperçu et confirmation"]
+    MCD["🧩 MCD<br/>SOURCE DE VÉRITÉ"]
+
+    VALIDATION["✅ Validation MERISE"]
+    IMPACT["🔎 Analyse d'impact"]
+    DOCUMENTATION["📚 Documentation"]
+
+    MLD["🗂️ MLD structuré<br/>tables · colonnes · PK · FK"]
+    DOCS["📄 Markdown · HTML · PDF"]
+    SQL["🛢️ Génération SQL<br/>aperçu et export uniquement"]
+
+    POSTGRES[(PostgreSQL)]
+    SQLITE[(SQLite)]
+    MYSQL[(MariaDB / MySQL)]
+
+    DESCRIPTION -->|Conception assistée| AI
+    AI --> PREVIEW
+    PREVIEW -->|Import confirmé| MCD
+    DESCRIPTION -->|Modélisation manuelle| MCD
+
+    MCD --> VALIDATION
+    MCD --> IMPACT
+    MCD --> DOCUMENTATION
+    VALIDATION -->|MCD valide| MLD
+    IMPACT -.->|Provenance MCD → MLD| MLD
+    DOCUMENTATION --> DOCS
+    MLD --> SQL
+    SQL --> POSTGRES
+    SQL --> SQLITE
+    SQL --> MYSQL
+
+    classDef truth fill:#fff4cc,stroke:#a56b00,stroke-width:3px,color:#302400;
+    classDef conceptual fill:#e8f1fb,stroke:#315d8a,stroke-width:2px,color:#172b3a;
+    classDef output fill:#e9f7ef,stroke:#287a50,stroke-width:2px,color:#173c2b;
+    classDef optional fill:#f2eafa,stroke:#7651a8,stroke-width:2px,color:#312044;
+
+    class MCD truth;
+    class VALIDATION,IMPACT,MLD conceptual;
+    class DOCUMENTATION,DOCS,SQL,POSTGRES,SQLITE,MYSQL output;
+    class AI,PREVIEW optional;
+```
+
+> [!NOTE]
+> L'analyse d'impact et la documentation sont des lectures du modèle : elles ne
+> le modifient pas. Le MLD est toujours dérivé du MCD validé, et le SQL est
+> toujours dérivé du MLD — jamais directement du texte ou d'une réponse IA.
+
 ## 📸 Aperçu
 
-### Édition d’un MCD
+Les captures suivantes illustrent les principales étapes du parcours ci-dessus.
+
+### 1. Construire le MCD — la source de vérité
 
 ![Fenêtre principale de MERISOR avec un MCD MotoGP et le panneau de propriétés](https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/mcd-editor.png)
 
-### Typage des attributs MCD
+### 2. Décrire précisément les attributs
 
 ![Sélection d’un type DECIMAL avec précision et échelle dans le panneau de propriétés](https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/attribute-types.png)
 
 <table>
   <tr>
-    <td width="50%"><strong>MLD graphique et propriétés</strong></td>
-    <td width="50%"><strong>Aperçu SQL avant export</strong></td>
+    <td width="50%"><strong>3. Examiner le MLD graphique et ses propriétés</strong></td>
+    <td width="50%"><strong>4. Vérifier le SQL avant export</strong></td>
   </tr>
   <tr>
     <td><img src="https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/mld-view.png" alt="Vue graphique du MLD dans MERISOR"></td>
@@ -48,9 +108,13 @@ préparé par une IA via OpenRouter, avec validation et confirmation avant impor
   </tr>
 </table>
 
-### Import d’un MCD proposé par l’IA
+### Parcours facultatif — préparer un MCD avec l’IA
 
 ![Aperçu et validation d’un MCD généré par IA avant import](https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/ai-preview.png)
+
+> [!IMPORTANT]
+> Cette fenêtre d'aperçu intervient avant l'import : fermer ou refuser la
+> proposition laisse le MCD courant entièrement inchangé.
 
 ## 🧭 MERISE en trente secondes
 
@@ -62,16 +126,9 @@ Vous découvrez MERISE ? Voici les trois niveaux manipulés par l’application 
 | **MLD** — Modèle Logique de Données | Transforme le MCD en tables, colonnes, PK et FK | `PARTICIPER(id_pilote, id_course)` |
 | **SQL** | Traduit le MLD dans le dialecte d’un SGBD | `CREATE TABLE ...` |
 
-Le flux est volontairement unidirectionnel :
-
-```mermaid
-flowchart LR
-    A[🧩 MCD] -->|Valider| B[✅ MCD cohérent]
-    B -->|Générer le MLD| C[🗂️ MLD]
-    C -->|Générer SQL| D[(PostgreSQL)]
-    C -->|Générer SQL| E[(SQLite)]
-    C -->|Générer SQL| F[(MariaDB / MySQL)]
-```
+Le flux détaillé présenté plus haut est volontairement unidirectionnel : le
+MCD validé produit le MLD, puis le MLD produit les variantes SQL. Aucun niveau
+généré ne remplace silencieusement celui qui le précède.
 
 ## ✨ Fonctionnalités
 
@@ -287,6 +344,24 @@ sans masquer les hypothèses métier :
 - vues graphique et textuelle, zoom, copie et export ;
 - indicateur **à jour / obsolète** après modification du MCD.
 
+#### ⓘ « Pourquoi ? » — règles MCD → MLD expliquées
+
+Sélectionnez une table dans le graphe MLD, puis utilisez **ⓘ Pourquoi ?** dans
+le panneau **Propriétés MLD**. MERISOR explique séparément :
+
+- pourquoi l'entité ou l'association a produit cette table ;
+- comment la clé primaire a été obtenue ;
+- pourquoi chaque attribut est devenu, a migré ou a été généré comme colonne ;
+- quelle association et quelle cardinalité ont produit chaque FK ;
+- pourquoi une colonne est `NULL` ou `NOT NULL` ;
+- l'origine des contraintes `UNIQUE` et `CHECK` ;
+- le rôle d'une association N:N, n-aire, historisée ou d'un héritage ISA.
+
+Chaque fiche affiche le **résultat**, la **règle appliquée** et la
+**provenance MCD** avec ses identifiants internes. Ces explications sont
+entièrement déterministes, calculées depuis les métadonnées de provenance du
+MLD et ne font appel à aucune IA. Le rapport complet peut être copié.
+
 ### 🛢️ Génération SQL
 
 - PostgreSQL, SQLite et MariaDB/MySQL ;
@@ -451,6 +526,31 @@ Les commentaires réellement saisis sur les attributs sont, eux, conservés.
 - appel de génération exécuté dans un thread Qt avec progression indéterminée,
   afin de conserver une interface réactive ;
 - organisation automatique du graphe après import.
+
+### 🩺 Analyse et réparation IA d'un MCD existant
+
+La commande **Modèle → ✨ Analyser avec l'IA…** complète les contrôles
+déterministes de MERISOR par une relecture sémantique facultative. Le modèle
+OpenRouter sélectionné reçoit une copie JSON du MCD courant ainsi que les
+signaux de validation et de qualité déjà calculés localement. Il peut alors
+proposer, par exemple, un type plus adapté, une unicité probable, une
+cardinalité à vérifier ou une structure métier manquante.
+
+Chaque amélioration est indépendante et comporte une explication, un niveau de
+confiance et un **patch JSON strict**. MERISOR recharge ce patch avec son dépôt
+JSON, vérifie ses références puis valide le MCD candidat. L'utilisateur peut :
+
+- **Voir** le graphe, les différences et le JSON d'une proposition sans rien
+  modifier ;
+- **Ignorer** une proposition ;
+- sélectionner plusieurs propositions compatibles et choisir **Appliquer** ;
+- confirmer une dernière fois l'aperçu combiné, ou fermer la fenêtre sans
+  aucune conséquence.
+
+Deux propositions qui modifient la même propriété sont signalées comme
+concurrentes et doivent être examinées séparément. Après confirmation,
+l'ensemble retenu constitue une seule commande : **Édition → Annuler** restaure
+le MCD précédent. Une réponse textuelle libre de l'IA n'est jamais appliquée.
 
 ### 🗣️ Assistant MERISE conversationnel
 
@@ -646,7 +746,9 @@ présente :
 
 - une vue graphique avec tables et FK ;
 - une vue textuelle copiable ou exportable ;
-- le panneau de propriétés de la table sélectionnée.
+- le panneau de propriétés de la table sélectionnée ;
+- le bouton **ⓘ Pourquoi ?** pour consulter toutes les règles et provenances
+  ayant produit cette table, ses colonnes et ses contraintes.
 
 Après une modification logique du MCD, le MLD passe à l’état **obsolète** et
 doit être régénéré. Déplacer seulement un objet ne le rend pas obsolète.
@@ -750,7 +852,22 @@ les tables logiques et une synthèse technique par entité.
 > les identifiants, les cardinalités et les besoins d’historisation. Les
 > modèles gratuits OpenRouter peuvent être soumis à des quotas.
 
-### 8. Concevoir un MCD avec l'assistant conversationnel
+### 8. Faire analyser et réparer un MCD existant
+
+1. Configurez OpenRouter comme pour la génération ponctuelle.
+2. Ouvrez le MCD à examiner, puis **Modèle → ✨ Analyser avec l'IA…**.
+3. Lancez l'analyse et consultez la justification de chaque proposition.
+4. Utilisez **Voir** pour comparer son candidat au MCD courant.
+5. Décochez ou ignorez ce que vous ne souhaitez pas conserver.
+6. Cliquez sur **Appliquer la sélection…**, contrôlez l'aperçu combiné puis
+   confirmez explicitement les modifications.
+
+> [!CAUTION]
+> Cette fonction transmet le MCD courant à OpenRouter et au fournisseur du
+> modèle choisi. Une suggestion IA peut être plausible sans correspondre à vos
+> règles métier : gardez uniquement les changements que vous comprenez.
+
+### 9. Concevoir un MCD avec l'assistant conversationnel
 
 1. Configurez OpenRouter comme pour la génération ponctuelle.
 2. Ouvrez **Modèle → Assistant MERISE conversationnel…** (`Ctrl+Alt+M`).
@@ -770,7 +887,7 @@ les tables logiques et une synthèse technique par entité.
 > document ouvert. Seul le patch JSON strict, rechargé par le dépôt MERISOR et
 > validé par les règles MCD, peut faire évoluer le brouillon isolé.
 
-### 9. Importer un schéma SQL existant
+### 10. Importer un schéma SQL existant
 
 1. Ouvrez **Fichier → Importer SQL / DDL…** (`Ctrl+Shift+O`).
 2. Choisissez un fichier PostgreSQL ou SQLite.
@@ -785,7 +902,7 @@ les tables logiques et une synthèse technique par entité.
 > SQL non représentable est adapté à un type logique révisable ; une table sans
 > PK reste importable, mais son entité est volontairement signalée invalide.
 
-### 10. Proposer un MCD depuis une PWA
+### 11. Proposer un MCD depuis une PWA
 
 1. Clonez le dépôt GitHub localement ou téléchargez son archive ZIP.
 2. Ouvrez **Fichier → Importer un projet PWA / IndexedDB…** (`Ctrl+Alt+P`).
@@ -1102,9 +1219,11 @@ src/merisor/
 │   ├── model_explorer.py        recherche et projections de navigation
 │   ├── submodels.py             résolution des domaines et vues enregistrées
 │   ├── mld_transformer.py       transformation MCD → MLD
+│   ├── transformation_explainer.py règles pédagogiques et provenance MLD
 │   ├── ddl_importer.py           reverse-engineering DDL → MLD → MCD
 │   ├── sql_generator.py         validation et dialectes SQL
 │   ├── ai_mcd_service.py        schéma/prompt/validation IA
+│   ├── ai_repair_service.py     propositions et patchs de réparation IA
 │   ├── design_session.py        brouillon et révisions conversationnelles
 │   ├── conversational_design_service.py patchs stricts OpenRouter
 │   ├── ai_normalization_service.py suggestions facultatives de DF
@@ -1116,10 +1235,13 @@ src/merisor/
 │   ├── canvas.py, items.py      scène et objets graphiques MCD
 │   ├── properties_panel.py      édition contextuelle
 │   ├── mld_view.py              MLD graphique et textuel
+│   ├── mld_properties_panel.py  propriétés et accès « Pourquoi ? »
+│   ├── transformation_explanation_dialog.py explications MCD → MLD
 │   ├── model_explorer_dialog.py exploration non destructive du MCD
 │   ├── submodel_dialog.py       gestion des domaines et sous-modèles
 │   ├── sql_dialog.py            aperçu et export SQL
 │   ├── ai_mcd_dialog.py         génération/aperçu/import IA
+│   ├── ai_repair_dialog.py      sélection/aperçu/confirmation des réparations
 │   ├── conversational_design_dialog.py conversation/aperçu/import
 │   ├── quality_dialog.py        rapport de qualité détaillé
 │   ├── normalization_dialog.py  saisie, rapport et aperçu non destructif
@@ -1172,9 +1294,12 @@ anciens fichiers produisent le même MLD et le même SQL qu’avant cette évolu
 - la génération ponctuelle transmet la description ; l'assistant
   conversationnel transmet aussi le brouillon MCD courant, les derniers tours,
   les hypothèses et les réponses nécessaires pour poursuivre la conception ;
+- l'analyse de réparation transmet une copie JSON du MCD courant, son rapport
+  de validation et les signaux de qualité locaux ;
 - ces données ne sont envoyées qu'après une action explicite de l'utilisateur,
   à OpenRouter et au fournisseur du modèle sélectionné ;
-- le JSON reçu est validé avant de pouvoir remplacer le document courant ;
+- tout JSON ou patch reçu est validé avant de pouvoir remplacer le document
+  courant, et une réparation exige un aperçu puis une confirmation ;
 - le SQL est seulement affiché ou enregistré localement.
 
 Ne placez jamais une clé API dans un fichier JSON, une capture d’écran, un

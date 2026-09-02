@@ -28,6 +28,8 @@ Fonctionnalités déjà intégrées :
   avec diagrammes, dictionnaire des objets, contraintes et fiches YAML ;
 - sauvegarde JSON V2 rétrocompatible avec les anciens fichiers V1/V2 ;
 - transformation MCD → MLD, dont provenance, PK/FK composées et contraintes ;
+- explication pédagogique **ⓘ Pourquoi ?** de chaque table MLD sélectionnée,
+  couvrant table, PK, colonnes, FK, nullabilité, UNIQUE et CHECK sans IA ;
 - génération SQL PostgreSQL, SQLite et MariaDB/MySQL ;
 - génération de scripts INSERT de données de test depuis le MLD, avec
   quantités par table, respect des FK/PK/UNIQUE, aperçu et export sans
@@ -43,6 +45,9 @@ Fonctionnalités déjà intégrées :
   confirmation avant remplacement du document courant ;
 - assistant MERISE conversationnel avec brouillon isolé, patchs stricts,
   révisions, questions structurantes et import confirmé/annulable ;
+- analyse facultative d'un MCD existant par OpenRouter, avec propositions
+  autonomes, validation locale, aperçu, sélection et application confirmée en
+  une commande annulable ;
 - exploration non destructive du MCD avec recherche, filtres, focus par
   profondeur, dépendances, zoom et masquage temporaire ;
 - domaines et vues métier/technique persistants, composables et sélectionnables
@@ -60,6 +65,15 @@ matérialisée en table, avec une FK par branche et une PK composée de ces FK,
 sauf si l'association possède son propre identifiant conceptuel. `FORCE_FK` est
 refusé pour une n-aire. Les tests de référence `SUPERVISER` et `FOURNIR`
 vérifient désormais toute la chaîne MCD → MLD → SQL.
+
+Le panneau **Propriétés MLD** propose **ⓘ Pourquoi ?** pour la table
+sélectionnée. `MldTransformationExplainer`, indépendant de Qt, utilise les
+identifiants de provenance déjà produits par `McdToMldTransformer` et génère
+une liste de décisions vérifiables : résultat, règle MERISE et objet MCD
+source. La fenêtre couvre les tables d'entité/association, PK conceptuelles,
+composées ou techniques, colonnes natives/migrées, FK et nullabilité,
+contraintes UNIQUE/CHECK, historisation, n-aires et ISA. Aucune IA n'intervient
+et le format JSON reste inchangé.
 
 Le reverse-engineering de fichier est déjà disponible via **Fichier → Importer
 SQL / DDL** et suit `SQL → MLD → MCD`. Il comprend les contraintes FK inline ou
@@ -152,8 +166,8 @@ QT_QPA_PLATFORM=offscreen pytest
 Mypy fonctionne en mode strict. À la dernière vérification locale :
 
 - Ruff format et lint : conformes ;
-- mypy : aucune erreur sur 90 fichiers ;
-- pytest : 304 tests réussis ;
+- mypy : aucune erreur sur 104 fichiers ;
+- pytest : 333 tests réussis ;
 - démarrage Qt hors écran : application active jusqu'au timeout de contrôle.
 
 ## Comparateur de versions terminé
@@ -287,6 +301,26 @@ Les étapes historiques sont terminées :
 Les appels de génération et de suggestion de dépendances fonctionnelles
 s'exécutent dans un `QThread`. Aucun worker réseau ne manipule directement un
 widget Qt.
+
+## Analyse et réparation IA du MCD terminée
+
+La commande **Modèle → ✨ Analyser avec l'IA…** envoie, après action explicite,
+une copie JSON du MCD courant, son rapport de validation et les signaux de
+qualité locaux au modèle OpenRouter configuré. `AiRepairService` impose une
+réponse `{summary, proposals}` stricte et un maximum de douze propositions.
+
+Chaque proposition transporte un `DraftPatch` autonome, une justification et
+un niveau de confiance. Le patch est interprété par le même
+`DraftPatchApplier` que l'assistant conversationnel, rechargé par le dépôt JSON
+et validé sans mutation du modèle source. Les cibles absentes, patchs sans
+effet et valeurs arbitraires sont refusés. Deux propositions touchant la même
+propriété sont déclarées concurrentes afin d'éviter une fusion silencieuse.
+
+`AiRepairDialog` exécute l'appel réseau dans un `QThread`, affiche les actions
+**Voir**, **Ignorer** et **Appliquer la sélection**, puis réutilise l'aperçu
+graphique/différentiel/JSON. Seule une confirmation explicite remplace le MCD,
+via `ReplaceModelStateCommand`; toute la réparation est donc annulable en une
+commande. Fermer la fenêtre ne modifie rien.
 
 ## Assistant MERISE conversationnel terminé
 

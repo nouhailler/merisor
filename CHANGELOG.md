@@ -6,6 +6,23 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ### Ajouté
 
+- bouton **ⓘ Pourquoi ?** dans les propriétés d'une table MLD sélectionnée ;
+- moteur pédagogique déterministe expliquant la création des tables, PK,
+  colonnes, FK, nullabilité, UNIQUE et CHECK depuis leur provenance MCD ;
+- explications spécifiques aux transformations 1:N, 1:1, N:N, n-aires,
+  associations historisées/matérialisées et héritages ISA ;
+- fenêtre navigable indiquant pour chaque décision le résultat, la règle
+  appliquée et l'objet MCD source, avec copie du rapport complet ;
+- commande **Modèle → ✨ Analyser avec l'IA…** transmettant explicitement une
+  copie du MCD courant à OpenRouter pour proposer des améliorations
+  sémantiques ;
+- réponse IA sous schéma JSON strict, limitée à douze propositions autonomes
+  avec justification et niveau de confiance ;
+- validation locale de chaque patch et de ses références, aperçu graphique,
+  différentiel et JSON sans mutation du document ;
+- actions **Voir**, **Ignorer** et **Appliquer la sélection**, détection des
+  modifications concurrentes et confirmation finale obligatoire ;
+- application des réparations confirmées comme une seule commande annulable ;
 - grille, aimantation et guides dynamiques sur le canvas MCD ;
 - alignement sur six axes et distribution horizontale ou verticale, avec
   historique Annuler/Rétablir ;

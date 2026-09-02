@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFormLayout,
     QHeaderView,
     QLabel,
+    QPushButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -18,6 +19,8 @@ from merisor.domain import MLDTable
 
 class MLDPropertiesPanel(QWidget):
     """Affiche la structure de la table MLD sélectionnée dans le graphe."""
+
+    why_requested = Signal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -63,19 +66,32 @@ class MLDPropertiesPanel(QWidget):
         )
         layout.addWidget(QLabel("Clés étrangères"))
         layout.addWidget(self.foreign_keys)
+        self.why_button = QPushButton("ⓘ Pourquoi ?")
+        self.why_button.setToolTip(
+            "Expliquer les règles MERISE qui ont produit cette table MLD"
+        )
+        self.why_button.setEnabled(False)
+        self.why_button.clicked.connect(self._request_explanation)
+        layout.addWidget(self.why_button)
+        self._table: MLDTable | None = None
+        self._stale = False
         self.clear()
 
     def clear(self) -> None:
+        self._table = None
         self.table_name.setText("—")
         self.table_source.setText("—")
         self.table_identifier.setText("—")
         self.columns.clear()
         self.foreign_keys.setText("—")
+        self.why_button.setEnabled(False)
 
     def display(self, table: MLDTable | None) -> None:
         if table is None:
             self.clear()
             return
+        self._table = table
+        self.why_button.setEnabled(not self._stale)
         self.table_name.setText(table.name)
         self.table_source.setText(table.source.value)
         self.table_identifier.setText(table.id)
@@ -110,3 +126,18 @@ class MLDPropertiesPanel(QWidget):
             )
             fk_lines.append(f"{local} → {foreign_key.referenced_table_id}")
         self.foreign_keys.setText("\n".join(fk_lines) if fk_lines else "Aucune")
+
+    def _request_explanation(self) -> None:
+        if self._table is not None and not self._stale:
+            self.why_requested.emit(self._table)
+
+    def set_stale(self, stale: bool) -> None:
+        """Désactive les explications si le MLD ne correspond plus au MCD."""
+
+        self._stale = stale
+        self.why_button.setEnabled(self._table is not None and not stale)
+        self.why_button.setToolTip(
+            "Régénérez le MLD avant de demander une explication."
+            if stale
+            else "Expliquer les règles MERISE qui ont produit cette table MLD"
+        )

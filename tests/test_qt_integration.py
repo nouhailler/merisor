@@ -117,6 +117,7 @@ def test_main_window_starts_offscreen(qapp) -> None:  # type: ignore[no-untyped-
     assert window.generate_mld_action.text() == "Générer le MLD"
     assert window.generate_sql_action.text() == "Générer SQL"
     assert window.normalization_action.text() == "Assistant de normalisation…"
+    assert window.ai_repair_action.text() == "✨ Analyser avec l'IA…"
     assert not window.generate_sql_action.isEnabled()
     toolbar = window.findChild(QToolBar, "diagramToolbar")
     assert toolbar is not None

@@ -28,15 +28,17 @@ from merisor.application import (
     DiagramTextExportError,
     MLDGenerationBlocked,
     MLDTransformationError,
+    MldTransformationExplainer,
     ModelDocumentationGenerator,
     ModelVersionComparator,
     PwaImportError,
     PwaSourceImporter,
     SQLDDLImporter,
 )
-from merisor.domain import InheritanceStrategy, MLDModel
+from merisor.domain import InheritanceStrategy, MLDModel, MLDTable
 from merisor.persistence import JsonDiagramRepository, PersistenceError
 from merisor.ui.ai_mcd_dialog import AiMcdDialog
+from merisor.ui.ai_repair_dialog import AiRepairDialog
 from merisor.ui.canvas import DiagramScene, DiagramView, MiniMapView, ToolMode
 from merisor.ui.conversational_design_dialog import ConversationalDesignDialog
 from merisor.ui.ddl_import_dialog import DDLImportPreviewDialog
@@ -58,6 +60,9 @@ from merisor.ui.query_generator_dialog import QueryGeneratorDialog
 from merisor.ui.sql_dialog import SQLPreviewDialog
 from merisor.ui.submodel_dialog import SubmodelManagerDialog
 from merisor.ui.test_data_dialog import TestDataDialog
+from merisor.ui.transformation_explanation_dialog import (
+    TransformationExplanationDialog,
+)
 from merisor.ui.validation_dialog import ValidationDialog
 from merisor.ui.version_comparison_dialog import VersionComparisonDialog
 
@@ -182,6 +187,7 @@ class MainWindow(QMainWindow):
         self.compare_version_action = QAction("Comparer avec une version…", self)
         self.compare_version_action.setShortcut(QKeySequence("Ctrl+Alt+C"))
         self.quality_action = QAction("Analyser la qualité du modèle…", self)
+        self.ai_repair_action = QAction("✨ Analyser avec l'IA…", self)
         self.impact_analysis_action = QAction("Analyser l'impact…", self)
         self.impact_analysis_action.setShortcut(QKeySequence("Ctrl+Alt+I"))
         self.quality_action.setShortcut(QKeySequence("Ctrl+Shift+Q"))
@@ -292,6 +298,7 @@ class MainWindow(QMainWindow):
         model_menu.addAction(self.validate_action)
         model_menu.addAction(self.compare_version_action)
         model_menu.addAction(self.quality_action)
+        model_menu.addAction(self.ai_repair_action)
         model_menu.addAction(self.impact_analysis_action)
         model_menu.addAction(self.normalization_action)
         model_menu.addAction(self.add_inheritance_action)
@@ -340,6 +347,7 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
         toolbar.addAction(self.validate_action)
         toolbar.addAction(self.quality_action)
+        toolbar.addAction(self.ai_repair_action)
         toolbar.addAction(self.normalization_action)
         toolbar.addAction(self.generate_mld_action)
         toolbar.addAction(self.generate_sql_action)
@@ -396,6 +404,7 @@ class MainWindow(QMainWindow):
         self.validate_action.triggered.connect(self.show_validation)
         self.compare_version_action.triggered.connect(self.compare_with_version)
         self.quality_action.triggered.connect(self.show_quality_report)
+        self.ai_repair_action.triggered.connect(self.show_ai_repair)
         self.impact_analysis_action.triggered.connect(self.show_impact_analysis)
         self.normalization_action.triggered.connect(self.show_normalization_assistant)
         self.generate_mld_action.triggered.connect(self.generate_mld)
@@ -425,6 +434,7 @@ class MainWindow(QMainWindow):
         self.mld_view.graphics_view.table_selected.connect(
             self.mld_properties_panel.display
         )
+        self.mld_properties_panel.why_requested.connect(self.show_mld_explanation)
         self.view.zoom_changed.connect(
             lambda factor: self.statusBar().showMessage(
                 f"Zoom : {factor * 100:.0f} %", 1800
@@ -608,6 +618,17 @@ class MainWindow(QMainWindow):
         dialog = QualityReportDialog(self.controller.analyze_quality(), self)
         dialog.exec()
 
+    def show_ai_repair(self, _checked: bool = False) -> None:
+        dialog = AiRepairDialog(self.controller.model, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        if dialog.repaired_model is None:
+            return
+        self.controller.apply_ai_repair_model(dialog.repaired_model)
+        self.workspace_tabs.setCurrentWidget(self.view)
+        self.select_action.setChecked(True)
+        self.view.fit_scene()
+
     def show_impact_analysis(self, selected: bool | str = False) -> None:
         selected_id = selected if isinstance(selected, str) else None
         if selected_id is None:
@@ -655,6 +676,8 @@ class MainWindow(QMainWindow):
             )
 
     def _display_mld(self, model: MLDModel | None) -> None:
+        self.mld_properties_panel.clear()
+        self.mld_properties_panel.set_stale(False)
         if model is None:
             self.mld_view.clear_model()
         else:
@@ -663,7 +686,21 @@ class MainWindow(QMainWindow):
 
     def _set_mld_stale(self, stale: bool) -> None:
         self.mld_view.set_stale(stale)
+        self.mld_properties_panel.set_stale(stale)
         self._update_sql_action()
+
+    def show_mld_explanation(self, table: object) -> None:
+        model = self.controller.mld_model
+        if (
+            model is None
+            or self.controller.mld_is_stale
+            or not isinstance(table, MLDTable)
+        ):
+            return
+        report = MldTransformationExplainer().explain_table(
+            self.controller.model, model, table
+        )
+        TransformationExplanationDialog(report, self).exec()
 
     def _update_sql_action(self) -> None:
         mld_available = (

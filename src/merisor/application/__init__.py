@@ -10,6 +10,13 @@ from merisor.application.ai_normalization_service import (
     AiNormalizationError,
     AiNormalizationService,
 )
+from merisor.application.ai_repair_service import (
+    AiRepairError,
+    AiRepairProposal,
+    AiRepairReport,
+    AiRepairService,
+    RepairConfidence,
+)
 from merisor.application.controller import DiagramController, MLDGenerationBlocked
 from merisor.application.conversational_design_service import (
     CONVERSATIONAL_SYSTEM_PROMPT,
@@ -109,6 +116,11 @@ from merisor.application.test_data_generator import (
     TestDataGenerator,
     TestDataIssue,
 )
+from merisor.application.transformation_explainer import (
+    MldTransformationExplainer,
+    TransformationExplanation,
+    TransformationExplanationReport,
+)
 from merisor.application.version_comparator import (
     ChangeImpact,
     ChangeKind,
@@ -126,6 +138,10 @@ __all__ = [
     "AiMcdValidationError",
     "AiNormalizationError",
     "AiNormalizationService",
+    "AiRepairError",
+    "AiRepairProposal",
+    "AiRepairReport",
+    "AiRepairService",
     "ChangeImpact",
     "ChangeKind",
     "ConceptKind",
@@ -159,6 +175,7 @@ __all__ = [
     "MLDTransformationError",
     "McdAutoLayout",
     "McdToMldTransformer",
+    "MldTransformationExplainer",
     "ModelDifference",
     "ModelDocumentation",
     "ModelDocumentationGenerator",
@@ -177,6 +194,7 @@ __all__ = [
     "QueryGenerationError",
     "QueryGenerationResult",
     "QueryTarget",
+    "RepairConfidence",
     "SQLDDLImporter",
     "SQLDialect",
     "SQLGenerationError",
@@ -195,6 +213,8 @@ __all__ = [
     "TestDataGenerationResult",
     "TestDataGenerator",
     "TestDataIssue",
+    "TransformationExplanation",
+    "TransformationExplanationReport",
     "VersionChange",
     "VersionComparison",
     "compare_models",

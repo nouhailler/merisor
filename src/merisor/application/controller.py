@@ -841,6 +841,21 @@ class DiagramController(QObject):
             "MCD proposé depuis le projet PWA importé ; utilisez Annuler pour le retirer."
         )
 
+    def apply_ai_repair_model(self, model: MCDModel) -> None:
+        """Applique un candidat IA confirmé comme une seule commande annulable."""
+
+        self.undo_stack.push(
+            ReplaceModelStateCommand(
+                self,
+                self.model,
+                copy.deepcopy(model),
+                "Appliquer les améliorations IA",
+            )
+        )
+        self.message.emit(
+            "Améliorations IA appliquées ; utilisez Annuler pour les retirer."
+        )
+
     def load_transient_model(self, model: MCDModel) -> None:
         """Installe une copie dans un contrôleur d'aperçu sans document associé."""
 

@@ -203,7 +203,7 @@ class ConversationalDesignService:
         concepts = cls._concepts(payload.get("detected_concepts"))
         questions = cls._questions(payload.get("questions"))
         assumptions = cls._text_list(payload.get("assumptions"), "assumptions")
-        patch = cls._patch(payload.get("draft_patch"))
+        patch = cls.parse_patch(payload.get("draft_patch"))
         ready = payload.get("ready_for_preview")
         if not isinstance(ready, bool):
             raise DesignSessionError("ready_for_preview doit être booléen.")
@@ -274,7 +274,9 @@ class ConversationalDesignService:
         return tuple(questions)
 
     @classmethod
-    def _patch(cls, raw: Any) -> DraftPatch:
+    def parse_patch(cls, raw: Any) -> DraftPatch:
+        """Valide le format public d'un patch MCD contrôlé."""
+
         if not isinstance(raw, dict):
             raise DesignSessionError("draft_patch doit être un objet.")
         specs = {

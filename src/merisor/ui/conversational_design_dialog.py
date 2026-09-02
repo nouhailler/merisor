@@ -83,9 +83,13 @@ class DesignDraftPreviewDialog(QDialog):
         json_text: str,
         report: ValidationReport,
         parent: QWidget | None = None,
+        *,
+        title: str = "Aperçu du brouillon conversationnel",
+        allow_import: bool = True,
+        confirm_label: str = "Confirmer l'import",
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Aperçu du brouillon conversationnel")
+        self.setWindowTitle(title)
         self.resize(1050, 760)
         self.import_confirmed = False
 
@@ -143,9 +147,12 @@ class DesignDraftPreviewDialog(QDialog):
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)
-        import_button = QPushButton("Confirmer l'import")
-        import_button.setEnabled(not report.errors)
-        cancel_button = QPushButton("Revenir à la conversation")
+        import_button = QPushButton(confirm_label)
+        import_button.setEnabled(allow_import and not report.errors)
+        import_button.setVisible(allow_import)
+        cancel_button = QPushButton(
+            "Fermer" if not allow_import else "Revenir à la conversation"
+        )
         import_button.clicked.connect(self._confirm)
         cancel_button.clicked.connect(self.reject)
         buttons.addWidget(cancel_button)
