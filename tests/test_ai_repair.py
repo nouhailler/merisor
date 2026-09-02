@@ -121,7 +121,9 @@ def test_ai_repair_interprets_a_valid_patch_without_mutating_source() -> None:
     assert len(report.proposals) == 1
     proposal = report.proposals[0]
     assert proposal.confidence.value == "high"
-    client = next(iter(proposal.candidate.entities.values()))
+    client = next(
+        item for item in proposal.candidate.entities.values() if item.name == "CLIENT"
+    )
     email = next(item for item in client.attributes if item.name == "email")
     assert email.unique
     assert proposal.validation.is_valid

@@ -9,7 +9,9 @@ datas = [
     (
         str(project_root / "src/merisor/assets/merisor.png"),
         "merisor/assets",
-    )
+    ),
+    (str(project_root / "docs"), "docs"),
+    (str(project_root / "examples"), "examples"),
 ]
 binaries = []
 hiddenimports = []

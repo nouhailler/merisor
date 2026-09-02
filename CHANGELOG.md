@@ -4,8 +4,16 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
+## [0.10.0] - 2026-09-02
+
 ### Ajouté
 
+- centre de documentation hors ligne accessible par **Documentation** ou `F1`,
+  avec sommaire par public, recherche et navigation entre les pages Markdown ;
+- manuel restructuré en guides utilisateur, concepts MERISE, références
+  techniques, guides de développement et décisions d'architecture (ADR) ;
+- exemple complet `examples/motogp.json`, validé par la couche de persistance ;
+- tests automatiques des pages, liens, paquets et lecteur Qt de documentation ;
 - bouton **ⓘ Pourquoi ?** dans les propriétés d'une table MLD sélectionnée ;
 - moteur pédagogique déterministe expliquant la création des tables, PK,
   colonnes, FK, nullabilité, UNIQUE et CHECK depuis leur provenance MCD ;
@@ -33,6 +41,11 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 - minimap cliquable indiquant la zone visible du grand MCD ;
 - recherche visuelle dans les noms et attributs ;
 - pliage de la sélection, affichage global des attributs et plein écran `F11`.
+
+### Modifié
+
+- README recentré sur la découverte, l'installation et l'accès au manuel ;
+- documentation embarquée dans les paquets PyPI, Debian et AppImage.
 
 ## [0.9.0] - 2026-09-01
 

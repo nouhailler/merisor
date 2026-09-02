@@ -1,0 +1,129 @@
+{
+  "format_version": 2,
+  "entities": [
+    {
+      "id": "entity_pilote",
+      "name": "PILOTE",
+      "position": {"x": 100, "y": 100},
+      "attributes": [
+        {
+          "id": "attr_pilote_id",
+          "name": "id_pilote",
+          "identifier": true,
+          "data_type": {"name": "INTEGER"},
+          "nullable": false,
+          "default": null,
+          "unique": false,
+          "comment": "Identifiant du pilote",
+          "auto_increment": true,
+          "constraints": []
+        },
+        {
+          "id": "attr_pilote_nom",
+          "name": "nom",
+          "identifier": false,
+          "data_type": {"name": "VARCHAR", "length": 100},
+          "nullable": false,
+          "default": null,
+          "unique": false,
+          "comment": "Nom du pilote",
+          "auto_increment": false,
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "id": "entity_equipe",
+      "name": "EQUIPE",
+      "position": {"x": 600, "y": 100},
+      "attributes": [
+        {
+          "id": "attr_equipe_id",
+          "name": "id_equipe",
+          "identifier": true,
+          "data_type": {"name": "INTEGER"},
+          "nullable": false,
+          "default": null,
+          "unique": false,
+          "comment": "Identifiant de l'équipe",
+          "auto_increment": true,
+          "constraints": []
+        },
+        {
+          "id": "attr_equipe_nom",
+          "name": "nom",
+          "identifier": false,
+          "data_type": {"name": "VARCHAR", "length": 100},
+          "nullable": false,
+          "default": null,
+          "unique": true,
+          "comment": "Nom public de l'équipe",
+          "auto_increment": false,
+          "constraints": []
+        }
+      ]
+    }
+  ],
+  "associations": [
+    {
+      "id": "association_engager",
+      "name": "ENGAGER",
+      "position": {"x": 350, "y": 300},
+      "attributes": [
+        {
+          "id": "attr_engager_debut",
+          "name": "date_debut",
+          "identifier": false,
+          "data_type": {"name": "DATE"},
+          "nullable": false,
+          "default": null,
+          "unique": false,
+          "comment": "Début de l'engagement",
+          "auto_increment": false,
+          "constraints": []
+        },
+        {
+          "id": "attr_engager_fin",
+          "name": "date_fin",
+          "identifier": false,
+          "data_type": {"name": "DATE"},
+          "nullable": true,
+          "default": null,
+          "unique": false,
+          "comment": "Fin éventuelle de l'engagement",
+          "auto_increment": false,
+          "constraints": []
+        }
+      ],
+      "is_historized": true,
+      "materialization_strategy": "AUTO"
+    }
+  ],
+  "relations": [
+    {
+      "id": "relation_pilote_engager",
+      "entity_id": "entity_pilote",
+      "association_id": "association_engager",
+      "cardinality": {"minimum": "0", "maximum": "N"},
+      "role": "pilote"
+    },
+    {
+      "id": "relation_equipe_engager",
+      "entity_id": "entity_equipe",
+      "association_id": "association_engager",
+      "cardinality": {"minimum": "1", "maximum": "1"},
+      "role": "equipe"
+    }
+  ],
+  "inheritances": [],
+  "functional_dependencies": [],
+  "domains": [
+    {
+      "id": "domain_motogp",
+      "name": "MotoGP",
+      "description": "Pilotes, équipes et engagements historisés",
+      "node_ids": ["entity_pilote", "entity_equipe", "association_engager"]
+    }
+  ],
+  "submodel_views": []
+}

@@ -22,6 +22,10 @@ cp "$project_root/packaging/deb/usr/share/applications/merisor.desktop" \
 cp "$project_root/packaging/deb/usr/share/icons/hicolor/256x256/apps/merisor.png" \
     "$staging/usr/share/icons/hicolor/256x256/apps/merisor.png"
 cp "$project_root/LICENSE" "$staging/usr/share/doc/merisor/LICENSE"
+cp "$project_root/CHANGELOG.md" "$staging/usr/share/doc/merisor/CHANGELOG.md"
+cp -a "$project_root/docs/." "$staging/usr/share/doc/merisor/"
+mkdir -p "$staging/usr/share/doc/merisor/examples"
+cp -a "$project_root/examples/." "$staging/usr/share/doc/merisor/examples/"
 sed "s/^Version:.*/Version: $version/; s/^Architecture:.*/Architecture: $architecture/" \
     "$project_root/packaging/deb/DEBIAN/control" > "$staging/control"
 mkdir -p "$staging/DEBIAN"

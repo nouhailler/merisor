@@ -46,6 +46,12 @@ from merisor.application.diagram_text_exporter import (
     DiagramTextExportError,
     DiagramTextFormat,
 )
+from merisor.application.documentation_catalog import (
+    DOCUMENTATION_PAGES,
+    DocumentationCatalog,
+    DocumentationError,
+    DocumentationPage,
+)
 from merisor.application.documentation_generator import (
     ModelDocumentation,
     ModelDocumentationGenerator,
@@ -131,6 +137,7 @@ from merisor.application.version_comparator import (
 
 __all__ = [
     "CONVERSATIONAL_SYSTEM_PROMPT",
+    "DOCUMENTATION_PAGES",
     "GLOBAL_SCOPE_ID",
     "AiDependencySuggestion",
     "AiMcdCandidate",
@@ -158,6 +165,9 @@ __all__ = [
     "DiagramTextExportError",
     "DiagramTextExporter",
     "DiagramTextFormat",
+    "DocumentationCatalog",
+    "DocumentationError",
+    "DocumentationPage",
     "DraftPatch",
     "DraftPatchApplier",
     "DraftRevision",

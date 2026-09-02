@@ -66,6 +66,17 @@ version = {attr = "merisor.__version__"}
 [tool.setuptools.package-data]
 merisor = ["assets/*.png"]
 
+[tool.setuptools.data-files]
+"share/doc/merisor" = ["docs/INDEX.md", "docs/PYPI_PUBLISHING.md"]
+"share/doc/merisor/images" = ["docs/images/*.png"]
+"share/doc/merisor/user" = ["docs/user/*.md"]
+"share/doc/merisor/concepts" = ["docs/concepts/*.md"]
+"share/doc/merisor/technical" = ["docs/technical/*.md"]
+"share/doc/merisor/development" = ["docs/development/*.md"]
+"share/doc/merisor/decisions" = ["docs/decisions/*.md"]
+"share/doc/merisor/decisions/ADR" = ["docs/decisions/ADR/*.md"]
+"share/doc/merisor/examples" = ["examples/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

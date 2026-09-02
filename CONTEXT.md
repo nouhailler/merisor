@@ -14,6 +14,8 @@ MCD graphique → validation → MLD structuré → SQL exportable
 
 Fonctionnalités déjà intégrées :
 
+- documentation structurée sous `docs/`, lecteur hors ligne intégré accessible
+  par le menu **Documentation** et `F1`, avec recherche et navigation ;
 - édition graphique des entités, associations, relations et cardinalités ;
 - attributs d'entités et d'associations, identifiants simples ou composés ;
 - associations historisées, stratégies `AUTO`, `FORCE_TABLE` et `FORCE_FK` ;
@@ -56,6 +58,15 @@ Fonctionnalités déjà intégrées :
   les différences détaillées et leurs impacts MCD/MLD/SQL.
 - analyse d'impact ciblée sur les objets et attributs, séparant les dépendances
   formelles des correspondances sémantiques potentielles.
+
+Le README est volontairement une page courte de découverte. Les informations
+de référence sont réparties entre les guides utilisateur, concepts MERISE,
+références techniques, guides de contribution et ADR. Le catalogue
+`DocumentationCatalog` localise ce manuel depuis les sources, un environnement
+`pipx`, le paquet Debian ou une AppImage ; `DocumentationDialog` l'affiche sans
+connexion réseau. Toute nouvelle fonction publique doit mettre à jour la
+rubrique correspondante et, si elle résulte d'un choix structurant, ajouter un
+ADR.
 
 Les associations complexes sont déjà supportées de bout en bout. Une réflexive
 répète la même entité avec des rôles obligatoires et distincts ; en 1:N elle

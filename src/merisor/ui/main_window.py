@@ -43,6 +43,7 @@ from merisor.ui.canvas import DiagramScene, DiagramView, MiniMapView, ToolMode
 from merisor.ui.conversational_design_dialog import ConversationalDesignDialog
 from merisor.ui.ddl_import_dialog import DDLImportPreviewDialog
 from merisor.ui.diagram_exporter import DiagramExportError, DiagramVisualExporter
+from merisor.ui.documentation_dialog import DocumentationDialog
 from merisor.ui.documentation_exporter import (
     DocumentationExportError,
     DocumentationFileExporter,
@@ -181,6 +182,14 @@ class MainWindow(QMainWindow):
         self.fullscreen_action.setShortcut(QKeySequence("F11"))
         self.explore_model_action = QAction("Explorer le modèle…", self)
         self.explore_model_action.setShortcut(QKeySequence("Ctrl+Alt+E"))
+
+        self.documentation_action = QAction("Centre de documentation…", self)
+        self.documentation_action.setShortcut(QKeySequence("F1"))
+        self.getting_started_documentation_action = QAction("Prise en main", self)
+        self.user_guide_documentation_action = QAction("Guide utilisateur", self)
+        self.merise_documentation_action = QAction("Comprendre MERISE", self)
+        self.mcd_mld_documentation_action = QAction("Règles MCD → MLD", self)
+        self.faq_documentation_action = QAction("Questions fréquentes", self)
 
         self.validate_action = QAction("Valider le MCD…", self)
         self.validate_action.setShortcut(QKeySequence("Ctrl+Shift+V"))
@@ -333,6 +342,15 @@ class MainWindow(QMainWindow):
         view_menu.addSeparator()
         view_menu.addAction(self.explore_model_action)
 
+        documentation_menu = self.menuBar().addMenu("Documentation")
+        documentation_menu.addAction(self.documentation_action)
+        documentation_menu.addSeparator()
+        documentation_menu.addAction(self.getting_started_documentation_action)
+        documentation_menu.addAction(self.user_guide_documentation_action)
+        documentation_menu.addAction(self.merise_documentation_action)
+        documentation_menu.addAction(self.mcd_mld_documentation_action)
+        documentation_menu.addAction(self.faq_documentation_action)
+
     def _create_toolbar(self) -> None:
         toolbar = QToolBar("Outils du diagramme", self)
         toolbar.setObjectName("diagramToolbar")
@@ -370,6 +388,24 @@ class MainWindow(QMainWindow):
         self.export_visual_action.triggered.connect(self.export_visual)
         self.generate_documentation_action.triggered.connect(
             self.generate_documentation
+        )
+        self.documentation_action.triggered.connect(
+            lambda _checked=False: self.show_documentation("index")
+        )
+        self.getting_started_documentation_action.triggered.connect(
+            lambda _checked=False: self.show_documentation("getting-started")
+        )
+        self.user_guide_documentation_action.triggered.connect(
+            lambda _checked=False: self.show_documentation("user-guide")
+        )
+        self.merise_documentation_action.triggered.connect(
+            lambda _checked=False: self.show_documentation("merise")
+        )
+        self.mcd_mld_documentation_action.triggered.connect(
+            lambda _checked=False: self.show_documentation("mcd-mld-rules")
+        )
+        self.faq_documentation_action.triggered.connect(
+            lambda _checked=False: self.show_documentation("faq")
         )
         self.quit_action.triggered.connect(self.close)
         self.openrouter_settings_action.triggered.connect(self.show_openrouter_settings)
@@ -503,6 +539,9 @@ class MainWindow(QMainWindow):
 
     def show_openrouter_settings(self, _checked: bool = False) -> None:
         OpenRouterSettingsDialog(self).exec()
+
+    def show_documentation(self, page_id: str = "index") -> None:
+        DocumentationDialog(page_id, self).exec()
 
     def _workspace_changed(self, index: int) -> None:
         if index == self.workspace_tabs.indexOf(self.mld_view):
