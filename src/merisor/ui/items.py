@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import cast
+from typing import Protocol, cast
 
 from PySide6.QtCore import QLineF, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
@@ -35,6 +35,14 @@ IDENTIFIER_COLOR = QColor("#0d5c3d")
 AttributeDisplay = tuple[str, bool]
 
 
+class PositionConstraintScene(Protocol):
+    def constrain_position(
+        self, item: NodeGraphicsItem, position: QPointF
+    ) -> QPointF: ...
+
+    def clear_guides(self) -> None: ...
+
+
 class NodeGraphicsItem(QGraphicsObject):
     """Base commune déplaçable ; l'origine locale est le centre du nœud."""
 
@@ -52,6 +60,10 @@ class NodeGraphicsItem(QGraphicsObject):
         self.name = name
         self.attributes = list(attributes)
         self._drag_origin: QPointF | None = None
+        self._attributes_visible = True
+        self._fill_color: QColor | None = None
+        self._dark_theme = False
+        self._search_match: bool | None = None
         self.setFlags(
             QGraphicsItem.GraphicsItemFlag.ItemIsMovable
             | QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
@@ -66,10 +78,41 @@ class NodeGraphicsItem(QGraphicsObject):
         self.attributes = list(attributes)
         self.update()
 
+    @property
+    def attributes_visible(self) -> bool:
+        return self._attributes_visible
+
+    def set_attributes_visible(self, visible: bool) -> None:
+        if self._attributes_visible == visible:
+            return
+        self.prepareGeometryChange()
+        self._attributes_visible = visible
+        self.update()
+        self.position_changed.emit(self.element_id)
+
+    def set_visual_style(self, *, fill: QColor | None, dark: bool) -> None:
+        self._fill_color = QColor(fill) if fill is not None else None
+        self._dark_theme = dark
+        self.update()
+
+    def set_search_match(self, match: bool | None) -> None:
+        self._search_match = match
+        self.setOpacity(0.24 if match is False else 1.0)
+        self.update()
+
     def itemChange(
         self, change: QGraphicsItem.GraphicsItemChange, value: object
     ) -> object:
         result = super().itemChange(change, value)
+        if (
+            change == QGraphicsItem.GraphicsItemChange.ItemPositionChange
+            and isinstance(value, QPointF)
+            and self._drag_origin is not None
+        ):
+            scene = self.scene()
+            if scene is not None and hasattr(scene, "constrain_position"):
+                constraint_scene = cast(PositionConstraintScene, scene)
+                return constraint_scene.constrain_position(self, value)
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
             self.position_changed.emit(self.element_id)
         return result
@@ -89,16 +132,32 @@ class NodeGraphicsItem(QGraphicsObject):
             self._drag_origin = None
             if old_position != new_position:
                 self.move_finished.emit(self.element_id, old_position, new_position)
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "clear_guides"):
+            cast(PositionConstraintScene, scene).clear_guides()
 
     def connection_point_towards(self, target: QPointF) -> QPointF:
         raise NotImplementedError
 
-    @staticmethod
-    def _border_pen(selected: bool) -> QPen:
+    def _border_pen(self, selected: bool) -> QPen:
+        color = QColor("#90caf9") if self._dark_theme else DEFAULT_BORDER
+        if self._search_match:
+            color = QColor("#ff9800")
         return QPen(
-            SELECTED_BORDER if selected else DEFAULT_BORDER,
-            3.0 if selected else 2.0,
+            SELECTED_BORDER if selected else color,
+            3.5 if selected or self._search_match else 2.0,
         )
+
+    def _text_color(self) -> QColor:
+        return QColor("#e8edf5") if self._dark_theme else DEFAULT_BORDER
+
+    def _identifier_color(self) -> QColor:
+        return QColor("#71d5a7") if self._dark_theme else IDENTIFIER_COLOR
+
+    def _body_fill(self, fallback: QColor) -> QColor:
+        if self._fill_color is not None:
+            return self._fill_color
+        return QColor("#2a313d") if self._dark_theme else fallback
 
     @staticmethod
     def _display_name(name: str) -> str:
@@ -117,9 +176,12 @@ class EntityGraphicsItem(NodeGraphicsItem):
         content_height = (
             self.HEADER_HEIGHT
             + 2 * self.BODY_PADDING
-            + len(self.attributes) * self.ROW_HEIGHT
+            + (len(self.attributes) * self.ROW_HEIGHT if self.attributes_visible else 0)
         )
-        return max(self.MIN_HEIGHT, content_height)
+        minimum = (
+            self.HEADER_HEIGHT + 8 if not self.attributes_visible else self.MIN_HEIGHT
+        )
+        return max(minimum, content_height)
 
     def _rectangle(self) -> QRectF:
         return QRectF(-self.WIDTH / 2, -self.height / 2, self.WIDTH, self.height)
@@ -142,7 +204,7 @@ class EntityGraphicsItem(NodeGraphicsItem):
         rectangle = self._rectangle()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(self._border_pen(self.isSelected()))
-        painter.setBrush(QBrush(ENTITY_FILL))
+        painter.setBrush(QBrush(self._body_fill(ENTITY_FILL)))
         painter.drawRoundedRect(rectangle, 4, 4)
         header_y = rectangle.top() + self.HEADER_HEIGHT
         painter.drawLine(
@@ -152,7 +214,7 @@ class EntityGraphicsItem(NodeGraphicsItem):
         font = QFont(painter.font())
         font.setBold(True)
         painter.setFont(font)
-        painter.setPen(DEFAULT_BORDER)
+        painter.setPen(self._text_color())
         text_rect = QRectF(
             rectangle.left() + 8,
             rectangle.top(),
@@ -168,10 +230,14 @@ class EntityGraphicsItem(NodeGraphicsItem):
 
         font.setBold(False)
         painter.setFont(font)
+        if not self.attributes_visible:
+            return
         row_y = header_y + self.BODY_PADDING
         for attribute_name, identifier in self.attributes:
             prefix = "# " if identifier else "  "
-            painter.setPen(IDENTIFIER_COLOR if identifier else DEFAULT_BORDER)
+            painter.setPen(
+                self._identifier_color() if identifier else self._text_color()
+            )
             attribute_rect = QRectF(
                 rectangle.left() + 12,
                 row_y,
@@ -221,7 +287,7 @@ class AssociationGraphicsItem(NodeGraphicsItem):
         )
 
     def _attribute_panel(self) -> QRectF | None:
-        if not self.attributes:
+        if not self.attributes or not self.attributes_visible:
             return None
         height = 2 * self.PANEL_PADDING + len(self.attributes) * self.ROW_HEIGHT
         return QRectF(
@@ -260,12 +326,12 @@ class AssociationGraphicsItem(NodeGraphicsItem):
         del option, widget
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(self._border_pen(self.isSelected()))
-        painter.setBrush(QBrush(ASSOCIATION_FILL))
+        painter.setBrush(QBrush(self._body_fill(ASSOCIATION_FILL)))
         painter.drawPolygon(self._polygon())
         font = QFont(painter.font())
         font.setBold(True)
         painter.setFont(font)
-        painter.setPen(DEFAULT_BORDER)
+        painter.setPen(self._text_color())
         text_rect = QRectF(
             -self.HALF_WIDTH * 0.70,
             -self.HALF_HEIGHT * 0.38,
@@ -283,7 +349,7 @@ class AssociationGraphicsItem(NodeGraphicsItem):
         if panel is None:
             return
         painter.setPen(self._border_pen(self.isSelected()))
-        painter.setBrush(QBrush(ENTITY_FILL))
+        painter.setBrush(QBrush(self._body_fill(ENTITY_FILL)))
         painter.drawLine(QPointF(0, self.HALF_HEIGHT), QPointF(0, panel.top()))
         painter.drawRoundedRect(panel, 3, 3)
         font.setBold(False)
@@ -291,7 +357,9 @@ class AssociationGraphicsItem(NodeGraphicsItem):
         row_y = panel.top() + self.PANEL_PADDING
         for attribute_name, identifier in self.attributes:
             prefix = "# " if identifier else ""
-            painter.setPen(IDENTIFIER_COLOR if identifier else DEFAULT_BORDER)
+            painter.setPen(
+                self._identifier_color() if identifier else self._text_color()
+            )
             attribute_rect = QRectF(
                 panel.left() + 10,
                 row_y,
@@ -379,9 +447,18 @@ class RelationGraphicsItem(QGraphicsLineItem):
         self.role_label.setVisible(bool(role_text))
         self._parallel_index = 0
         self._parallel_count = 1
+        self._dark_theme = False
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setZValue(0)
         self.update_geometry()
+
+    def set_dark_theme(self, enabled: bool) -> None:
+        self._dark_theme = enabled
+        self.update()
+
+    def set_search_match(self, match: bool | None) -> None:
+        self.setOpacity(0.18 if match is False else 1.0)
+        self.update()
 
     @property
     def cardinality_text(self) -> str:
@@ -458,7 +535,8 @@ class RelationGraphicsItem(QGraphicsLineItem):
     ) -> None:
         del option, widget
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        color = SELECTED_BORDER if self.isSelected() else RELATION_COLOR
+        normal_color = QColor("#aab7c8") if self._dark_theme else RELATION_COLOR
+        color = SELECTED_BORDER if self.isSelected() else normal_color
         width = 3.5 if self.isSelected() else 2.0
         painter.setPen(
             QPen(color, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)

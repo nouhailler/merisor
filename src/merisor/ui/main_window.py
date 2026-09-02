@@ -7,10 +7,12 @@ from pathlib import Path
 from PySide6.QtCore import QPointF, QSettings, Qt
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QDockWidget,
     QFileDialog,
     QInputDialog,
+    QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -35,7 +37,7 @@ from merisor.application import (
 from merisor.domain import InheritanceStrategy, MLDModel
 from merisor.persistence import JsonDiagramRepository, PersistenceError
 from merisor.ui.ai_mcd_dialog import AiMcdDialog
-from merisor.ui.canvas import DiagramScene, DiagramView, ToolMode
+from merisor.ui.canvas import DiagramScene, DiagramView, MiniMapView, ToolMode
 from merisor.ui.conversational_design_dialog import ConversationalDesignDialog
 from merisor.ui.ddl_import_dialog import DDLImportPreviewDialog
 from merisor.ui.diagram_exporter import DiagramExportError, DiagramVisualExporter
@@ -88,6 +90,15 @@ class MainWindow(QMainWindow):
         properties_dock.setMinimumWidth(340)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, properties_dock)
 
+        self.minimap = MiniMapView(self.view, self)
+        self.minimap_dock = QDockWidget("Minimap", self)
+        self.minimap_dock.setObjectName("minimapDock")
+        self.minimap_dock.setWidget(self.minimap)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.minimap_dock)
+        self.minimap_dock.setVisible(
+            bool(self._settings.value("canvas/minimap", True, type=bool))
+        )
+
         self._create_actions()
         self._create_menus()
         self._create_toolbar()
@@ -123,6 +134,14 @@ class MainWindow(QMainWindow):
         self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
         self.delete_action = QAction("Supprimer", self)
         self.delete_action.setShortcut(QKeySequence(Qt.Key.Key_Delete))
+        self.copy_action = QAction("Copier", self)
+        self.copy_action.setShortcut(QKeySequence.StandardKey.Copy)
+        self.paste_action = QAction("Coller", self)
+        self.paste_action.setShortcut(QKeySequence.StandardKey.Paste)
+        self.duplicate_action = QAction("Dupliquer", self)
+        self.duplicate_action.setShortcut(QKeySequence("Ctrl+D"))
+        self.select_all_action = QAction("Tout sélectionner", self)
+        self.select_all_action.setShortcut(QKeySequence.StandardKey.SelectAll)
 
         self.zoom_in_action = QAction("Zoom avant", self)
         self.zoom_in_action.setShortcuts(
@@ -132,6 +151,29 @@ class MainWindow(QMainWindow):
         self.zoom_out_action.setShortcut(QKeySequence("Ctrl+-"))
         self.reset_zoom_action = QAction("Réinitialiser le zoom", self)
         self.reset_zoom_action.setShortcut(QKeySequence("Ctrl+0"))
+        self.grid_action = QAction("Afficher la grille", self)
+        self.grid_action.setCheckable(True)
+        self.grid_action.setChecked(
+            bool(self._settings.value("canvas/grid", False, type=bool))
+        )
+        self.snap_action = QAction("Aimantation à la grille", self)
+        self.snap_action.setCheckable(True)
+        self.snap_action.setChecked(
+            bool(self._settings.value("canvas/snap", False, type=bool))
+        )
+        self.guides_action = QAction("Guides d'alignement", self)
+        self.guides_action.setCheckable(True)
+        self.guides_action.setChecked(
+            bool(self._settings.value("canvas/guides", True, type=bool))
+        )
+        self.attributes_action = QAction("Afficher les attributs", self)
+        self.attributes_action.setCheckable(True)
+        self.attributes_action.setChecked(True)
+        self.fold_action = QAction("Plier/déplier la sélection", self)
+        self.fold_action.setShortcut(QKeySequence("Ctrl+Alt+F"))
+        self.fullscreen_action = QAction("Mode plein écran", self)
+        self.fullscreen_action.setCheckable(True)
+        self.fullscreen_action.setShortcut(QKeySequence("F11"))
         self.explore_model_action = QAction("Explorer le modèle…", self)
         self.explore_model_action.setShortcut(QKeySequence("Ctrl+Alt+E"))
 
@@ -166,6 +208,37 @@ class MainWindow(QMainWindow):
         self.manage_submodels_action = QAction("Gérer les domaines et vues…", self)
         self.manage_submodels_action.setShortcut(QKeySequence("Ctrl+Alt+D"))
         self.auto_layout_action.setShortcut(QKeySequence("Ctrl+Shift+L"))
+
+        self.align_actions: dict[str, QAction] = {}
+        for key, label in (
+            ("left", "Aligner à gauche"),
+            ("horizontal_center", "Centrer horizontalement"),
+            ("right", "Aligner à droite"),
+            ("top", "Aligner en haut"),
+            ("vertical_center", "Centrer verticalement"),
+            ("bottom", "Aligner en bas"),
+            ("distribute_horizontal", "Distribuer horizontalement"),
+            ("distribute_vertical", "Distribuer verticalement"),
+        ):
+            action = QAction(label, self)
+            action.setData(key)
+            self.align_actions[key] = action
+
+        self.theme_group = QActionGroup(self)
+        self.theme_group.setExclusive(True)
+        self.theme_actions: dict[str, QAction] = {}
+        configured_theme = str(self._settings.value("appearance/theme", "system"))
+        for key, label in (
+            ("system", "Thème système"),
+            ("light", "Thème clair"),
+            ("dark", "Thème sombre"),
+        ):
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setData(key)
+            action.setChecked(key == configured_theme)
+            self.theme_group.addAction(action)
+            self.theme_actions[key] = action
 
         self.tool_group = QActionGroup(self)
         self.tool_group.setExclusive(True)
@@ -205,7 +278,15 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(self.undo_action)
         edit_menu.addAction(self.redo_action)
         edit_menu.addSeparator()
+        edit_menu.addAction(self.copy_action)
+        edit_menu.addAction(self.paste_action)
+        edit_menu.addAction(self.duplicate_action)
+        edit_menu.addAction(self.select_all_action)
+        edit_menu.addSeparator()
         edit_menu.addAction(self.delete_action)
+        align_menu = edit_menu.addMenu("Aligner et distribuer")
+        for action in self.align_actions.values():
+            align_menu.addAction(action)
 
         model_menu = self.menuBar().addMenu("Modèle")
         model_menu.addAction(self.validate_action)
@@ -232,6 +313,17 @@ class MainWindow(QMainWindow):
         view_menu.addAction(self.zoom_out_action)
         view_menu.addAction(self.reset_zoom_action)
         view_menu.addSeparator()
+        view_menu.addAction(self.grid_action)
+        view_menu.addAction(self.snap_action)
+        view_menu.addAction(self.guides_action)
+        view_menu.addAction(self.attributes_action)
+        view_menu.addAction(self.fold_action)
+        view_menu.addAction(self.minimap_dock.toggleViewAction())
+        theme_menu = view_menu.addMenu("Thème")
+        for action in self.theme_actions.values():
+            theme_menu.addAction(action)
+        view_menu.addAction(self.fullscreen_action)
+        view_menu.addSeparator()
         view_menu.addAction(self.explore_model_action)
 
     def _create_toolbar(self) -> None:
@@ -251,6 +343,13 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.normalization_action)
         toolbar.addAction(self.generate_mld_action)
         toolbar.addAction(self.generate_sql_action)
+        toolbar.addSeparator()
+        self.visual_search = QLineEdit(self)
+        self.visual_search.setObjectName("visualSearch")
+        self.visual_search.setClearButtonEnabled(True)
+        self.visual_search.setMaximumWidth(250)
+        self.visual_search.setPlaceholderText("Rechercher dans le MCD…")
+        toolbar.addWidget(self.visual_search)
         self.addToolBar(toolbar)
 
     def _connect_signals(self) -> None:
@@ -267,9 +366,32 @@ class MainWindow(QMainWindow):
         self.quit_action.triggered.connect(self.close)
         self.openrouter_settings_action.triggered.connect(self.show_openrouter_settings)
         self.delete_action.triggered.connect(self.controller.delete_selected)
+        self.copy_action.triggered.connect(self.controller.copy_selected)
+        self.paste_action.triggered.connect(self.controller.paste_copied)
+        self.duplicate_action.triggered.connect(self.controller.duplicate_selected)
+        self.select_all_action.triggered.connect(self.controller.select_all_nodes)
+        for action in self.align_actions.values():
+            action.triggered.connect(
+                lambda _checked=False, item=action: self.controller.align_selected(
+                    str(item.data())
+                )
+            )
         self.zoom_in_action.triggered.connect(self.view.zoom_in)
         self.zoom_out_action.triggered.connect(self.view.zoom_out)
         self.reset_zoom_action.triggered.connect(self.view.reset_zoom)
+        self.grid_action.toggled.connect(self._canvas_preferences_changed)
+        self.snap_action.toggled.connect(self._canvas_preferences_changed)
+        self.guides_action.toggled.connect(self._canvas_preferences_changed)
+        self.attributes_action.toggled.connect(
+            self.controller.set_all_attributes_visible
+        )
+        self.fold_action.triggered.connect(self.controller.toggle_selected_fold)
+        self.fullscreen_action.toggled.connect(self._toggle_fullscreen)
+        self.minimap_dock.visibilityChanged.connect(
+            lambda visible: self._settings.setValue("canvas/minimap", visible)
+        )
+        self.theme_group.triggered.connect(self._theme_selected)
+        self.visual_search.textChanged.connect(self._visual_search_changed)
         self.explore_model_action.triggered.connect(self.show_model_explorer)
         self.validate_action.triggered.connect(self.show_validation)
         self.compare_version_action.triggered.connect(self.compare_with_version)
@@ -308,11 +430,66 @@ class MainWindow(QMainWindow):
                 f"Zoom : {factor * 100:.0f} %", 1800
             )
         )
+        self._canvas_preferences_changed()
+        self._apply_theme(str(self._settings.value("appearance/theme", "system")))
 
     def _tool_triggered(self, action: QAction) -> None:
         mode = action.data()
         if isinstance(mode, ToolMode):
             self.scene.set_mode(mode)
+
+    def _canvas_preferences_changed(self, _value: object = None) -> None:
+        self.scene.configure_canvas(
+            grid_visible=self.grid_action.isChecked(),
+            snap_enabled=self.snap_action.isChecked(),
+            guides_enabled=self.guides_action.isChecked(),
+        )
+        self._settings.setValue("canvas/grid", self.grid_action.isChecked())
+        self._settings.setValue("canvas/snap", self.snap_action.isChecked())
+        self._settings.setValue("canvas/guides", self.guides_action.isChecked())
+
+    def _theme_selected(self, action: QAction) -> None:
+        self._apply_theme(str(action.data()))
+
+    def _apply_theme(self, theme: str) -> None:
+        application = QApplication.instance()
+        if not isinstance(application, QApplication):
+            return
+        dark = theme == "dark"
+        if theme == "system":
+            dark = (
+                application.palette()
+                .color(application.palette().ColorRole.Window)
+                .lightness()
+                < 128
+            )
+        if dark:
+            application.setStyleSheet(
+                "QWidget { background-color: #242a33; color: #e8edf5; }"
+                "QLineEdit, QPlainTextEdit, QTextEdit, QTreeWidget, QListWidget, "
+                "QComboBox, QSpinBox { background-color: #1d222b; "
+                "color: #e8edf5; border: 1px solid #586579; }"
+                "QMenuBar, QMenu, QToolBar { background-color: #2a313d; }"
+                "QPushButton { background-color: #354052; padding: 4px; }"
+            )
+        else:
+            application.setStyleSheet("")
+        self.scene.set_dark_theme(dark)
+        self.controller.apply_canvas_style(dark=dark)
+        self._settings.setValue("appearance/theme", theme)
+
+    def _toggle_fullscreen(self, enabled: bool) -> None:
+        if enabled:
+            self.showFullScreen()
+        else:
+            self.showNormal()
+
+    def _visual_search_changed(self, query: str) -> None:
+        count = self.controller.apply_visual_search(query)
+        if query.strip():
+            self.statusBar().showMessage(f"Recherche visuelle : {count} résultat(s).")
+        else:
+            self.statusBar().showMessage("Recherche visuelle effacée.", 1500)
 
     def show_openrouter_settings(self, _checked: bool = False) -> None:
         OpenRouterSettingsDialog(self).exec()

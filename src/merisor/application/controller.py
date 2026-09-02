@@ -9,7 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QPointF, Signal, Slot
-from PySide6.QtGui import QUndoStack
+from PySide6.QtGui import QColor, QUndoStack
 
 from merisor.application.commands import (
     AddAttributeCommand,
@@ -35,6 +35,7 @@ from merisor.application.commands import (
     SetIdentifierCommand,
     SetRelationRoleCommand,
 )
+from merisor.application.diagram_clipboard import paste_selection
 from merisor.application.mcd_layout import McdAutoLayout
 from merisor.application.mld_transformer import (
     McdToMldTransformer,
@@ -113,6 +114,12 @@ class DiagramController(QObject):
         self._node_items: dict[str, NodeGraphicsItem] = {}
         self._relation_items: dict[str, RelationGraphicsItem] = {}
         self._inheritance_items: dict[str, InheritanceGraphicsItem] = {}
+        self._clipboard_model: MCDModel | None = None
+        self._clipboard_node_ids: set[str] = set()
+        self._paste_count = 0
+        self._folded_node_ids: set[str] = set()
+        self._attributes_visible = True
+        self._dark_theme = False
 
         self.undo_stack.cleanChanged.connect(self._undo_clean_changed)
         self.scene.selectionChanged.connect(self._emit_selection)
@@ -531,6 +538,211 @@ class DiagramController(QObject):
         if not snapshot.empty:
             self.undo_stack.push(DeleteItemsCommand(self, snapshot))
 
+    def selected_node_ids(self) -> set[str]:
+        return {
+            item.element_id
+            for item in self.scene.selectedItems()
+            if isinstance(item, NodeGraphicsItem)
+        }
+
+    def select_all_nodes(self) -> None:
+        for item in self._node_items.values():
+            item.setSelected(True)
+
+    def align_selected(self, mode: str) -> None:
+        items = [
+            self._node_items[item_id]
+            for item_id in self.selected_node_ids()
+            if item_id in self._node_items
+        ]
+        if len(items) < 2:
+            self.message.emit("Sélectionnez au moins deux objets à aligner.")
+            return
+        positions = {item.element_id: QPointF(item.pos()) for item in items}
+        bounds = {item.element_id: item.sceneBoundingRect() for item in items}
+        if mode == "left":
+            target = min(rect.left() for rect in bounds.values())
+            for item in items:
+                positions[item.element_id].setX(target - item.boundingRect().left())
+        elif mode == "right":
+            target = max(rect.right() for rect in bounds.values())
+            for item in items:
+                positions[item.element_id].setX(target - item.boundingRect().right())
+        elif mode == "top":
+            target = min(rect.top() for rect in bounds.values())
+            for item in items:
+                positions[item.element_id].setY(target - item.boundingRect().top())
+        elif mode == "bottom":
+            target = max(rect.bottom() for rect in bounds.values())
+            for item in items:
+                positions[item.element_id].setY(target - item.boundingRect().bottom())
+        elif mode == "horizontal_center":
+            target = sum(item.pos().x() for item in items) / len(items)
+            for position in positions.values():
+                position.setX(target)
+        elif mode == "vertical_center":
+            target = sum(item.pos().y() for item in items) / len(items)
+            for position in positions.values():
+                position.setY(target)
+        elif mode in {"distribute_horizontal", "distribute_vertical"}:
+            horizontal = mode.endswith("horizontal")
+            ordered = sorted(
+                items, key=lambda item: item.pos().x() if horizontal else item.pos().y()
+            )
+            first = ordered[0].pos().x() if horizontal else ordered[0].pos().y()
+            last = ordered[-1].pos().x() if horizontal else ordered[-1].pos().y()
+            step = (last - first) / (len(ordered) - 1)
+            for index, item in enumerate(ordered):
+                if horizontal:
+                    positions[item.element_id].setX(first + index * step)
+                else:
+                    positions[item.element_id].setY(first + index * step)
+        else:
+            raise ValueError(f"Mode d'alignement inconnu : {mode}")
+        self._push_position_changes(positions, "Aligner la sélection")
+
+    def _push_position_changes(self, positions: dict[str, QPointF], label: str) -> None:
+        changes = []
+        for node_id, point in positions.items():
+            old = self.model.node(node_id).position
+            new = Position(point.x(), point.y())
+            if old != new:
+                changes.append((node_id, old, new))
+        if not changes:
+            return
+        self.undo_stack.beginMacro(label)
+        try:
+            for node_id, old, new in changes:
+                self.undo_stack.push(MoveNodeCommand(self, node_id, old, new))
+        finally:
+            self.undo_stack.endMacro()
+
+    def copy_selected(self) -> bool:
+        node_ids = self.selected_node_ids()
+        if not node_ids:
+            self.message.emit("Sélectionnez une ou plusieurs entités ou associations.")
+            return False
+        self._clipboard_model = copy.deepcopy(self.model)
+        self._clipboard_node_ids = node_ids
+        self._paste_count = 0
+        self.message.emit(f"{len(node_ids)} objet(s) copié(s).")
+        return True
+
+    def paste_copied(self) -> tuple[str, ...]:
+        if self._clipboard_model is None or not self._clipboard_node_ids:
+            self.message.emit("Le presse-papiers du diagramme est vide.")
+            return ()
+        self._paste_count += 1
+        transformed, created = paste_selection(
+            self._clipboard_model,
+            self._clipboard_node_ids,
+            self.model,
+            offset=45.0 * self._paste_count,
+        )
+        self.undo_stack.push(
+            ReplaceModelStateCommand(
+                self, self.model, transformed, "Coller la sélection"
+            )
+        )
+        self.scene.clearSelection()
+        for node_id in created:
+            self._node_items[node_id].setSelected(True)
+        self.message.emit(f"{len(created)} objet(s) collé(s).")
+        return created
+
+    def duplicate_selected(self) -> tuple[str, ...]:
+        if not self.copy_selected():
+            return ()
+        return self.paste_copied()
+
+    def set_all_attributes_visible(self, visible: bool) -> None:
+        self._attributes_visible = visible
+        for node_id, item in self._node_items.items():
+            item.set_attributes_visible(
+                visible and node_id not in self._folded_node_ids
+            )
+        self.scene.setSceneRect(
+            self.scene.itemsBoundingRect().adjusted(-100, -100, 100, 100)
+        )
+
+    def toggle_selected_fold(self) -> None:
+        node_ids = self.selected_node_ids()
+        if not node_ids:
+            self.message.emit("Sélectionnez les objets à plier ou déplier.")
+            return
+        should_fold = any(item not in self._folded_node_ids for item in node_ids)
+        if should_fold:
+            self._folded_node_ids.update(node_ids)
+        else:
+            self._folded_node_ids.difference_update(node_ids)
+        for node_id in node_ids:
+            self._node_items[node_id].set_attributes_visible(
+                self._attributes_visible and node_id not in self._folded_node_ids
+            )
+
+    def apply_visual_search(self, query: str) -> int:
+        needle = query.strip().casefold()
+        matches: set[str] = set()
+        if needle:
+            nodes: tuple[Entity | Association, ...] = (
+                *self.model.entities.values(),
+                *self.model.associations.values(),
+            )
+            for node in nodes:
+                if needle in node.name.casefold() or any(
+                    needle in attribute.name.casefold() for attribute in node.attributes
+                ):
+                    matches.add(node.id)
+        for node_id, node_item in self._node_items.items():
+            node_item.set_search_match(None if not needle else node_id in matches)
+        for relation_id, relation_item in self._relation_items.items():
+            relation = self.model.relations[relation_id]
+            relation_item.set_search_match(
+                None
+                if not needle
+                else relation.entity_id in matches or relation.association_id in matches
+            )
+        return len(matches)
+
+    def apply_canvas_style(self, *, dark: bool) -> None:
+        self._dark_theme = dark
+        palette = (
+            "#d6eaff",
+            "#dff5df",
+            "#fff0c9",
+            "#f1ddff",
+            "#ffdede",
+            "#d9f3f0",
+            "#ece2d0",
+            "#e2e6ff",
+        )
+        domain_colors = {
+            domain.id: QColor(palette[index % len(palette)])
+            for index, domain in enumerate(
+                sorted(
+                    self.model.domains.values(), key=lambda item: item.name.casefold()
+                )
+            )
+        }
+        for node_id, item in self._node_items.items():
+            domain = next(
+                (
+                    domain
+                    for domain in sorted(
+                        self.model.domains.values(),
+                        key=lambda value: value.name.casefold(),
+                    )
+                    if node_id in domain.node_ids
+                ),
+                None,
+            )
+            item.set_visual_style(
+                fill=domain_colors.get(domain.id) if domain is not None else None,
+                dark=dark and domain is None,
+            )
+        for relation_item in self._relation_items.values():
+            relation_item.set_dark_theme(dark)
+
     def _snapshot_for_deletion(self, element_ids: set[str]) -> DeletionSnapshot:
         entities = tuple(
             self.model.entities[element_id]
@@ -707,6 +919,9 @@ class DiagramController(QObject):
         for relation in self.model.relations.values():
             self._add_relation_item(relation)
         self._refresh_all_parallel_relations()
+        self._folded_node_ids.intersection_update(self._node_items)
+        self.set_all_attributes_visible(self._attributes_visible)
+        self.apply_canvas_style(dark=self._dark_theme)
         self.model_changed.emit()
         self.mld_changed.emit(None)
         self.mld_stale_changed.emit(False)
@@ -732,6 +947,7 @@ class DiagramController(QObject):
         self.selection_changed.emit(self.selected_elements())
 
     def _model_did_change(self) -> None:
+        self.apply_canvas_style(dark=self._dark_theme)
         self.model_changed.emit()
         self.mld_stale_changed.emit(self.mld_is_stale)
         self._emit_selection()
@@ -772,6 +988,9 @@ class DiagramController(QObject):
         item.move_finished.connect(self._node_move_finished)
         self.scene.addItem(item)
         self._node_items[node.id] = item
+        item.set_attributes_visible(
+            self._attributes_visible and node.id not in self._folded_node_ids
+        )
 
     @staticmethod
     def _cardinality_text(relation: Relation) -> str:
@@ -793,6 +1012,7 @@ class DiagramController(QObject):
         )
         self.scene.addItem(item)
         self._relation_items[relation.id] = item
+        item.set_dark_theme(self._dark_theme)
 
     def _add_inheritance_item(self, inheritance: Inheritance) -> None:
         parent_item = self._node_items[inheritance.parent_entity_id]
@@ -839,12 +1059,11 @@ class DiagramController(QObject):
     def _node_move_finished(
         self, node_id: str, old_point: QPointF, new_point: QPointF
     ) -> None:
-        old_position = Position(old_point.x(), old_point.y())
-        new_position = Position(new_point.x(), new_point.y())
-        if old_position != new_position:
-            self.undo_stack.push(
-                MoveNodeCommand(self, node_id, old_position, new_position)
-            )
+        del node_id, old_point, new_point
+        positions = {
+            item_id: QPointF(item.pos()) for item_id, item in self._node_items.items()
+        }
+        self._push_position_changes(positions, "Déplacer la sélection")
 
     def command_insert_node(self, node: Entity | Association) -> None:
         if isinstance(node, Entity):

@@ -99,6 +99,32 @@ flowchart LR
 - génération d'une documentation complète en Markdown, HTML ou PDF ;
 - sauvegarde JSON versionnée, chargement V1/V2 et fichiers récents.
 
+### 🎨 Canvas productif
+
+Le canvas principal propose désormais les outils attendus sur les grands
+diagrammes :
+
+- grille optionnelle, aimantation au pas de la grille et guides dynamiques sur
+  les axes des objets voisins ;
+- alignement à gauche, à droite, en haut ou en bas, centrage et distribution
+  régulière de la sélection ;
+- sélection multiple au lasso ou avec `Ctrl`, déplacement collectif conservé
+  comme une seule opération annulable ;
+- copier/coller et duplication structurés : attributs, relations internes,
+  cardinalités, rôles, héritages et dépendances fonctionnelles sont conservés ;
+- couleur pastel déterministe selon le premier domaine de l’objet ;
+- thèmes système, clair et sombre mémorisés dans les préférences locales ;
+- recherche visuelle intégrée à la barre d’outils, qui met les correspondances
+  en évidence et atténue le reste du graphe ;
+- pliage individuel d’entités ou d’associations et masquage global temporaire
+  des attributs ;
+- minimap cliquable avec représentation de la zone actuellement visible ;
+- mode plein écran avec `F11`.
+
+Les préférences de grille, guides, aimantation, minimap et thème utilisent les
+réglages locaux de l’application. Elles n’ajoutent aucune donnée de présentation
+au JSON métier et ne modifient donc ni le MCD, ni le MLD.
+
 ### 🧭 Exploration des grands modèles
 
 La commande **Affichage → Explorer le modèle…** (`Ctrl+Alt+E`) ouvre une vue
@@ -779,6 +805,8 @@ sources, MERISOR n’invente pas de modèle et explique pourquoi l’analyse éc
 |---|---|
 | Nouveau / Ouvrir / Enregistrer | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` |
 | Annuler / Rétablir | `Ctrl+Z` / `Ctrl+Shift+Z` |
+| Copier / Coller / Dupliquer | `Ctrl+C` / `Ctrl+V` / `Ctrl+D` |
+| Tout sélectionner | `Ctrl+A` |
 | Supprimer la sélection | `Suppr` |
 | Zoom avant / arrière / initial | `Ctrl++` / `Ctrl+-` / `Ctrl+0` |
 | Explorer le modèle | `Ctrl+Alt+E` |
@@ -795,6 +823,8 @@ sources, MERISOR n’invente pas de modèle et explique pourquoi l’analyse éc
 | Générer la documentation | `Ctrl+Shift+D` |
 | Importer SQL / DDL | `Ctrl+Shift+O` |
 | Importer une PWA / IndexedDB | `Ctrl+Alt+P` |
+| Plier/déplier la sélection | `Ctrl+Alt+F` |
+| Mode plein écran | `F11` |
 | Zoom MLD | `Ctrl` + molette ou boutons `+` / `−` |
 
 ## 🧪 Exemple MotoGP
@@ -1067,6 +1097,7 @@ src/merisor/
 ├── application/
 │   ├── controller.py            orchestration document/scène
 │   ├── commands.py              annuler/rétablir
+│   ├── diagram_clipboard.py     copie structurée des sélections MCD
 │   ├── mcd_layout.py            disposition automatique
 │   ├── model_explorer.py        recherche et projections de navigation
 │   ├── submodels.py             résolution des domaines et vues enregistrées

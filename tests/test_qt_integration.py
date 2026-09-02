@@ -102,6 +102,13 @@ def test_main_window_starts_offscreen(qapp) -> None:  # type: ignore[no-untyped-
     assert window.import_ddl_action.text() == "Importer SQL / DDL…"
     assert window.import_pwa_action.text() == "Importer un projet PWA / IndexedDB…"
     assert window.import_pwa_action.shortcut().toString() == "Ctrl+Alt+P"
+    assert window.grid_action.isCheckable()
+    assert window.snap_action.isCheckable()
+    assert window.guides_action.isCheckable()
+    assert window.minimap.scene() is window.scene
+    assert window.visual_search.placeholderText() == "Rechercher dans le MCD…"
+    assert window.duplicate_action.shortcut().toString() == "Ctrl+D"
+    assert window.fullscreen_action.shortcut().toString() == "F11"
     assert window.centralWidget() is window.workspace_tabs
     assert window.workspace_tabs.widget(0) is window.view
     assert window.workspace_tabs.widget(1) is window.mld_view

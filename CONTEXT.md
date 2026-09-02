@@ -1,6 +1,6 @@
 # Contexte de reprise du projet MERISOR
 
-Ce document décrit l'état réel du dépôt au 1er septembre 2026 et les évolutions
+Ce document décrit l'état réel du dépôt au 2 septembre 2026 et les évolutions
 déjà terminées. Il doit être lu avant toute nouvelle évolution afin de
 ne pas réimplémenter les versions précédentes.
 
@@ -19,7 +19,10 @@ Fonctionnalités déjà intégrées :
 - associations historisées, stratégies `AUTO`, `FORCE_TABLE` et `FORCE_FK` ;
 - associations réflexives et n-aires avec rôles de branche ;
 - héritages ISA `PARENT_ONLY`, `CHILDREN_ONLY` et `JOINED` ;
-- disposition automatique, zoom, export PNG/SVG/PDF et fichiers récents ;
+- canvas productif avec disposition automatique, alignements, grille,
+  aimantation, guides, multi-sélection, copier/coller, duplication, recherche,
+  pliage, couleurs de domaines, thèmes, minimap et plein écran ;
+- zoom, export PNG/SVG/PDF et fichiers récents ;
 - exports documentaires Mermaid et Graphviz/DOT du MCD ou du MLD actif ;
 - génération d'une documentation MCD/MLD en Markdown, HTML autonome ou PDF,
   avec diagrammes, dictionnaire des objets, contraintes et fiches YAML ;

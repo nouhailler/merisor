@@ -4,7 +4,18 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
-Aucune modification pour le moment.
+### Ajouté
+
+- grille, aimantation et guides dynamiques sur le canvas MCD ;
+- alignement sur six axes et distribution horizontale ou verticale, avec
+  historique Annuler/Rétablir ;
+- déplacement collectif fiable des sélections au lasso ou avec `Ctrl` ;
+- copier/coller et duplication structurés des objets MCD et de leurs liens ;
+- coloration déterministe des objets par domaine ;
+- thèmes système, clair et sombre persistants ;
+- minimap cliquable indiquant la zone visible du grand MCD ;
+- recherche visuelle dans les noms et attributs ;
+- pliage de la sélection, affichage global des attributs et plein écran `F11`.
 
 ## [0.9.0] - 2026-09-01
 
