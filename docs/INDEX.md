@@ -58,6 +58,8 @@ Description métier → MCD → validation → MLD → SQL
 ## Ressources
 
 - [Exemple MotoGP](https://github.com/nouhailler/merisor/blob/main/examples/motogp.json)
+- [PWA IndexedDB de démonstration](https://github.com/nouhailler/merisor/tree/main/examples/indexeddb-demo-pwa)
+- [Archive PWA directement importable](https://github.com/nouhailler/merisor/raw/main/examples/indexeddb-demo-pwa.zip)
 - [Journal des changements](https://github.com/nouhailler/merisor/blob/main/CHANGELOG.md)
 - [Licence MIT](https://github.com/nouhailler/merisor/blob/main/LICENSE)
 - [Dépôt GitHub](https://github.com/nouhailler/merisor)

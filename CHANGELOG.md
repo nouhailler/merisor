@@ -4,6 +4,27 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
+## [0.10.1] - 2026-09-02
+
+### Corrigé
+
+- l'analyse IA accepte désormais les notations de type sûres `DATE`,
+  `VARCHAR(255)` et `DECIMAL(10,2)` lorsqu'un modèle OpenRouter les renvoie
+  comme textes, puis les normalise vers les objets JSON V2 stricts ;
+- le prompt de réparation précise explicitement le format des types afin de
+  réduire les réponses incompatibles des modèles gratuits ;
+- les mises à jour IA qui recopient sans changement l'identifiant dans
+  `changes`, ou utilisent une forme aplatie non ambiguë, sont normalisées ; une
+  tentative de remplacement d'identifiant reste strictement refusée.
+
+### Ajouté
+
+- logo MERISOR désormais visible dans la barre d'outils principale, en plus de
+  son utilisation comme icône de fenêtre, de bureau et de paquet ;
+- PWA IndexedDB native de démonstration, exécutable localement et fournie aussi
+  sous forme de ZIP directement importable, avec test de référence du MCD
+  `CUSTOMER → ORDER` reconstruit.
+
 ## [0.10.0] - 2026-09-02
 
 ### Ajouté

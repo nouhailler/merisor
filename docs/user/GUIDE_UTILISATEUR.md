@@ -80,6 +80,10 @@ Voir [Générer le MLD](MLD.md) et [Générer du SQL](SQL.md).
 Le reverse engineering ne peut pas retrouver toutes les intentions métier :
 vérifiez les cardinalités minimales, l'historisation et les concepts reconstruits.
 
+Pour essayer cette fonction sans chercher un projet externe, téléchargez
+[l'archive IndexedDB de démonstration](https://github.com/nouhailler/merisor/raw/main/examples/indexeddb-demo-pwa.zip),
+puis choisissez **Archive ZIP** dans la commande d'import PWA.
+
 ## Exporter
 
 - MCD ou MLD : PNG, SVG, PDF, Mermaid ou Graphviz/DOT ;

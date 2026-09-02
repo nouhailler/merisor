@@ -108,12 +108,16 @@ flowchart TB
 - **MLD explicable** : PK/FK composées, provenance, associations historisées et
   bouton **ⓘ Pourquoi ?** ;
 - **SQL multi-dialecte** : PostgreSQL, SQLite, MariaDB/MySQL, aperçu et export ;
-- **imports** : JSON V1/V2, DDL et schémas statiques PWA/IndexedDB ;
+- **imports** : JSON V1/V2, DDL et schémas statiques PWA/IndexedDB, avec une
+  [archive de démonstration prête à tester](examples/indexeddb-demo-pwa.zip) ;
 - **exports** : PNG, SVG, PDF, Mermaid, Graphviz, documentation Markdown/HTML/PDF,
   données de test et requêtes SQL simples ;
 - **IA facultative** : génération, conversation et réparation avec validation
-  locale et confirmation humaine ;
+  locale, normalisation prudente des réponses et confirmation humaine ;
 - **historique** : opérations importantes annulables avec Annuler/Rétablir.
+
+Le logo MERISOR est utilisé de manière cohérente dans la fenêtre principale,
+le lanceur desktop, les paquets et cette page.
 
 Le détail se trouve dans le [guide utilisateur](docs/user/GUIDE_UTILISATEUR.md).
 
@@ -173,7 +177,8 @@ Voir la [documentation d'installation développeur](docs/development/DEVELOPMENT
 
 Le tutoriel détaillé est disponible dans
 [Prise en main](docs/user/PRISE_EN_MAIN.md). Vous pouvez également ouvrir
-[l'exemple MotoGP](examples/motogp.json).
+[l'exemple MotoGP](examples/motogp.json) ou tester le reverse-engineering avec
+[la PWA IndexedDB de démonstration](examples/indexeddb-demo-pwa/README.md).
 
 ## 🧱 Architecture simplifiée
 

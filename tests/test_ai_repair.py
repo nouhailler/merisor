@@ -130,6 +130,111 @@ def test_ai_repair_interprets_a_valid_patch_without_mutating_source() -> None:
     assert JsonDiagramRepository().to_dict(model) == before
 
 
+@pytest.mark.parametrize(
+    ("ai_type", "expected_label"),
+    (
+        ("DATE", "DATE"),
+        ("VARCHAR(255)", "VARCHAR(255)"),
+        ("DECIMAL(10,2)", "DECIMAL(10,2)"),
+    ),
+)
+def test_ai_repair_normalizes_safe_textual_data_types(
+    ai_type: str, expected_label: str
+) -> None:
+    model = _model()
+    report = AiRepairService().interpret(
+        model,
+        _response(
+            _proposal(
+                "fix_date_types",
+                "Corriger le type",
+                _attribute_update(model, "CLIENT", "email", data_type=ai_type),
+            )
+        ),
+    )
+
+    proposal = report.proposals[0]
+    client = next(
+        item for item in proposal.candidate.entities.values() if item.name == "CLIENT"
+    )
+    data_type = next(
+        item for item in client.attributes if item.name == "email"
+    ).data_type
+
+    assert data_type is not None
+    assert data_type.label == expected_label
+    assert "normalisés au format MERISOR" in proposal.patch_summary
+
+
+def test_ai_repair_still_rejects_an_unknown_textual_data_type() -> None:
+    model = _model()
+    raw = _response(
+        _proposal(
+            "unknown_type",
+            "Type inconnu",
+            _attribute_update(model, "CLIENT", "email", data_type="MONEY"),
+        )
+    )
+
+    with pytest.raises(AiRepairError, match="type d'attribut doit être un objet"):
+        AiRepairService().interpret(model, raw)
+
+
+def test_ai_repair_removes_a_redundant_unchanged_id_from_changes() -> None:
+    model = _model()
+    patch = _attribute_update(model, "CLIENT", "email", unique=True)
+    update = patch["entities_to_update"][0]
+    update["changes"]["id"] = update["id"]
+
+    proposal = (
+        AiRepairService()
+        .interpret(
+            model,
+            _response(_proposal("redundant_id", "Email unique", patch)),
+        )
+        .proposals[0]
+    )
+
+    client = next(
+        item for item in proposal.candidate.entities.values() if item.name == "CLIENT"
+    )
+    assert next(item for item in client.attributes if item.name == "email").unique
+    assert "sans modifier les identifiants" in proposal.patch_summary
+
+
+def test_ai_repair_normalizes_a_flat_update_shape() -> None:
+    model = _model()
+    patch = _attribute_update(model, "CLIENT", "email", unique=True)
+    update = patch["entities_to_update"][0]
+    patch["entities_to_update"][0] = {"id": update["id"], **update["changes"]}
+
+    proposal = (
+        AiRepairService()
+        .interpret(
+            model,
+            _response(_proposal("flat_update", "Email unique", patch)),
+        )
+        .proposals[0]
+    )
+
+    client = next(
+        item for item in proposal.candidate.entities.values() if item.name == "CLIENT"
+    )
+    assert next(item for item in client.attributes if item.name == "email").unique
+
+
+def test_ai_repair_rejects_a_nested_id_that_differs_from_the_target() -> None:
+    model = _model()
+    patch = _attribute_update(model, "CLIENT", "email", unique=True)
+    patch["entities_to_update"][0]["changes"]["id"] = "entity_other"
+
+    with pytest.raises(AiRepairError, match="sans modifier l'ID"):
+        AiRepairService().interpret(
+            model,
+            _response(_proposal("changed_id", "Changer l'ID", patch)),
+        )
+
+
 def test_ai_repair_rejects_invented_targets_and_empty_changes() -> None:
     model = _model()
     invented = _empty_patch()

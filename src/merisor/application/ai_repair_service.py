@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -98,6 +99,18 @@ existants et n'invente aucun ID de référence. Une addition contient l'objet V2
 complet avec un nouvel ID unique. Les suppressions doivent être rares et
 justifiées. confidence vaut high, medium ou low.
 
+IMPORTANT : dans une mise à jour, changes ne contient JAMAIS la propriété id.
+L'ID apparaît une seule fois, au même niveau que changes. Exemple exact :
+{"id":"entity_eleve","changes":{"attributes":[...]}}.
+
+IMPORTANT : data_type vaut null ou TOUJOURS un objet JSON, jamais une chaîne.
+Exemples exacts :
+- DATE : {"name":"DATE"}
+- VARCHAR(255) : {"name":"VARCHAR","length":255}
+- DECIMAL(10,2) : {"name":"DECIMAL","precision":10,"scale":2}
+Les seuls noms autorisés sont INTEGER, BIGINT, DECIMAL, FLOAT, BOOLEAN,
+VARCHAR, TEXT, DATE, TIME, DATETIME et TIMESTAMP.
+
 Propose uniquement des améliorations plausibles : types, unicité, attributs
 redondants, cardinalités, associations, entités métier, historisation ou
 normalisation. Une ambiguïté métier doit produire une proposition de confiance
@@ -108,6 +121,25 @@ appliquée automatiquement : l'utilisateur les examinera une par une."""
 
 
 class AiRepairService:
+    _TYPE_PATTERN = re.compile(
+        r"^\s*([A-Za-z]+)\s*(?:\(\s*(\d+)\s*(?:,\s*(\d+)\s*)?\))?\s*$"
+    )
+    _TYPE_NAMES = frozenset(
+        {
+            "INTEGER",
+            "BIGINT",
+            "DECIMAL",
+            "FLOAT",
+            "BOOLEAN",
+            "VARCHAR",
+            "TEXT",
+            "DATE",
+            "TIME",
+            "DATETIME",
+            "TIMESTAMP",
+        }
+    )
+
     def __init__(
         self,
         repository: JsonDiagramRepository | None = None,
@@ -207,7 +239,12 @@ class AiRepairService:
                 "Le niveau de confiance d'une proposition est invalide."
             ) from error
         try:
-            patch = ConversationalDesignService.parse_patch(raw.get("patch"))
+            (
+                raw_patch,
+                normalized_type_count,
+                normalized_update_count,
+            ) = self._normalize_patch(raw.get("patch"))
+            patch = ConversationalDesignService.parse_patch(raw_patch)
             candidate, patch_summary = self.applier.apply(model, patch)
         except DesignSessionError as error:
             raise AiRepairError(
@@ -217,6 +254,18 @@ class AiRepairService:
             raise AiRepairError(f"La proposition {proposal_id} ne change rien au MCD.")
         if self.repository.to_dict(candidate) == self.repository.to_dict(model):
             raise AiRepairError(f"La proposition {proposal_id} ne change rien au MCD.")
+        if normalized_type_count:
+            patch_summary += (
+                "\n"
+                f"{normalized_type_count} type(s) simplifié(s) renvoyé(s) par l'IA "
+                "ont été normalisés au format MERISOR."
+            )
+        if normalized_update_count:
+            patch_summary += (
+                "\n"
+                f"{normalized_update_count} mise(s) à jour simplifiée(s) renvoyée(s) "
+                "par l'IA ont été normalisées sans modifier les identifiants."
+            )
         return AiRepairProposal(
             proposal_id,
             self._text(raw, "title"),
@@ -228,6 +277,118 @@ class AiRepairService:
             validate_mcd(candidate),
             patch_summary,
         )
+
+    @classmethod
+    def _normalize_patch(cls, raw: Any) -> tuple[Any, int, int]:
+        """Corrige des écarts IA sûrs sans assouplir le modèle JSON V2."""
+
+        patch = copy.deepcopy(raw)
+        if not isinstance(patch, dict):
+            return patch, 0, 0
+        normalized_updates = cls._normalize_updates(patch)
+        normalized_types = 0
+        for key in (
+            "entities_to_add",
+            "associations_to_add",
+        ):
+            items = patch.get(key)
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if isinstance(item, dict):
+                    normalized_types += cls._normalize_attributes(
+                        item.get("attributes")
+                    )
+        for key in (
+            "entities_to_update",
+            "associations_to_update",
+        ):
+            updates = patch.get(key)
+            if not isinstance(updates, list):
+                continue
+            for update in updates:
+                if not isinstance(update, dict):
+                    continue
+                changes = update.get("changes")
+                if isinstance(changes, dict):
+                    normalized_types += cls._normalize_attributes(
+                        changes.get("attributes")
+                    )
+        return patch, normalized_types, normalized_updates
+
+    @staticmethod
+    def _normalize_updates(patch: dict[str, Any]) -> int:
+        count = 0
+        for key in (
+            "entities_to_update",
+            "associations_to_update",
+            "relations_to_update",
+            "inheritances_to_update",
+            "functional_dependencies_to_update",
+        ):
+            updates = patch.get(key)
+            if not isinstance(updates, list):
+                continue
+            for update in updates:
+                if not isinstance(update, dict):
+                    continue
+                update_id = update.get("id")
+                changes = update.get("changes")
+                if isinstance(changes, dict):
+                    nested_id = changes.get("id")
+                    if isinstance(update_id, str) and nested_id == update_id:
+                        del changes["id"]
+                        count += 1
+                    continue
+                if "changes" in update or not isinstance(update_id, str):
+                    continue
+                flattened_changes = {
+                    name: value for name, value in update.items() if name != "id"
+                }
+                update.clear()
+                update.update({"id": update_id, "changes": flattened_changes})
+                count += 1
+        return count
+
+    @classmethod
+    def _normalize_attributes(cls, raw: Any) -> int:
+        if not isinstance(raw, list):
+            return 0
+        count = 0
+        for attribute in raw:
+            if not isinstance(attribute, dict):
+                continue
+            normalized = cls._normalized_data_type(attribute.get("data_type"))
+            if normalized is not None:
+                attribute["data_type"] = normalized
+                count += 1
+        return count
+
+    @classmethod
+    def _normalized_data_type(cls, raw: Any) -> dict[str, Any] | None:
+        if not isinstance(raw, str):
+            return None
+        match = cls._TYPE_PATTERN.fullmatch(raw)
+        if match is None:
+            return None
+        name, first_parameter, second_parameter = match.groups()
+        name = name.upper()
+        if name not in cls._TYPE_NAMES:
+            return None
+        if name == "VARCHAR":
+            if second_parameter is not None:
+                return None
+            return {"name": name, "length": int(first_parameter or 100)}
+        if name == "DECIMAL":
+            result: dict[str, Any] = {"name": name}
+            if first_parameter is not None:
+                result["precision"] = int(first_parameter)
+            if second_parameter is not None:
+                result["scale"] = int(second_parameter)
+            return result
+        if first_parameter is not None or second_parameter is not None:
+            return None
+        return {"name": name}
 
     def _user_prompt(self, model: MCDModel) -> str:
         validation = validate_mcd(model)

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#315d8a">
+    <title>Commerce IndexedDB — Démonstration MERISOR</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header>
+      <h1>Commerce IndexedDB</h1>
+      <p>Projet de démonstration pour le reverse-engineering MERISOR.</p>
+    </header>
+    <main>
+      <section>
+        <h2>Nouveau client</h2>
+        <form id="customer-form">
+          <label>Nom <input name="name" required></label>
+          <label>Email <input name="email" type="email" required></label>
+          <button>Ajouter</button>
+        </form>
+        <ul id="customers"></ul>
+      </section>
+      <section>
+        <h2>Nouvelle commande</h2>
+        <form id="order-form">
+          <label>Client <select name="customerId" required></select></label>
+          <label>Description <input name="description" required></label>
+          <label>Montant <input name="amount" type="number" min="0" step="0.01" required></label>
+          <button>Ajouter</button>
+        </form>
+        <ul id="orders"></ul>
+      </section>
+    </main>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

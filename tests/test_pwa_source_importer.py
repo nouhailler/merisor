@@ -14,6 +14,8 @@ from merisor.application import (
 from merisor.domain import Attribute, Entity, MLDDataTypeName
 from merisor.persistence import JsonDiagramRepository
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 DEXIE_SOURCE = """
 import Dexie from "dexie";
 
@@ -143,6 +145,28 @@ def test_zip_is_supported_and_generated_directories_are_ignored(
     assert result.scanned_files == 1
     assert result.database_names == ("CommercePWA",)
     assert len(result.mcd.entities) == 2
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        PROJECT_ROOT / "examples/indexeddb-demo-pwa",
+        PROJECT_ROOT / "examples/indexeddb-demo-pwa.zip",
+    ),
+)
+def test_packaged_indexeddb_demo_builds_the_expected_mcd(source: Path) -> None:
+    result = PwaSourceImporter().import_path(source)
+
+    assert result.database_names == ("MerisorIndexedDbDemo",)
+    assert result.validation.is_valid
+    assert {entity.name for entity in result.mcd.entities.values()} == {
+        "CUSTOMER",
+        "ORDER",
+    }
+    assert len(result.mcd.associations) == 1
+    order = _entity(result, "ORDER")
+    assert _attribute(order, "customerId").data_type is not None
+    assert _attribute(order, "createdAt").data_type is not None
 
 
 def test_import_is_deterministic(tmp_path: Path) -> None:

@@ -5,13 +5,21 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QSettings, Qt
-from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
+from PySide6.QtGui import (
+    QAction,
+    QActionGroup,
+    QCloseEvent,
+    QIcon,
+    QKeySequence,
+    QPixmap,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QDockWidget,
     QFileDialog,
     QInputDialog,
+    QLabel,
     QLineEdit,
     QMainWindow,
     QMenu,
@@ -70,10 +78,12 @@ from merisor.ui.version_comparison_dialog import VersionComparisonDialog
 
 class MainWindow(QMainWindow):
     MAX_RECENT_FILES = 10
+    LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "merisor.png"
 
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("mainWindow")
+        self.setWindowIcon(QIcon(str(self.LOGO_PATH)))
         self.resize(1280, 800)
         self._settings = QSettings("MERISOR", "MERISOR")
         self.recent_menu: QMenu | None = None
@@ -355,6 +365,21 @@ class MainWindow(QMainWindow):
         toolbar = QToolBar("Outils du diagramme", self)
         toolbar.setObjectName("diagramToolbar")
         toolbar.setMovable(False)
+        self.brand_logo = QLabel(self)
+        self.brand_logo.setObjectName("brandLogo")
+        self.brand_logo.setAccessibleName("Logo MERISOR")
+        self.brand_logo.setToolTip("MERISOR — Éditeur graphique MERISE")
+        self.brand_logo.setPixmap(
+            QPixmap(str(self.LOGO_PATH)).scaled(
+                40,
+                40,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+        self.brand_logo.setContentsMargins(4, 2, 8, 2)
+        toolbar.addWidget(self.brand_logo)
+        toolbar.addSeparator()
         toolbar.addAction(self.select_action)
         toolbar.addSeparator()
         toolbar.addAction(self.entity_action)

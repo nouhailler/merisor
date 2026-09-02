@@ -42,6 +42,9 @@ Fonctionnalités déjà intégrées :
 - import statique d’un projet PWA depuis un dossier ou ZIP, avec détection
   Dexie/IndexedDB, enrichissement TypeScript, preuves source, validation,
   aperçu et import annulable ;
+- projet PWA IndexedDB natif de référence sous
+  `examples/indexeddb-demo-pwa/`, également fourni comme ZIP directement
+  importable et couvert par les tests dossier/archive ;
 - paquets Debian, AppImage et publication PyPI/pipx ;
 - génération d'un MCD depuis une description via OpenRouter, avec aperçu et
   confirmation avant remplacement du document courant ;
@@ -50,6 +53,9 @@ Fonctionnalités déjà intégrées :
 - analyse facultative d'un MCD existant par OpenRouter, avec propositions
   autonomes, validation locale, aperçu, sélection et application confirmée en
   une commande annulable ;
+- normalisation défensive des écarts sûrs produits par certains modèles IA :
+  types textuels usuels, ID recopié à l'identique dans `changes` et mises à
+  jour aplaties ; les types inconnus et remplacements d'ID restent refusés ;
 - exploration non destructive du MCD avec recherche, filtres, focus par
   profondeur, dépendances, zoom et masquage temporaire ;
 - domaines et vues métier/technique persistants, composables et sélectionnables
@@ -58,6 +64,8 @@ Fonctionnalités déjà intégrées :
   les différences détaillées et leurs impacts MCD/MLD/SQL.
 - analyse d'impact ciblée sur les objets et attributs, séparant les dépendances
   formelles des correspondances sémantiques potentielles.
+- identité MERISOR visible dans la barre d'outils et réutilisée par la fenêtre,
+  le lanceur, le README et les paquets Linux.
 
 Le README est volontairement une page courte de découverte. Les informations
 de référence sont réparties entre les guides utilisateur, concepts MERISE,

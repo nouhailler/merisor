@@ -2,6 +2,8 @@ from pathlib import Path
 
 from PySide6.QtGui import QImage
 
+from merisor.ui.main_window import MainWindow
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -18,6 +20,17 @@ def test_application_logo_and_debian_icon_are_valid_png_files() -> None:
     assert logo_image.hasAlphaChannel()
     assert not icon_image.isNull()
     assert (icon_image.width(), icon_image.height()) == (256, 256)
+
+
+def test_main_window_displays_the_merisor_brand_logo(qapp: object) -> None:
+    window = MainWindow()
+    pixmap = window.brand_logo.pixmap()
+
+    assert not window.windowIcon().isNull()
+    assert pixmap is not None
+    assert not pixmap.isNull()
+    assert window.brand_logo.accessibleName() == "Logo MERISOR"
+    window.close()
 
 
 def test_desktop_entry_uses_the_packaged_icon() -> None:

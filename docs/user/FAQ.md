@@ -48,6 +48,10 @@ Le dépôt contient généralement le code de définition du schéma, pas les
 enregistrements stockés sur le téléphone. L'import PWA analyse Dexie,
 IndexedDB natif et certains types TypeScript statiques.
 
+Un projet minimal prêt à tester est fourni dans
+[`examples/indexeddb-demo-pwa`](https://github.com/nouhailler/merisor/tree/main/examples/indexeddb-demo-pwa),
+ainsi que sous forme d'archive ZIP directement importable.
+
 ## Où signaler un problème ?
 
 Sur [GitHub Issues](https://github.com/nouhailler/merisor/issues), avec un JSON
