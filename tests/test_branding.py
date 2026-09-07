@@ -74,18 +74,19 @@ def test_release_workflow_publishes_deb_and_appimage() -> None:
 def test_readme_screenshots_are_present_and_readable() -> None:
     readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
 
-    for filename in (
+    relative_path = "docs/images/ui2-mcd.png"
+    image = QImage(str(PROJECT_ROOT / relative_path))
+    assert relative_path in readme
+    assert not image.isNull()
+    assert image.width() >= 900
+    for obsolete in (
         "mcd-editor.png",
         "attribute-types.png",
         "mld-view.png",
         "sql-preview.png",
         "ai-preview.png",
     ):
-        relative_path = f"docs/images/{filename}"
-        image = QImage(str(PROJECT_ROOT / relative_path))
-        assert relative_path in readme
-        assert not image.isNull()
-        assert image.width() >= 900
+        assert obsolete not in readme
 
 
 def test_project_is_distributed_under_the_mit_license() -> None:

@@ -20,11 +20,14 @@ Fonctionnalités déjà intégrées :
   Assistant IA et Documentation, sans déplacement des règles métier dans Qt ;
 - recherche globale MCD/MLD/documentation (`Ctrl+Shift+F`) et palette de
   commandes (`Ctrl+K`) ; audit, guides et rapport final sous `docs/` ;
-
 - documentation structurée sous `docs/`, avec une synthèse transversale dans
   `docs/PROJECT_DOCUMENTATION.md` accessible directement par **Documentation →
   Documentation du projet** ; le portail complet reste disponible avec `F1`,
   recherche et navigation hors ligne ;
+- README recentré sur une seule capture UI/UX 2.0 actuelle ; les autres
+  captures de référence à jour restent consultables dans
+  `docs/UI_UX_2.0_IMPLEMENTATION_REPORT.md`, sans exposer les anciennes images
+  dans la page de découverte ;
 - édition graphique des entités, associations, relations et cardinalités ;
 - attributs d'entités et d'associations, identifiants simples ou composés ;
 - associations historisées, stratégies `AUTO`, `FORCE_TABLE` et `FORCE_FK` ;

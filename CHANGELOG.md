@@ -4,6 +4,13 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
+### Documentation
+
+- retrait du README des captures des anciennes interfaces MCD, attributs, MLD,
+  SQL et IA ; seule la capture représentative UI/UX 2.0 reste affichée ;
+- conservation des captures récentes complémentaires dans le rapport UI/UX
+  détaillé, accessible depuis le README.
+
 ## [0.11.0] - 2026-09-07
 
 ### Ajouté

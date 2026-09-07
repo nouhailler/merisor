@@ -78,34 +78,13 @@ flowchart TB
 
 ![Atelier MCD MERISOR UI/UX 2.0](docs/images/ui2-mcd.png)
 
+Le README conserve volontairement une seule capture représentative et à jour,
+afin de rester rapide à parcourir et de ne pas montrer d’anciennes interfaces.
 Le parcours reste visible de bout en bout : **Concevoir → Vérifier → Transformer
 → Produire**. Les espaces Validation, MLD, SQL, Assistant IA et Documentation
 s’ouvrent dans la fenêtre principale. Consultez le
 [rapport UI/UX 2.0](docs/UI_UX_2.0_IMPLEMENTATION_REPORT.md) pour les autres
-captures, les raccourcis et les décisions de conception.
-
-### Construire le MCD
-
-![Fenêtre principale avec un MCD MotoGP](https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/mcd-editor.png)
-
-### Décrire les attributs
-
-![Édition d'un type DECIMAL](https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/attribute-types.png)
-
-<table>
-  <tr>
-    <td width="50%"><strong>Examiner le MLD</strong></td>
-    <td width="50%"><strong>Vérifier le SQL</strong></td>
-  </tr>
-  <tr>
-    <td><img src="https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/mld-view.png" alt="Vue graphique du MLD"></td>
-    <td><img src="https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/sql-preview.png" alt="Aperçu SQL PostgreSQL"></td>
-  </tr>
-</table>
-
-### Préparer un MCD avec l'IA
-
-![Aperçu et validation avant import IA](https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/ai-preview.png)
+captures à jour, les raccourcis et les décisions de conception.
 
 ## ✨ Fonctionnalités principales
 
