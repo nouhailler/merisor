@@ -100,5 +100,7 @@ confirmé. Voir [Utiliser les fonctions IA](IA.md).
 
 ## Documentation intégrée
 
-`F1` ouvre ce manuel. La recherche filtre les rubriques ; les liens internes
-restent dans le lecteur et les liens Web s'ouvrent dans le navigateur système.
+`F1` ouvre ce manuel. **Documentation → Documentation du projet** ouvre une
+vue synthétique destinée aux utilisateurs et contributeurs. La recherche filtre
+les rubriques ; les liens internes restent dans le lecteur et les liens Web
+s'ouvrent dans le navigateur système.

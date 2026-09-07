@@ -239,6 +239,7 @@ class MainWindow(QMainWindow):
 
         self.documentation_action = QAction("Centre de documentation…", self)
         self.documentation_action.setShortcut(QKeySequence("F1"))
+        self.project_documentation_action = QAction("Documentation du projet", self)
         self.getting_started_documentation_action = QAction("Prise en main", self)
         self.user_guide_documentation_action = QAction("Guide utilisateur", self)
         self.merise_documentation_action = QAction("Comprendre MERISE", self)
@@ -423,6 +424,7 @@ class MainWindow(QMainWindow):
 
         documentation_menu = self.menuBar().addMenu("Documentation")
         documentation_menu.addAction(self.documentation_action)
+        documentation_menu.addAction(self.project_documentation_action)
         documentation_menu.addSeparator()
         documentation_menu.addAction(self.getting_started_documentation_action)
         documentation_menu.addAction(self.user_guide_documentation_action)
@@ -523,6 +525,9 @@ class MainWindow(QMainWindow):
         )
         self.documentation_action.triggered.connect(
             lambda _checked=False: self.show_documentation("index")
+        )
+        self.project_documentation_action.triggered.connect(
+            lambda _checked=False: self.show_documentation("project-documentation")
         )
         self.getting_started_documentation_action.triggered.connect(
             lambda _checked=False: self.show_documentation("getting-started")

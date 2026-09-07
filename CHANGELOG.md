@@ -20,6 +20,9 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
   numéros de lignes, coloration légère, copie et export ;
 - hub IA unifié rappelant la validation locale et la confirmation obligatoire ;
 - centre de documentation intégré à la fenêtre principale ;
+- documentation transversale du projet réunissant parcours utilisateur,
+  concepts MERISE, architecture, UI/UX et contribution, accessible directement
+  depuis **Documentation → Documentation du projet** ;
 - recherche globale MCD/MLD/documentation (`Ctrl+Shift+F`) et palette de
   commandes (`Ctrl+K`) ;
 - audit, cahier des charges, guides UX et rapport final sous `docs/`, ainsi que

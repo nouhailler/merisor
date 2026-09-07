@@ -23,6 +23,12 @@ class DocumentationPage:
 DOCUMENTATION_PAGES = (
     DocumentationPage("index", "Accueil de la documentation", "Accueil", "INDEX.md"),
     DocumentationPage(
+        "project-documentation",
+        "Documentation du projet",
+        "Accueil",
+        "PROJECT_DOCUMENTATION.md",
+    ),
+    DocumentationPage(
         "getting-started", "Prise en main", "Utilisateur", "user/PRISE_EN_MAIN.md"
     ),
     DocumentationPage(

@@ -92,6 +92,11 @@ def test_main_window_exposes_documentation_menu_and_f1(qapp: object) -> None:
     assert "Documentation" in menus
     assert window.documentation_action.shortcut().toString() == "F1"
     assert window.documentation_action.isEnabled()
+    assert window.project_documentation_action.isEnabled()
+    window.project_documentation_action.trigger()
+    assert "Documentation du projet MERISOR" in (
+        window.documentation_center.browser.toPlainText()
+    )
     window.show_documentation("mcd")
     assert window.workspace_tabs.currentWidget() is window.documentation_center
     assert "MCD" in window.documentation_center.browser.toPlainText()
@@ -114,4 +119,5 @@ def test_readme_is_a_short_discovery_page_linking_to_the_manual() -> None:
 
     assert len(readme.splitlines()) < 400
     assert "docs/INDEX.md" in readme
+    assert "docs/PROJECT_DOCUMENTATION.md" in readme
     assert "Documentation" in readme

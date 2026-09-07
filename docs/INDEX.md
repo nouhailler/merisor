@@ -3,6 +3,9 @@
 Bienvenue dans le manuel de MERISOR. Le **MCD est la source de vérité** : le
 MLD, le SQL et la documentation technique sont toujours des résultats dérivés.
 
+Pour une vue synthétique, ouvrez la
+[documentation transversale du projet](PROJECT_DOCUMENTATION.md).
+
 ```text
 Description métier → MCD → validation → MLD → SQL
                          └──────────────→ documentation

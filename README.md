@@ -207,10 +207,11 @@ et les commandes annulables. Consultez
 
 ## 📚 Documentation
 
-Dans l'application, ouvrez **Documentation → Centre de documentation…** ou
-appuyez sur `F1`. Le manuel Markdown est inclus dans les paquets et reste
-également consultable sur GitHub.
+Dans l'application, ouvrez **Documentation → Documentation du projet** pour la
+vue transversale, ou appuyez sur `F1` pour le portail complet. Le manuel
+Markdown est inclus dans les paquets et reste également consultable sur GitHub.
 
+- [Documentation du projet](docs/PROJECT_DOCUMENTATION.md)
 - [Portail documentaire](docs/INDEX.md)
 - [Guide utilisateur](docs/user/GUIDE_UTILISATEUR.md)
 - [Concepts MERISE](docs/concepts/MERISE.md)
