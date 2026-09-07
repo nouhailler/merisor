@@ -29,7 +29,7 @@ from merisor.application.documentation_catalog import (
 ONLINE_DOCUMENTATION_URL = "https://github.com/nouhailler/merisor/tree/main/docs"
 
 
-class DocumentationDialog(QDialog):
+class DocumentationCenter(QWidget):
     """Navigue dans les guides hors ligne inclus avec l'application."""
 
     def __init__(
@@ -41,9 +41,6 @@ class DocumentationDialog(QDialog):
         super().__init__(parent)
         self.catalog = catalog or DocumentationCatalog()
         self.current_path: Path | None = None
-        self.setWindowTitle("Documentation MERISOR")
-        self.resize(1120, 760)
-
         root = QVBoxLayout(self)
         header = QHBoxLayout()
         title = QLabel("📚 Documentation MERISOR")
@@ -76,13 +73,6 @@ class DocumentationDialog(QDialog):
         splitter.addWidget(self.browser)
         splitter.setSizes([290, 810])
         root.addWidget(splitter, 1)
-
-        buttons = QHBoxLayout()
-        buttons.addStretch(1)
-        close_button = QPushButton("Fermer")
-        close_button.clicked.connect(self.accept)
-        buttons.addWidget(close_button)
-        root.addLayout(buttons)
 
         self._populate_navigation()
         self.search.textChanged.connect(self._filter_navigation)
@@ -193,3 +183,34 @@ class DocumentationDialog(QDialog):
             self.browser.setMarkdown(target.read_text(encoding="utf-8"))
         if anchor:
             self.browser.scrollToAnchor(anchor)
+
+
+class DocumentationDialog(QDialog):
+    """Enveloppe modale conservée pour les intégrations historiques."""
+
+    def __init__(
+        self,
+        page_id: str = "index",
+        parent: QWidget | None = None,
+        catalog: DocumentationCatalog | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Documentation MERISOR")
+        self.resize(1120, 760)
+        layout = QVBoxLayout(self)
+        self.center = DocumentationCenter(page_id, self, catalog)
+        layout.addWidget(self.center, 1)
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        close_button = QPushButton("Fermer")
+        close_button.clicked.connect(self.accept)
+        buttons.addWidget(close_button)
+        layout.addLayout(buttons)
+        # Compatibilité de l'API publique du dialogue historique.
+        self.catalog = self.center.catalog
+        self.search = self.center.search
+        self.navigation = self.center.navigation
+        self.browser = self.center.browser
+
+    def open_page(self, page_id: str) -> None:
+        self.center.open_page(page_id)

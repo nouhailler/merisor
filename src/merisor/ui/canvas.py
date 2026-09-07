@@ -9,6 +9,7 @@ from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QTransform
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
 
 from merisor.ui.items import NodeGraphicsItem
+from merisor.ui.theme import DARK_COLORS, LIGHT_COLORS
 
 
 class ToolMode(Enum):
@@ -27,7 +28,7 @@ class DiagramScene(QGraphicsScene):
     def __init__(self, parent=None) -> None:  # type: ignore[no-untyped-def]
         super().__init__(parent)
         self.setSceneRect(QRectF(-5000, -5000, 10000, 10000))
-        self.setBackgroundBrush(QBrush(QColor("#f5f7fa")))
+        self.setBackgroundBrush(QBrush(QColor(LIGHT_COLORS.canvas)))
         self.mode = ToolMode.SELECT
         self._relation_start: NodeGraphicsItem | None = None
         self.grid_size = 25.0
@@ -37,6 +38,10 @@ class DiagramScene(QGraphicsScene):
         self._guide_x: float | None = None
         self._guide_y: float | None = None
         self._dark_theme = False
+
+    @property
+    def is_dark(self) -> bool:
+        return self._dark_theme
 
     def configure_canvas(
         self,
@@ -55,7 +60,8 @@ class DiagramScene(QGraphicsScene):
 
     def set_dark_theme(self, enabled: bool) -> None:
         self._dark_theme = enabled
-        self.setBackgroundBrush(QBrush(QColor("#1d222b" if enabled else "#f5f7fa")))
+        colors = DARK_COLORS if enabled else LIGHT_COLORS
+        self.setBackgroundBrush(QBrush(QColor(colors.canvas)))
         self.update()
 
     def constrain_position(self, item: NodeGraphicsItem, position: QPointF) -> QPointF:
@@ -122,7 +128,8 @@ class DiagramScene(QGraphicsScene):
         rect = QRectF(rect)
         if not self.grid_visible:
             return
-        color = QColor("#3b4555" if self._dark_theme else "#d7dde6")
+        colors = DARK_COLORS if self._dark_theme else LIGHT_COLORS
+        color = QColor(colors.canvas_grid)
         pen = QPen(color, 0.0)
         painter.setPen(pen)
         left = int(rect.left() // self.grid_size) * self.grid_size
@@ -139,7 +146,8 @@ class DiagramScene(QGraphicsScene):
     def drawForeground(self, painter: QPainter, rect: QRectF | QRect) -> None:
         super().drawForeground(painter, rect)
         rect = QRectF(rect)
-        painter.setPen(QPen(QColor("#e91e63"), 1.2, Qt.PenStyle.DashLine))
+        colors = DARK_COLORS if self._dark_theme else LIGHT_COLORS
+        painter.setPen(QPen(QColor(colors.ai), 1.2, Qt.PenStyle.DashLine))
         if self._guide_x is not None:
             painter.drawLine(
                 QPointF(self._guide_x, rect.top()),
@@ -252,6 +260,8 @@ class DiagramView(QGraphicsView):
         self._zoom = 1.0
         self._panning = False
         self._pan_origin = QPoint()
+        self._space_pressed = False
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     @property
     def zoom_factor(self) -> float:
@@ -299,7 +309,9 @@ class DiagramView(QGraphicsView):
         event.accept()
 
     def mousePressEvent(self, event) -> None:  # type: ignore[no-untyped-def]
-        if event.button() == Qt.MouseButton.MiddleButton:
+        if event.button() == Qt.MouseButton.MiddleButton or (
+            event.button() == Qt.MouseButton.LeftButton and self._space_pressed
+        ):
             self._panning = True
             self._pan_origin = event.position().toPoint()
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
@@ -329,6 +341,23 @@ class DiagramView(QGraphicsView):
             event.accept()
             return
         super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        if event.key() == Qt.Key.Key_Space and not event.isAutoRepeat():
+            self._space_pressed = True
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        if event.key() == Qt.Key.Key_Space and not event.isAutoRepeat():
+            self._space_pressed = False
+            if not self._panning:
+                self.unsetCursor()
+            event.accept()
+            return
+        super().keyReleaseEvent(event)
 
 
 class MiniMapView(QGraphicsView):
@@ -370,6 +399,14 @@ class MiniMapView(QGraphicsView):
         ).boundingRect()
         mapped = self.mapFromScene(visible).boundingRect()
         painter = QPainter(self.viewport())
-        painter.setPen(QPen(QColor("#e91e63"), 2.0))
-        painter.setBrush(QColor(233, 30, 99, 24))
+        scene = self.main_view.scene()
+        colors = (
+            DARK_COLORS
+            if isinstance(scene, DiagramScene) and scene.is_dark
+            else LIGHT_COLORS
+        )
+        painter.setPen(QPen(QColor(colors.ai), 2.0))
+        fill = QColor(colors.ai)
+        fill.setAlpha(24)
+        painter.setBrush(fill)
         painter.drawRect(mapped)

@@ -4,6 +4,34 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
+### Ajouté
+
+- refonte UI/UX 2.0 structurée autour de **Concevoir → Vérifier → Transformer
+  → Produire**, avec états permanents du MCD, du document, du MLD et du SQL ;
+- Start Center avec actions principales, fichiers récents, exemples et imports ;
+- design system centralisé et thèmes clair, sombre et système appliqués aux
+  widgets, canvas MCD/MLD et coloration SQL ;
+- nouvelles cartes graphiques MCD, palette de canvas, sélection et survol
+  visibles, pan avec Espace et inspecteur de propriétés restructuré ;
+- centre de validation intégré avec filtres, explications et localisation sur
+  le canvas ;
+- vue MLD enrichie d’une provenance navigable et d’un retour vers le MCD ;
+- espace SQL intégré avec dialectes, validation, statistiques, recherche,
+  numéros de lignes, coloration légère, copie et export ;
+- hub IA unifié rappelant la validation locale et la confirmation obligatoire ;
+- centre de documentation intégré à la fenêtre principale ;
+- recherche globale MCD/MLD/documentation (`Ctrl+Shift+F`) et palette de
+  commandes (`Ctrl+K`) ;
+- audit, cahier des charges, guides UX et rapport final sous `docs/`, ainsi que
+  huit captures reproductibles de référence.
+
+### Qualité
+
+- nouveaux tests Qt couvrant le shell, l’accueil, les thèmes, le canvas, les
+  propriétés, la validation, le workflow, le MLD, le SQL, l’IA, la
+  documentation, la recherche et la palette de commandes ;
+- suite complète validée avec 377 tests, Ruff et mypy au vert.
+
 ## [0.10.1] - 2026-09-02
 
 ### Corrigé

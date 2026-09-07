@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF
+from PySide6.QtCore import QPointF, Qt
 
 from merisor.application import DiagramController
 from merisor.domain import Cardinality, ModelDomain, Position
-from merisor.ui.canvas import DiagramScene, MiniMapView
+from merisor.ui.canvas import DiagramScene, DiagramView, MiniMapView
+from merisor.ui.items import EntityGraphicsItem
 
 
 def _controller() -> DiagramController:
@@ -130,8 +131,6 @@ def test_folding_search_and_domain_colors_are_transient(qapp) -> None:  # type: 
 
 
 def test_minimap_shares_the_scene_and_tracks_the_main_view(qapp) -> None:  # type: ignore[no-untyped-def]
-    from merisor.ui.canvas import DiagramView
-
     scene = DiagramScene()
     main_view = DiagramView(scene)
     minimap = MiniMapView(main_view)
@@ -144,3 +143,39 @@ def test_minimap_shares_the_scene_and_tracks_the_main_view(qapp) -> None:  # typ
     assert minimap.main_view is main_view
     assert minimap.isVisible()
     minimap.close()
+
+
+def test_canvas_cards_expose_readable_attribute_parts_and_tooltips(qapp) -> None:  # type: ignore[no-untyped-def]
+    controller = _controller()
+    entity = controller.create_entity("CLIENT", QPointF())
+    controller.add_attribute(entity.id, "id_client", True)
+    item = controller._node_items[entity.id]
+
+    assert EntityGraphicsItem._attribute_parts("email : VARCHAR(255) UNIQUE") == (
+        "email",
+        "VARCHAR(255) UNIQUE",
+    )
+    assert item.toolTip().startswith("Entité : CLIENT")
+    assert EntityGraphicsItem.WIDTH >= 340
+
+
+def test_space_bar_enables_canvas_pan_mode(qapp) -> None:  # type: ignore[no-untyped-def]
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QKeyEvent
+
+    view = DiagramView(DiagramScene())
+    press = QKeyEvent(
+        QEvent.Type.KeyPress,
+        Qt.Key.Key_Space,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    release = QKeyEvent(
+        QEvent.Type.KeyRelease,
+        Qt.Key.Key_Space,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+    view.keyPressEvent(press)
+    assert view._space_pressed
+    view.keyReleaseEvent(release)
+    assert not view._space_pressed

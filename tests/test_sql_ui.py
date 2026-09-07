@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from PySide6.QtCore import QPointF
 from PySide6.QtWidgets import QApplication
 
@@ -69,7 +68,7 @@ def test_sql_preview_displays_readable_mld_errors(qapp) -> None:  # type: ignore
 
 
 def test_generate_sql_action_tracks_current_mld_and_uses_only_it(
-    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+    qapp: QApplication,
 ) -> None:
     window = MainWindow()
     assert not window.generate_sql_action.isEnabled()
@@ -81,25 +80,11 @@ def test_generate_sql_action_tracks_current_mld_and_uses_only_it(
     qapp.processEvents()
     assert window.generate_sql_action.isEnabled()
 
-    captured: dict[str, object] = {}
-
-    class FakeSQLPreviewDialog:
-        def __init__(self, model, project_name, parent) -> None:  # type: ignore[no-untyped-def]
-            captured.update(
-                model=model,
-                project_name=project_name,
-                parent=parent,
-            )
-
-        def exec(self) -> int:
-            captured["executed"] = True
-            return 0
-
-    monkeypatch.setattr("merisor.ui.main_window.SQLPreviewDialog", FakeSQLPreviewDialog)
     window.generate_sql()
 
-    assert captured["model"] is generated
-    assert captured["executed"] is True
+    assert window.sql_workspace.model is generated
+    assert window.workspace_tabs.currentWidget() is window.sql_workspace
+    assert "PILOTE" in window.sql_workspace.script
     window.controller.rename_node(entity.id, "AVIATEUR")
     assert not window.generate_sql_action.isEnabled()
     window.controller.undo_stack.undo()

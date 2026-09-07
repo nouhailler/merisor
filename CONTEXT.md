@@ -1,6 +1,6 @@
 # Contexte de reprise du projet MERISOR
 
-Ce document décrit l'état réel du dépôt au 2 septembre 2026 et les évolutions
+Ce document décrit l'état réel du dépôt au 7 septembre 2026 et les évolutions
 déjà terminées. Il doit être lu avant toute nouvelle évolution afin de
 ne pas réimplémenter les versions précédentes.
 
@@ -13,6 +13,13 @@ MCD graphique → validation → MLD structuré → SQL exportable
 ```
 
 Fonctionnalités déjà intégrées :
+
+- interface UI/UX 2.0 avec design system, thèmes clair/sombre/système, Start
+  Center et workflow permanent Concevoir/Vérifier/Transformer/Produire/IA ;
+- espaces intégrés Validation, MLD avec provenance, SQL avec éditeur numéroté,
+  Assistant IA et Documentation, sans déplacement des règles métier dans Qt ;
+- recherche globale MCD/MLD/documentation (`Ctrl+Shift+F`) et palette de
+  commandes (`Ctrl+K`) ; audit, guides et rapport final sous `docs/` ;
 
 - documentation structurée sous `docs/`, lecteur hors ligne intégré accessible
   par le menu **Documentation** et `F1`, avec recherche et navigation ;

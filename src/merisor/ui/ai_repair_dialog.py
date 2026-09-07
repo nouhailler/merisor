@@ -125,7 +125,7 @@ class AiRepairDialog(QDialog):
         root.addWidget(splitter, 1)
 
         self.progress_label = QLabel("OpenRouter analyse le MCD…")
-        self.progress_label.setStyleSheet("color: #315d8a; font-weight: bold;")
+        self.progress_label.setProperty("role", "info")
         self.progress_label.hide()
         root.addWidget(self.progress_label)
         self.progress = QProgressBar()

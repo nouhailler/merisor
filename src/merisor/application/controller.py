@@ -742,6 +742,8 @@ class DiagramController(QObject):
             )
         for relation_item in self._relation_items.values():
             relation_item.set_dark_theme(dark)
+        for inheritance_item in self._inheritance_items.values():
+            inheritance_item.set_dark_theme(dark)
 
     def _snapshot_for_deletion(self, element_ids: set[str]) -> DeletionSnapshot:
         entities = tuple(
@@ -958,6 +960,27 @@ class DiagramController(QObject):
                         result.append(element)
         return result
 
+    def select_element(
+        self, element_id: str
+    ) -> NodeGraphicsItem | RelationGraphicsItem | None:
+        """Sélectionne l'item associé à un identifiant de rapport, si localisable."""
+
+        item: NodeGraphicsItem | RelationGraphicsItem | None = self._node_items.get(
+            element_id
+        ) or self._relation_items.get(element_id)
+        if item is None and element_id in self.model.functional_dependencies:
+            owner_id = self.model.functional_dependencies[element_id].owner_id
+            item = self._node_items.get(owner_id)
+        if item is None and element_id in self.model.inheritances:
+            parent_id = self.model.inheritances[element_id].parent_entity_id
+            item = self._node_items.get(parent_id)
+        if item is None:
+            return None
+        self.scene.clearSelection()
+        item.setSelected(True)
+        self._emit_selection()
+        return item
+
     def _emit_selection(self) -> None:
         self.selection_changed.emit(self.selected_elements())
 
@@ -998,6 +1021,11 @@ class DiagramController(QObject):
             item: NodeGraphicsItem = EntityGraphicsItem(node.id, node.name, attributes)
         else:
             item = AssociationGraphicsItem(node.id, node.name, attributes)
+        kind = "Entité" if isinstance(node, Entity) else "Association"
+        item.setToolTip(
+            f"{kind} : {node.name or '(sans nom)'}\n"
+            f"{len(node.attributes)} attribut(s) — cliquez pour afficher les propriétés"
+        )
         item.setPos(node.position.x, node.position.y)
         item.position_changed.connect(self._update_relations_for_node)
         item.move_finished.connect(self._node_move_finished)

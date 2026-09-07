@@ -92,6 +92,9 @@ def test_main_window_exposes_documentation_menu_and_f1(qapp: object) -> None:
     assert "Documentation" in menus
     assert window.documentation_action.shortcut().toString() == "F1"
     assert window.documentation_action.isEnabled()
+    window.show_documentation("mcd")
+    assert window.workspace_tabs.currentWidget() is window.documentation_center
+    assert "MCD" in window.documentation_center.browser.toPlainText()
     window.close()
 
 

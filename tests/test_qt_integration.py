@@ -129,6 +129,35 @@ def test_main_window_starts_offscreen(qapp) -> None:  # type: ignore[no-untyped-
     window.controller.undo_stack.setClean()
 
     window.close()
+
+
+def test_empty_properties_panel_summarizes_the_current_model(qapp) -> None:  # type: ignore[no-untyped-def]
+    window = MainWindow()
+    window.controller.create_entity("CLIENT", QPointF())
+    entity = next(iter(window.controller.model.entities.values()))
+    window.controller.add_attribute(entity.id, "id_client", True)
+    window.scene.clearSelection()
+    window.properties_panel.display([])
+
+    panel = window.properties_panel
+    assert panel.entity_count.text() == "1"
+    assert panel.attribute_count.text() == "1"
+    assert "valide" in panel.model_validation.text().lower()
+    window.controller.undo_stack.setClean()
+    window.close()
+
+
+def test_properties_panel_explains_multiple_selection(qapp) -> None:  # type: ignore[no-untyped-def]
+    window = MainWindow()
+    first = window.controller.create_entity("A", QPointF())
+    second = window.controller.create_entity("B", QPointF(300, 0))
+
+    window.properties_panel.display([first, second])
+
+    assert window.properties_panel.empty_title.text() == "SÉLECTION MULTIPLE"
+    assert "2 objets" in window.properties_panel.empty_message.text()
+    window.controller.undo_stack.setClean()
+    window.close()
     qapp.processEvents()
 
 

@@ -178,6 +178,14 @@ def test_mld_view_displays_copies_and_exports_text(qapp, tmp_path) -> None:  # t
     assert qapp.clipboard().text() == view.text
     assert path.read_text(encoding="utf-8") == view.text
     assert "MLD à jour" in view.status_label.text()
+    assert view.tabs.count() == 3
+    assert view.tabs.tabText(2) == "Provenance"
+    assert view.provenance_tree.topLevelItemCount() == len(model.tables)
+    sources: list[str] = []
+    view.source_requested.connect(sources.append)
+    view.provenance_tree.setCurrentItem(view.provenance_tree.topLevelItem(0))
+    view.show_source_button.click()
+    assert sources
 
     view.set_stale(True)
     assert "obsolète" in view.status_label.text()

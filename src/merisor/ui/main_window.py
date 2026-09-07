@@ -14,6 +14,7 @@ from PySide6.QtGui import (
     QPixmap,
 )
 from PySide6.QtWidgets import (
+    QAbstractScrollArea,
     QApplication,
     QDialog,
     QDockWidget,
@@ -24,6 +25,9 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QScrollArea,
+    QStackedWidget,
+    QStyle,
     QTabWidget,
     QToolBar,
 )
@@ -45,13 +49,22 @@ from merisor.application import (
 )
 from merisor.domain import InheritanceStrategy, MLDModel, MLDTable
 from merisor.persistence import JsonDiagramRepository, PersistenceError
+from merisor.ui.ai_hub import AIHub
 from merisor.ui.ai_mcd_dialog import AiMcdDialog
 from merisor.ui.ai_repair_dialog import AiRepairDialog
+from merisor.ui.application_shell import (
+    ModelStatusStrip,
+    ToolPalette,
+    WorkflowNavigation,
+    WorkflowState,
+    WorkflowStep,
+)
 from merisor.ui.canvas import DiagramScene, DiagramView, MiniMapView, ToolMode
+from merisor.ui.command_palette import CommandPalette, GlobalSearchDialog
 from merisor.ui.conversational_design_dialog import ConversationalDesignDialog
 from merisor.ui.ddl_import_dialog import DDLImportPreviewDialog
 from merisor.ui.diagram_exporter import DiagramExportError, DiagramVisualExporter
-from merisor.ui.documentation_dialog import DocumentationDialog
+from merisor.ui.documentation_dialog import DocumentationCenter
 from merisor.ui.documentation_exporter import (
     DocumentationExportError,
     DocumentationFileExporter,
@@ -66,13 +79,15 @@ from merisor.ui.properties_panel import PropertiesPanel
 from merisor.ui.pwa_import_dialog import PwaImportPreviewDialog
 from merisor.ui.quality_dialog import QualityReportDialog
 from merisor.ui.query_generator_dialog import QueryGeneratorDialog
-from merisor.ui.sql_dialog import SQLPreviewDialog
+from merisor.ui.sql_workspace import SQLWorkspace
+from merisor.ui.start_center import StartCenter
 from merisor.ui.submodel_dialog import SubmodelManagerDialog
 from merisor.ui.test_data_dialog import TestDataDialog
+from merisor.ui.theme import ThemeManager, ThemeMode
 from merisor.ui.transformation_explanation_dialog import (
     TransformationExplanationDialog,
 )
-from merisor.ui.validation_dialog import ValidationDialog
+from merisor.ui.validation_center import ValidationCenter
 from merisor.ui.version_comparison_dialog import VersionComparisonDialog
 
 
@@ -86,6 +101,7 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(str(self.LOGO_PATH)))
         self.resize(1280, 800)
         self._settings = QSettings("MERISOR", "MERISOR")
+        self.theme_manager = ThemeManager(self._settings, self)
         self.recent_menu: QMenu | None = None
 
         self.scene = DiagramScene(self)
@@ -96,13 +112,34 @@ class MainWindow(QMainWindow):
         self.workspace_tabs = QTabWidget(self)
         self.workspace_tabs.addTab(self.view, "MCD")
         self.workspace_tabs.addTab(self.mld_view, "MLD")
+        self.start_center = StartCenter(self)
+        self.workspace_tabs.addTab(self.start_center, "Accueil")
+        self.validation_center = ValidationCenter(self)
+        self.workspace_tabs.addTab(self.validation_center, "Vérifier")
+        self.sql_workspace = SQLWorkspace(self)
+        self.workspace_tabs.addTab(self.sql_workspace, "SQL")
+        self.ai_hub = AIHub(self)
+        self.workspace_tabs.addTab(self.ai_hub, "Assistant IA")
+        self.documentation_center = DocumentationCenter(parent=self)
+        self.workspace_tabs.addTab(self.documentation_center, "Documentation")
+        self.workspace_tabs.setCurrentWidget(self.start_center)
         self.setCentralWidget(self.workspace_tabs)
 
         self.properties_panel = PropertiesPanel(self.controller)
         properties_dock = QDockWidget("Propriétés", self)
         self.properties_dock = properties_dock
         properties_dock.setObjectName("propertiesDock")
-        properties_dock.setWidget(self.properties_panel)
+        self.properties_stack = QStackedWidget()
+        self.properties_stack.addWidget(self.properties_panel)
+        self.properties_stack.addWidget(self.mld_properties_panel)
+        self.properties_scroll = QScrollArea(properties_dock)
+        self.properties_scroll.setObjectName("propertiesScroll")
+        self.properties_scroll.setWidgetResizable(True)
+        self.properties_scroll.setSizeAdjustPolicy(
+            QAbstractScrollArea.SizeAdjustPolicy.AdjustIgnored
+        )
+        self.properties_scroll.setWidget(self.properties_stack)
+        properties_dock.setWidget(self.properties_scroll)
         properties_dock.setMinimumWidth(340)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, properties_dock)
 
@@ -118,9 +155,12 @@ class MainWindow(QMainWindow):
         self._create_actions()
         self._create_menus()
         self._create_toolbar()
+        self._create_application_shell()
         self._connect_signals()
         self.workspace_tabs.currentChanged.connect(self._workspace_changed)
+        self._workspace_changed(self.workspace_tabs.currentIndex())
         self.statusBar().showMessage("Prêt — utilisez les outils pour commencer.")
+        self._refresh_shell_status()
         self._update_title()
 
     def _create_actions(self) -> None:
@@ -192,6 +232,10 @@ class MainWindow(QMainWindow):
         self.fullscreen_action.setShortcut(QKeySequence("F11"))
         self.explore_model_action = QAction("Explorer le modèle…", self)
         self.explore_model_action.setShortcut(QKeySequence("Ctrl+Alt+E"))
+        self.global_search_action = QAction("Recherche globale…", self)
+        self.global_search_action.setShortcut(QKeySequence("Ctrl+Shift+F"))
+        self.command_palette_action = QAction("Palette de commandes…", self)
+        self.command_palette_action.setShortcut(QKeySequence("Ctrl+K"))
 
         self.documentation_action = QAction("Centre de documentation…", self)
         self.documentation_action.setShortcut(QKeySequence("F1"))
@@ -252,7 +296,7 @@ class MainWindow(QMainWindow):
         self.theme_group = QActionGroup(self)
         self.theme_group.setExclusive(True)
         self.theme_actions: dict[str, QAction] = {}
-        configured_theme = str(self._settings.value("appearance/theme", "system"))
+        configured_theme = self.theme_manager.mode.value
         for key, label in (
             ("system", "Thème système"),
             ("light", "Thème clair"),
@@ -272,6 +316,27 @@ class MainWindow(QMainWindow):
         self.association_action = self._tool_action("Association", ToolMode.ASSOCIATION)
         self.relation_action = self._tool_action("Relation", ToolMode.RELATION)
         self.select_action.setChecked(True)
+        self.undo_action.setToolTip("Annuler la dernière modification (Ctrl+Z)")
+        self.redo_action.setToolTip("Rétablir la dernière modification (Ctrl+Shift+Z)")
+        self.global_search_action.setToolTip(
+            "Rechercher dans le MCD, le MLD et la documentation"
+        )
+        self.command_palette_action.setToolTip(
+            "Rechercher et exécuter une commande (Ctrl+K)"
+        )
+        self._install_action_icons()
+
+    def _install_action_icons(self) -> None:
+        icons = {
+            self.new_action: QStyle.StandardPixmap.SP_FileIcon,
+            self.open_action: QStyle.StandardPixmap.SP_DialogOpenButton,
+            self.save_action: QStyle.StandardPixmap.SP_DialogSaveButton,
+            self.undo_action: QStyle.StandardPixmap.SP_ArrowBack,
+            self.redo_action: QStyle.StandardPixmap.SP_ArrowForward,
+            self.delete_action: QStyle.StandardPixmap.SP_TrashIcon,
+        }
+        for action, standard_icon in icons.items():
+            action.setIcon(self.style().standardIcon(standard_icon))
 
     def _tool_action(self, text: str, mode: ToolMode) -> QAction:
         action = QAction(text, self)
@@ -331,6 +396,10 @@ class MainWindow(QMainWindow):
         model_menu.addAction(self.auto_layout_action)
 
         tools_menu = self.menuBar().addMenu("Outils")
+        tools_menu.addAction(self.global_search_action)
+        tools_menu.addAction(self.command_palette_action)
+        tools_menu.addAction(self.auto_layout_action)
+        tools_menu.addSeparator()
         tools_menu.addAction(self.generate_test_data_action)
         tools_menu.addAction(self.generate_query_action)
 
@@ -362,7 +431,7 @@ class MainWindow(QMainWindow):
         documentation_menu.addAction(self.faq_documentation_action)
 
     def _create_toolbar(self) -> None:
-        toolbar = QToolBar("Outils du diagramme", self)
+        toolbar = QToolBar("Commandes du projet", self)
         toolbar.setObjectName("diagramToolbar")
         toolbar.setMovable(False)
         self.brand_logo = QLabel(self)
@@ -380,28 +449,66 @@ class MainWindow(QMainWindow):
         self.brand_logo.setContentsMargins(4, 2, 8, 2)
         toolbar.addWidget(self.brand_logo)
         toolbar.addSeparator()
-        toolbar.addAction(self.select_action)
+        toolbar.addAction(self.new_action)
+        toolbar.addAction(self.open_action)
+        toolbar.addAction(self.save_action)
         toolbar.addSeparator()
-        toolbar.addAction(self.entity_action)
-        toolbar.addAction(self.association_action)
-        toolbar.addAction(self.relation_action)
+        toolbar.addAction(self.undo_action)
+        toolbar.addAction(self.redo_action)
         toolbar.addSeparator()
-        toolbar.addAction(self.delete_action)
-        toolbar.addSeparator()
-        toolbar.addAction(self.validate_action)
-        toolbar.addAction(self.quality_action)
-        toolbar.addAction(self.ai_repair_action)
-        toolbar.addAction(self.normalization_action)
         toolbar.addAction(self.generate_mld_action)
         toolbar.addAction(self.generate_sql_action)
-        toolbar.addSeparator()
         self.visual_search = QLineEdit(self)
         self.visual_search.setObjectName("visualSearch")
         self.visual_search.setClearButtonEnabled(True)
         self.visual_search.setMaximumWidth(250)
         self.visual_search.setPlaceholderText("Rechercher dans le MCD…")
-        toolbar.addWidget(self.visual_search)
         self.addToolBar(toolbar)
+
+    def _create_application_shell(self) -> None:
+        workflow_toolbar = QToolBar("Parcours MERISE", self)
+        workflow_toolbar.setObjectName("workflowToolbar")
+        workflow_toolbar.setMovable(False)
+        self.workflow_navigation = WorkflowNavigation(self)
+        workflow_toolbar.addWidget(self.workflow_navigation)
+        self.addToolBarBreak(Qt.ToolBarArea.TopToolBarArea)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, workflow_toolbar)
+
+        self.tool_palette = ToolPalette(
+            (
+                self.select_action,
+                self.entity_action,
+                self.association_action,
+                self.relation_action,
+                self.add_inheritance_action,
+            ),
+            (
+                self.delete_action,
+                self.auto_layout_action,
+                self.grid_action,
+                self.snap_action,
+                self.guides_action,
+                self.fold_action,
+                self.zoom_out_action,
+                self.reset_zoom_action,
+                self.zoom_in_action,
+            ),
+            self.visual_search,
+            self,
+        )
+        self.tools_dock = QDockWidget("Concevoir", self)
+        self.tools_dock.setObjectName("toolsDock")
+        self.tool_scroll = QScrollArea(self.tools_dock)
+        self.tool_scroll.setObjectName("toolPaletteScroll")
+        self.tool_scroll.setWidgetResizable(True)
+        self.tool_scroll.setWidget(self.tool_palette)
+        self.tools_dock.setWidget(self.tool_scroll)
+        self.tools_dock.setMinimumWidth(190)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.tools_dock)
+
+        self.model_status = ModelStatusStrip(self)
+        self.statusBar().addPermanentWidget(self.model_status)
+        self._refresh_start_center()
 
     def _connect_signals(self) -> None:
         self.new_action.triggered.connect(self.new_document)
@@ -456,12 +563,12 @@ class MainWindow(QMainWindow):
         )
         self.fold_action.triggered.connect(self.controller.toggle_selected_fold)
         self.fullscreen_action.toggled.connect(self._toggle_fullscreen)
-        self.minimap_dock.visibilityChanged.connect(
-            lambda visible: self._settings.setValue("canvas/minimap", visible)
-        )
+        self.minimap_dock.visibilityChanged.connect(self._minimap_visibility_changed)
         self.theme_group.triggered.connect(self._theme_selected)
         self.visual_search.textChanged.connect(self._visual_search_changed)
         self.explore_model_action.triggered.connect(self.show_model_explorer)
+        self.global_search_action.triggered.connect(self.show_global_search)
+        self.command_palette_action.triggered.connect(self.show_command_palette)
         self.validate_action.triggered.connect(self.show_validation)
         self.compare_version_action.triggered.connect(self.compare_with_version)
         self.quality_action.triggered.connect(self.show_quality_report)
@@ -480,6 +587,17 @@ class MainWindow(QMainWindow):
         self.add_inheritance_action.triggered.connect(self.add_inheritance)
         self.manage_submodels_action.triggered.connect(self.manage_submodels)
         self.tool_group.triggered.connect(self._tool_triggered)
+        self.workflow_navigation.step_requested.connect(self._workflow_requested)
+        self.start_center.new_requested.connect(self.new_document)
+        self.start_center.open_requested.connect(self.open_document)
+        self.start_center.ai_requested.connect(self.show_ai_hub)
+        self.start_center.import_ddl_requested.connect(self.import_ddl)
+        self.start_center.import_pwa_requested.connect(self.import_pwa_project)
+        self.start_center.recent_requested.connect(self._open_recent_file)
+        self.start_center.example_requested.connect(self._open_example)
+        self.validation_center.locate_requested.connect(self._locate_validation_element)
+        self.ai_hub.action_requested.connect(self._ai_action_requested)
+        self.mld_view.source_requested.connect(self._locate_mld_source)
 
         self.scene.entity_creation_requested.connect(self._request_entity)
         self.scene.association_creation_requested.connect(self._request_association)
@@ -488,10 +606,15 @@ class MainWindow(QMainWindow):
         self.controller.selection_changed.connect(self.properties_panel.display)
         self.properties_panel.impact_requested.connect(self.show_impact_analysis)
         self.controller.model_changed.connect(self._refresh_properties)
+        self.controller.model_changed.connect(self._refresh_shell_status)
         self.controller.dirty_changed.connect(self._update_title)
+        self.controller.dirty_changed.connect(self._refresh_shell_status)
         self.controller.document_path_changed.connect(self._update_title)
+        self.controller.document_path_changed.connect(self._refresh_shell_status)
         self.controller.mld_changed.connect(self._display_mld)
         self.controller.mld_stale_changed.connect(self._set_mld_stale)
+        self.controller.mld_changed.connect(self._refresh_shell_status)
+        self.controller.mld_stale_changed.connect(self._refresh_shell_status)
         self.mld_view.graphics_view.table_selected.connect(
             self.mld_properties_panel.display
         )
@@ -503,6 +626,78 @@ class MainWindow(QMainWindow):
         )
         self._canvas_preferences_changed()
         self._apply_theme(str(self._settings.value("appearance/theme", "system")))
+
+    def _workflow_requested(self, step_name: str) -> None:
+        step = WorkflowStep(step_name)
+        if step is WorkflowStep.DESIGN:
+            self.workspace_tabs.setCurrentWidget(self.view)
+        elif step is WorkflowStep.VERIFY:
+            self.show_validation()
+        elif step is WorkflowStep.TRANSFORM:
+            if self.controller.mld_model is None or self.controller.mld_is_stale:
+                self.generate_mld()
+            else:
+                self.workspace_tabs.setCurrentWidget(self.mld_view)
+        elif step is WorkflowStep.PRODUCE:
+            self.generate_sql()
+        elif step is WorkflowStep.AI:
+            self.show_ai_hub()
+
+    def _refresh_shell_status(self, _value: object = None) -> None:
+        report = self.controller.validate()
+        self.model_status.set_validation(len(report.errors), len(report.warnings))
+        self.model_status.set_document(
+            dirty=self.controller.is_dirty,
+            named=self.controller.document_path is not None,
+        )
+        self.model_status.set_mld(
+            exists=self.controller.mld_model is not None,
+            stale=self.controller.mld_is_stale,
+        )
+        self.model_status.set_sql(
+            exists=self.sql_workspace.model is not None,
+            stale=self.controller.mld_is_stale,
+        )
+        self.workflow_navigation.set_state(
+            WorkflowStep.DESIGN,
+            WorkflowState.READY,
+            "MCD disponible — poursuivez sa conception.",
+        )
+        if report.errors:
+            verify_state = WorkflowState.ERROR
+            verify_detail = f"{len(report.errors)} erreur(s) à corriger."
+        elif report.warnings:
+            verify_state = WorkflowState.WARNING
+            verify_detail = f"{len(report.warnings)} avertissement(s) à examiner."
+        else:
+            verify_state = WorkflowState.READY
+            verify_detail = "MCD valide."
+        self.workflow_navigation.set_state(
+            WorkflowStep.VERIFY, verify_state, verify_detail
+        )
+        if self.controller.mld_model is None:
+            transform_state = WorkflowState.PENDING
+            transform_detail = "MLD non généré."
+        elif self.controller.mld_is_stale:
+            transform_state = WorkflowState.STALE
+            transform_detail = "Le MCD a changé : régénérez le MLD."
+        else:
+            transform_state = WorkflowState.READY
+            transform_detail = "MLD à jour."
+        self.workflow_navigation.set_state(
+            WorkflowStep.TRANSFORM, transform_state, transform_detail
+        )
+        can_produce = (
+            self.controller.mld_model is not None and not self.controller.mld_is_stale
+        )
+        self.workflow_navigation.buttons[WorkflowStep.PRODUCE].setEnabled(can_produce)
+        self.workflow_navigation.set_state(
+            WorkflowStep.PRODUCE,
+            WorkflowState.READY if can_produce else WorkflowState.PENDING,
+            "Produire SQL, documentation ou données."
+            if can_produce
+            else "Générez d'abord un MLD à jour.",
+        )
 
     def _tool_triggered(self, action: QAction) -> None:
         mode = action.data()
@@ -519,6 +714,10 @@ class MainWindow(QMainWindow):
         self._settings.setValue("canvas/snap", self.snap_action.isChecked())
         self._settings.setValue("canvas/guides", self.guides_action.isChecked())
 
+    def _minimap_visibility_changed(self, visible: bool) -> None:
+        if self.workspace_tabs.currentWidget() is self.view:
+            self._settings.setValue("canvas/minimap", visible)
+
     def _theme_selected(self, action: QAction) -> None:
         self._apply_theme(str(action.data()))
 
@@ -526,28 +725,11 @@ class MainWindow(QMainWindow):
         application = QApplication.instance()
         if not isinstance(application, QApplication):
             return
-        dark = theme == "dark"
-        if theme == "system":
-            dark = (
-                application.palette()
-                .color(application.palette().ColorRole.Window)
-                .lightness()
-                < 128
-            )
-        if dark:
-            application.setStyleSheet(
-                "QWidget { background-color: #242a33; color: #e8edf5; }"
-                "QLineEdit, QPlainTextEdit, QTextEdit, QTreeWidget, QListWidget, "
-                "QComboBox, QSpinBox { background-color: #1d222b; "
-                "color: #e8edf5; border: 1px solid #586579; }"
-                "QMenuBar, QMenu, QToolBar { background-color: #2a313d; }"
-                "QPushButton { background-color: #354052; padding: 4px; }"
-            )
-        else:
-            application.setStyleSheet("")
+        dark = self.theme_manager.apply(application, ThemeMode(theme))
         self.scene.set_dark_theme(dark)
         self.controller.apply_canvas_style(dark=dark)
-        self._settings.setValue("appearance/theme", theme)
+        self.mld_view.set_dark_theme(dark)
+        self.sql_workspace.set_dark_theme(dark)
 
     def _toggle_fullscreen(self, enabled: bool) -> None:
         if enabled:
@@ -565,14 +747,108 @@ class MainWindow(QMainWindow):
     def show_openrouter_settings(self, _checked: bool = False) -> None:
         OpenRouterSettingsDialog(self).exec()
 
+    def show_ai_hub(self, _checked: bool = False) -> None:
+        self.workspace_tabs.setCurrentWidget(self.ai_hub)
+
+    def _ai_action_requested(self, action_id: str) -> None:
+        if action_id == "conversation":
+            self.show_conversational_assistant()
+        elif action_id == "create":
+            self.generate_ai_mcd()
+        elif action_id == "repair":
+            self.show_ai_repair()
+        elif action_id == "quality":
+            self.show_quality_report()
+        elif action_id == "normalize":
+            self.show_normalization_assistant()
+        elif action_id == "explain":
+            if self.controller.mld_model is None or self.controller.mld_is_stale:
+                self.generate_mld()
+            else:
+                self.workspace_tabs.setCurrentWidget(self.mld_view)
+
     def show_documentation(self, page_id: str = "index") -> None:
-        DocumentationDialog(page_id, self).exec()
+        self.documentation_center.open_page(page_id)
+        self.workspace_tabs.setCurrentWidget(self.documentation_center)
 
     def _workspace_changed(self, index: int) -> None:
+        if index == self.workspace_tabs.indexOf(self.start_center):
+            self.tools_dock.hide()
+            self.properties_dock.hide()
+            self.minimap_dock.hide()
+            return
+        if index == self.workspace_tabs.indexOf(self.validation_center):
+            self.tools_dock.hide()
+            self.properties_dock.hide()
+            self.minimap_dock.hide()
+            self.workflow_navigation.set_current(WorkflowStep.VERIFY)
+            return
+        if index == self.workspace_tabs.indexOf(self.sql_workspace):
+            self.tools_dock.hide()
+            self.properties_dock.hide()
+            self.minimap_dock.hide()
+            self.workflow_navigation.set_current(WorkflowStep.PRODUCE)
+            return
+        if index == self.workspace_tabs.indexOf(self.ai_hub):
+            self.tools_dock.hide()
+            self.properties_dock.hide()
+            self.minimap_dock.hide()
+            self.workflow_navigation.set_current(WorkflowStep.AI)
+            return
+        if index == self.workspace_tabs.indexOf(self.documentation_center):
+            self.tools_dock.hide()
+            self.properties_dock.hide()
+            self.minimap_dock.hide()
+            return
+        self.properties_dock.show()
         if index == self.workspace_tabs.indexOf(self.mld_view):
-            self.properties_dock.setWidget(self.mld_properties_panel)
+            self.tools_dock.hide()
+            self.minimap_dock.hide()
+            self.workflow_navigation.set_current(WorkflowStep.TRANSFORM)
+            self.properties_stack.setCurrentWidget(self.mld_properties_panel)
         else:
-            self.properties_dock.setWidget(self.properties_panel)
+            self.tools_dock.show()
+            self.minimap_dock.setVisible(
+                bool(self._settings.value("canvas/minimap", True, type=bool))
+            )
+            self.workflow_navigation.set_current(WorkflowStep.DESIGN)
+            self.properties_stack.setCurrentWidget(self.properties_panel)
+
+    def _refresh_start_center(self) -> None:
+        if not hasattr(self, "start_center"):
+            return
+        self.start_center.set_recent_files(self._recent_files())
+        candidates = (
+            Path(__file__).resolve().parents[3] / "examples",
+            Path.cwd() / "examples",
+        )
+        example_paths: list[Path] = []
+        for directory in candidates:
+            if directory.is_dir():
+                example_paths = sorted(directory.glob("*.json"))
+                if example_paths:
+                    break
+        self.start_center.set_examples(example_paths)
+
+    def _open_example(self, filename: str) -> None:
+        if not self._maybe_save():
+            return
+        try:
+            model = self.controller.repository.load(filename)
+            self.controller.load_transient_model(model)
+        except (OSError, PersistenceError) as error:
+            QMessageBox.critical(
+                self,
+                "Exemple inaccessible",
+                f"Impossible d'ouvrir cet exemple : {error}",
+            )
+            return
+        self.workspace_tabs.setCurrentWidget(self.view)
+        self.controller.auto_layout()
+        self.statusBar().showMessage(
+            "Exemple chargé comme nouveau modèle — enregistrez-le pour le conserver.",
+            5000,
+        )
 
     def _request_entity(self, position: QPointF) -> None:
         name, accepted = QInputDialog.getText(
@@ -656,8 +932,20 @@ class MainWindow(QMainWindow):
         self.properties_panel.display(self.controller.selected_elements())
 
     def show_validation(self, _checked: bool = False) -> None:
-        dialog = ValidationDialog(self.controller.validate(), self)
-        dialog.exec()
+        self.validation_center.set_report(self.controller.validate())
+        self.workspace_tabs.setCurrentWidget(self.validation_center)
+
+    def _locate_validation_element(self, element_id: str) -> None:
+        item = self.controller.select_element(element_id)
+        if item is None:
+            self.statusBar().showMessage(
+                "Ce problème global ne correspond pas à un objet graphique.", 3500
+            )
+            return
+        self.workspace_tabs.setCurrentWidget(self.view)
+        self.view.centerOn(item)
+        self.view.setFocus()
+        self.statusBar().showMessage("Élément localisé sur le MCD.", 2500)
 
     def compare_with_version(self, _checked: bool = False) -> None:
         filename, _filter = QFileDialog.getOpenFileName(
@@ -704,6 +992,62 @@ class MainWindow(QMainWindow):
     def show_model_explorer(self, _checked: bool = False) -> None:
         ModelExplorerDialog(self.controller.model, self).exec()
 
+    def show_command_palette(self, _checked: bool = False) -> None:
+        CommandPalette(self._palette_actions(), self).exec()
+
+    def _palette_actions(self) -> tuple[QAction, ...]:
+        return (
+            self.new_action,
+            self.open_action,
+            self.save_action,
+            self.undo_action,
+            self.redo_action,
+            self.entity_action,
+            self.association_action,
+            self.relation_action,
+            self.validate_action,
+            self.quality_action,
+            self.generate_mld_action,
+            self.generate_sql_action,
+            self.export_visual_action,
+            self.global_search_action,
+            self.documentation_action,
+            self.conversational_assistant_action,
+            self.generate_ai_mcd_action,
+            self.openrouter_settings_action,
+        )
+
+    def show_global_search(self, _checked: bool = False) -> None:
+        dialog = GlobalSearchDialog(
+            self.controller.model, self.controller.mld_model, self
+        )
+        dialog.result_requested.connect(self._global_search_result)
+        dialog.exec()
+
+    def _global_search_result(self, kind: str, element_id: str) -> None:
+        if kind == "documentation":
+            self.show_documentation(element_id)
+            return
+        if kind == "mld":
+            self.workspace_tabs.setCurrentWidget(self.mld_view)
+            self.mld_view.graphics_view.select_table(element_id)
+            return
+        item = self.controller.select_element(element_id)
+        if item is not None:
+            self.workspace_tabs.setCurrentWidget(self.view)
+            self.view.centerOn(item)
+
+    def _locate_mld_source(self, element_id: str) -> None:
+        item = self.controller.select_element(element_id)
+        if item is None:
+            self.statusBar().showMessage(
+                "La provenance est conservée, mais cet élément n'est pas directement visible.",
+                4000,
+            )
+            return
+        self.workspace_tabs.setCurrentWidget(self.view)
+        self.view.centerOn(item)
+
     def manage_submodels(self, _checked: bool = False) -> None:
         dialog = SubmodelManagerDialog(self.controller.model, self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
@@ -722,7 +1066,8 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(
                 "Impossible de générer le MLD : corrigez les erreurs du MCD."
             )
-            ValidationDialog(error.report, self).exec()
+            self.validation_center.set_report(error.report)
+            self.workspace_tabs.setCurrentWidget(self.validation_center)
             return
         except MLDTransformationError as error:
             QMessageBox.critical(
@@ -742,6 +1087,8 @@ class MainWindow(QMainWindow):
     def _display_mld(self, model: MLDModel | None) -> None:
         self.mld_properties_panel.clear()
         self.mld_properties_panel.set_stale(False)
+        if self.sql_workspace.model is not model:
+            self.sql_workspace.clear_model()
         if model is None:
             self.mld_view.clear_model()
         else:
@@ -789,7 +1136,9 @@ class MainWindow(QMainWindow):
             if self.controller.document_path is not None
             else "Sans titre"
         )
-        SQLPreviewDialog(model, project_name, self).exec()
+        self.sql_workspace.set_model(model, project_name)
+        self.workspace_tabs.setCurrentWidget(self.sql_workspace)
+        self._refresh_shell_status()
 
     def generate_test_data(self, _checked: bool = False) -> None:
         model = self.controller.mld_model
@@ -859,6 +1208,7 @@ class MainWindow(QMainWindow):
     def new_document(self, _checked: bool = False) -> None:
         if self._maybe_save():
             self.controller.new_document()
+            self.workspace_tabs.setCurrentWidget(self.view)
             self.select_action.setChecked(True)
 
     def open_document(self, _checked: bool = False) -> None:
@@ -875,6 +1225,7 @@ class MainWindow(QMainWindow):
         try:
             self.controller.load(filename)
             self._add_recent_file(filename)
+            self.workspace_tabs.setCurrentWidget(self.view)
             self.select_action.setChecked(True)
         except PersistenceError as error:
             QMessageBox.critical(self, "Ouverture impossible", str(error))
@@ -1143,6 +1494,7 @@ class MainWindow(QMainWindow):
         files.insert(0, filename)
         self._settings.setValue("recent_files", files[: self.MAX_RECENT_FILES])
         self._refresh_recent_menu()
+        self._refresh_start_center()
 
     def _refresh_recent_menu(self) -> None:
         if self.recent_menu is None:
@@ -1175,6 +1527,7 @@ class MainWindow(QMainWindow):
         try:
             self.controller.load(filename)
             self._add_recent_file(filename)
+            self.workspace_tabs.setCurrentWidget(self.view)
             self.select_action.setChecked(True)
         except PersistenceError as error:
             self._refresh_recent_menu()

@@ -106,6 +106,22 @@ DOCUMENTATION_PAGES = (
     DocumentationPage(
         "project-context", "Contexte et décisions", "Projet", "decisions/CONTEXT.md"
     ),
+    DocumentationPage(
+        "ui-ux-report",
+        "Interface UI/UX 2.0",
+        "Interface",
+        "UI_UX_2.0_IMPLEMENTATION_REPORT.md",
+    ),
+    DocumentationPage(
+        "design-system", "Design system", "Interface", "DESIGN_SYSTEM.md"
+    ),
+    DocumentationPage("ux-guidelines", "Principes UX", "Interface", "UX_GUIDELINES.md"),
+    DocumentationPage(
+        "ui-architecture",
+        "Architecture de l'interface",
+        "Interface",
+        "UI_ARCHITECTURE.md",
+    ),
 )
 
 

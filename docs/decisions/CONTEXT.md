@@ -2,6 +2,10 @@
 
 [← Portail](../INDEX.md) · [ADR](ADR/ADR-001-MCD-SOURCE-VERITE.md)
 
+> La refonte de présentation est décrite dans le
+> [rapport UI/UX 2.0](../UI_UX_2.0_IMPLEMENTATION_REPORT.md). Elle ne déplace
+> aucune règle MERISE ou de persistance dans la couche Qt.
+
 ## Vision
 
 MERISOR est un éditeur MERISE pédagogique et professionnel. Il doit rendre les

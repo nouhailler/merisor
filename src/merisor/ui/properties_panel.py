@@ -50,34 +50,68 @@ class PropertiesPanel(QWidget):
         self._current_relation_id: str | None = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(10, 10, 10, 10)
-        title = QLabel("PROPRIÉTÉS")
-        title_font = title.font()
-        title_font.setBold(True)
-        title.setFont(title_font)
-        root.addWidget(title)
+        root.setContentsMargins(12, 12, 12, 12)
+        self.panel_title = QLabel("PROPRIÉTÉS")
+        self.panel_title.setProperty("role", "sectionTitle")
+        root.addWidget(self.panel_title)
         separator = QFrame()
         separator.setFrameShape(QFrame.Shape.HLine)
         root.addWidget(separator)
 
         self.stack = QStackedWidget()
         root.addWidget(self.stack, 1)
-        self.empty_page = QLabel(
-            "Sélectionnez une entité, une association ou une relation."
-        )
-        self.empty_page.setWordWrap(True)
-        self.empty_page.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.empty_page = self._build_empty_page()
         self.node_page = self._build_node_page()
         self.relation_page = self._build_relation_page()
         self.stack.addWidget(self.empty_page)
         self.stack.addWidget(self.node_page)
         self.stack.addWidget(self.relation_page)
+        self._refresh_model_summary()
+
+    def _build_empty_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 8, 0, 0)
+        self.empty_title = QLabel("MON MODÈLE")
+        self.empty_title.setProperty("role", "sectionTitle")
+        layout.addWidget(self.empty_title)
+        self.empty_message = QLabel(
+            "Sélectionnez une entité, une association ou une relation."
+        )
+        self.empty_message.setWordWrap(True)
+        self.empty_message.setProperty("role", "secondary")
+        layout.addWidget(self.empty_message)
+        summary = QGroupBox("Vue d'ensemble")
+        summary_form = QFormLayout(summary)
+        self.entity_count = QLabel("0")
+        self.association_count = QLabel("0")
+        self.attribute_count = QLabel("0")
+        self.relation_count = QLabel("0")
+        summary_form.addRow("Entités", self.entity_count)
+        summary_form.addRow("Associations", self.association_count)
+        summary_form.addRow("Attributs", self.attribute_count)
+        summary_form.addRow("Relations", self.relation_count)
+        layout.addWidget(summary)
+        self.model_validation = QLabel("✓ Modèle valide")
+        self.model_validation.setWordWrap(True)
+        self.model_validation.setProperty("role", "success")
+        layout.addWidget(self.model_validation)
+        hint = QLabel(
+            "Conseil : double-cliquez sur un attribut pour le renommer, ou utilisez "
+            "les propriétés complètes pour définir son type et ses contraintes."
+        )
+        hint.setWordWrap(True)
+        hint.setProperty("role", "secondary")
+        layout.addWidget(hint)
+        layout.addStretch(1)
+        return page
 
     def _build_node_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        form = QFormLayout()
+        general_group = QGroupBox("Général")
+        form = QFormLayout(general_group)
         self.node_type = QLabel("—")
         self.node_name = QLineEdit()
         self.node_identifier = QLabel("—")
@@ -90,7 +124,7 @@ class PropertiesPanel(QWidget):
         form.addRow("Nom", self.node_name)
         form.addRow("ID interne", self.node_identifier)
         form.addRow("Position", self.node_position)
-        layout.addLayout(form)
+        layout.addWidget(general_group)
 
         self.association_transformation_group = QGroupBox("Transformation MLD")
         transformation_form = QFormLayout(self.association_transformation_group)
@@ -137,10 +171,8 @@ class PropertiesPanel(QWidget):
         separator = QFrame()
         separator.setFrameShape(QFrame.Shape.HLine)
         layout.addWidget(separator)
-        attribute_title = QLabel("Attributs")
-        font = attribute_title.font()
-        font.setBold(True)
-        attribute_title.setFont(font)
+        attribute_title = QLabel("ATTRIBUTS")
+        attribute_title.setProperty("role", "sectionTitle")
         layout.addWidget(attribute_title)
 
         self.attribute_tree = QTreeWidget()
@@ -226,6 +258,7 @@ class PropertiesPanel(QWidget):
         )
         attribute_type_form.addRow("Contraintes CHECK", self.attribute_constraints_edit)
         self.apply_attribute_type_button = QPushButton("Appliquer les propriétés")
+        self.apply_attribute_type_button.setProperty("role", "primary")
         attribute_type_form.addRow(self.apply_attribute_type_button)
         self.attribute_impact_summary = QLabel("—")
         self.attribute_impact_summary.setWordWrap(True)
@@ -239,6 +272,7 @@ class PropertiesPanel(QWidget):
         self.add_attribute_button = QPushButton("+ Ajouter")
         self.rename_attribute_button = QPushButton("Modifier")
         self.remove_attribute_button = QPushButton("Supprimer")
+        self.remove_attribute_button.setProperty("role", "danger")
         buttons.addWidget(self.add_attribute_button)
         buttons.addWidget(self.rename_attribute_button)
         buttons.addWidget(self.remove_attribute_button)
@@ -271,7 +305,12 @@ class PropertiesPanel(QWidget):
 
     def _build_relation_page(self) -> QWidget:
         page = QWidget()
-        layout = QFormLayout(page)
+        page_layout = QVBoxLayout(page)
+        relation_title = QLabel("RELATION")
+        relation_title.setProperty("role", "sectionTitle")
+        page_layout.addWidget(relation_title)
+        general_group = QGroupBox("Général")
+        layout = QFormLayout(general_group)
         self.relation_identifier = QLabel("—")
         self.relation_identifier.setWordWrap(True)
         self.relation_identifier.setTextInteractionFlags(
@@ -296,6 +335,15 @@ class PropertiesPanel(QWidget):
         layout.addRow("Rôle", self.relation_role)
         layout.addRow("Cardinalité minimale", self.minimum_combo)
         layout.addRow("Cardinalité maximale", self.maximum_combo)
+        page_layout.addWidget(general_group)
+        explanation = QLabel(
+            "La cardinalité est portée par l'extrémité entité de cette relation. "
+            "Les rôles distinguent les branches d'une association réflexive."
+        )
+        explanation.setWordWrap(True)
+        explanation.setProperty("role", "secondary")
+        page_layout.addWidget(explanation)
+        page_layout.addStretch(1)
         self.minimum_combo.currentIndexChanged.connect(self._cardinality_changed)
         self.maximum_combo.currentIndexChanged.connect(self._cardinality_changed)
         self.relation_role.editingFinished.connect(self._relation_role_changed)
@@ -307,12 +355,19 @@ class PropertiesPanel(QWidget):
             self._current_node_id = None
             self._current_relation_id = None
             if len(elements) != 1:
+                self.panel_title.setText("PROPRIÉTÉS")
                 if len(elements) > 1:
-                    self.empty_page.setText(f"{len(elements)} objets sélectionnés.")
+                    self.empty_title.setText("SÉLECTION MULTIPLE")
+                    self.empty_message.setText(
+                        f"{len(elements)} objets sélectionnés. Utilisez les commandes "
+                        "d'alignement, de duplication ou de suppression groupée."
+                    )
                 else:
-                    self.empty_page.setText(
+                    self.empty_title.setText("MON MODÈLE")
+                    self.empty_message.setText(
                         "Sélectionnez une entité, une association ou une relation."
                     )
+                self._refresh_model_summary()
                 self.stack.setCurrentWidget(self.empty_page)
                 return
             element = elements[0]
@@ -324,11 +379,37 @@ class PropertiesPanel(QWidget):
             self._updating = False
             self._update_buttons()
 
+    def _refresh_model_summary(self) -> None:
+        model = self._controller.model
+        self.entity_count.setText(str(len(model.entities)))
+        self.association_count.setText(str(len(model.associations)))
+        self.attribute_count.setText(
+            str(
+                sum(len(node.attributes) for node in model.entities.values())
+                + sum(len(node.attributes) for node in model.associations.values())
+            )
+        )
+        self.relation_count.setText(str(len(model.relations)))
+        report = self._controller.validate()
+        if report.errors:
+            self.model_validation.setText(f"✕ {len(report.errors)} erreur(s)")
+            role = "error"
+        elif report.warnings:
+            self.model_validation.setText(f"⚠ {len(report.warnings)} avertissement(s)")
+            role = "warning"
+        else:
+            self.model_validation.setText("✓ Modèle valide")
+            role = "success"
+        self.model_validation.setProperty("role", role)
+        self.model_validation.style().unpolish(self.model_validation)
+        self.model_validation.style().polish(self.model_validation)
+
     def _display_node(self, node: Entity | Association) -> None:
         selected_attribute_id = self._selected_attribute_id()
         self._current_node_id = node.id
         self.stack.setCurrentWidget(self.node_page)
         is_entity = isinstance(node, Entity)
+        self.panel_title.setText(node.name or "(sans nom)")
         self.node_type.setText("Entité" if is_entity else "Association")
         self.node_name.setText(node.name)
         self.node_identifier.setText(node.id)
@@ -379,6 +460,7 @@ class PropertiesPanel(QWidget):
     def _display_relation(self, relation: Relation) -> None:
         self._current_relation_id = relation.id
         self.stack.setCurrentWidget(self.relation_page)
+        self.panel_title.setText("Relation")
         self.relation_identifier.setText(relation.id)
         entity = self._controller.model.entities.get(relation.entity_id)
         association = self._controller.model.associations.get(relation.association_id)

@@ -231,7 +231,7 @@ class AiMcdDialog(QDialog):
         self.progress_label = QLabel(
             "OpenRouter prépare le MCD… L'interface reste disponible."
         )
-        self.progress_label.setStyleSheet("color: #315d8a; font-weight: bold;")
+        self.progress_label.setProperty("role", "info")
         self.progress_label.setVisible(False)
         layout.addWidget(self.progress_label)
         self.progress_bar = QProgressBar()

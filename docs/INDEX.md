@@ -36,6 +36,23 @@ Description métier → MCD → validation → MLD → SQL
 - [Persistance et compatibilité](technical/PERSISTENCE.md)
 - [Sécurité et confidentialité](technical/SECURITY.md)
 
+## 🎨 Interface et expérience utilisateur
+
+- [Cahier des charges UI/UX 2.0](UI_UX_2.0.md)
+- [Rapport d’implémentation](UI_UX_2.0_IMPLEMENTATION_REPORT.md)
+- [Audit initial](UI_AUDIT.md)
+- [Design system](DESIGN_SYSTEM.md)
+- [Architecture de présentation](UI_ARCHITECTURE.md)
+- [Principes UX](UX_GUIDELINES.md)
+- [Canvas MCD](CANVAS_UX.md)
+- [Propriétés](PROPERTIES_PANEL_UX.md)
+- [Validation](VALIDATION_CENTER_UX.md)
+- [MLD](MLD_VIEW_UX.md)
+- [SQL](SQL_WORKSPACE_UX.md)
+- [Assistant IA](AI_HUB_UX.md)
+- [Documentation intégrée](DOCUMENTATION_CENTER_UX.md)
+- [Recherche et commandes](SEARCH_AND_COMMANDS_UX.md)
+
 ## 🧪 Développement
 
 - [Installer un environnement développeur](development/DEVELOPMENT.md)

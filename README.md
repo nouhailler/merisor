@@ -74,6 +74,16 @@ flowchart TB
 
 ## 📸 Aperçu
 
+### Atelier UI/UX 2.0
+
+![Atelier MCD MERISOR UI/UX 2.0](docs/images/ui2-mcd.png)
+
+Le parcours reste visible de bout en bout : **Concevoir → Vérifier → Transformer
+→ Produire**. Les espaces Validation, MLD, SQL, Assistant IA et Documentation
+s’ouvrent dans la fenêtre principale. Consultez le
+[rapport UI/UX 2.0](docs/UI_UX_2.0_IMPLEMENTATION_REPORT.md) pour les autres
+captures, les raccourcis et les décisions de conception.
+
 ### Construire le MCD
 
 ![Fenêtre principale avec un MCD MotoGP](https://raw.githubusercontent.com/nouhailler/merisor/main/docs/images/mcd-editor.png)
@@ -103,6 +113,8 @@ flowchart TB
   composés, cardinalités, réflexives, n-aires et héritages ISA ;
 - **canvas productif** : grille, guides, alignement, sélection multiple,
   copier/coller, domaines, minimap, recherche et disposition automatique ;
+- **interface guidée** : accueil, workflow permanent, thèmes clair/sombre,
+  validation intégrée, recherche globale `Ctrl+Shift+F` et palette `Ctrl+K` ;
 - **contrôles** : validation MERISE, qualité, normalisation 1NF/2NF/3NF,
   comparaison de versions et analyse d'impact ;
 - **MLD explicable** : PK/FK composées, provenance, associations historisées et
