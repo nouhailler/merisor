@@ -4,6 +4,8 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
+## [0.11.0] - 2026-09-07
+
 ### Ajouté
 
 - refonte UI/UX 2.0 structurée autour de **Concevoir → Vérifier → Transformer
