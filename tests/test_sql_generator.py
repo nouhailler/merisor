@@ -492,12 +492,22 @@ def test_complete_motogp_chain_mcd_to_mld_to_all_sql_dialects() -> None:
 
     assert engage_table.primary_key_columns[0].auto_increment
     assert len(engage_table.foreign_keys) == 2
+    assert engage_table.column("id_pilote").nullable is False
+    assert engage_table.column("id_equipe").nullable is False
     for target in SQLTarget:
         sql = SQLGenerator().generate(mld, target, project_name="MotoGP")
         assert sql.count("CREATE TABLE") == 3
         assert sql.count("FOREIGN KEY") == 2
         assert "date_debut" in sql and "date_fin" in sql
         assert "UNIQUE" not in sql
+        quote = "`" if target is SQLTarget.MYSQL else '"'
+        for column_name in ("id_pilote", "id_equipe"):
+            definition = next(
+                line
+                for line in sql.splitlines()
+                if f"{quote}{column_name}{quote}" in line
+            )
+            assert "NOT NULL" in definition
 
 
 @pytest.mark.parametrize(

@@ -98,6 +98,13 @@ sauf si l'association possède son propre identifiant conceptuel. `FORCE_FK` est
 refusé pour une n-aire. Les tests de référence `SUPERVISER` et `FOURNIR`
 vérifient désormais toute la chaîne MCD → MLD → SQL.
 
+Une ligne de table d'association matérialisée représente toujours une
+occurrence complète : toutes ses FK participantes sont `NOT NULL`, y compris
+pour une branche de minimum `0`. Ce minimum autorise l'entité à ne participer à
+aucune occurrence ; il ne rend pas une occurrence existante incomplète. La
+conversion `0 → NULL` reste réservée aux migrations de FK dans une table
+d'entité lors des transformations 1:N et 1:1.
+
 Le panneau **Propriétés MLD** propose **ⓘ Pourquoi ?** pour la table
 sélectionnée. `MldTransformationExplainer`, indépendant de Qt, utilise les
 identifiants de provenance déjà produits par `McdToMldTransformer` et génère

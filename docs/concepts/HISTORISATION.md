@@ -37,3 +37,6 @@ historisée. Le validateur bloque ces contradictions.
 - une N:N sans identifiant utilise normalement ses FK comme PK composée ;
 - une association non-N:N matérialisée sans identifiant reçoit une PK technique
   déterministe `id_<association>` et auto-incrémentée.
+- chaque FK participante d'une association matérialisée est `NOT NULL` : le
+  minimum `0` autorise l'absence d'occurrence pour une entité, jamais une
+  occurrence d'association incomplète.

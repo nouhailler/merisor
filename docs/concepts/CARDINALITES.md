@@ -20,6 +20,13 @@ Une cardinalité décrit combien de fois une occurrence d'entité peut participe
 Lors d'une migration de FK, MERISOR traduit le minimum en nullabilité lorsque
 la contrainte est représentable : `0 → NULL`, `1 → NOT NULL`.
 
+Cette traduction concerne une FK migrée dans la table d'une entité (cas 1:N ou
+1:1). Dans une **table d'association matérialisée**, chaque ligne représente une
+occurrence réelle et complète : toutes les FK vers les participants sont donc
+`NOT NULL`, même pour une branche `(0,N)` ou `(0,1)`. Le minimum `0` signifie
+que l'entité peut ne participer à aucune occurrence, pas qu'une occurrence peut
+exister sans cette entité.
+
 ## Maximum
 
 - `1` limite la participation à une occurrence ;

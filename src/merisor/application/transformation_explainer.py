@@ -217,14 +217,26 @@ class MldTransformationExplainer:
             entity = mcd.entities[relation.entity_id]
             card = relation.cardinality.label if relation.cardinality else "inconnue"
             identifier_name = attribute.name if attribute is not None else column.name
+            if table.source is MLDTableSource.ASSOCIATION:
+                nullability_rule = (
+                    "Une ligne de table d'association matérialisée représente une "
+                    "occurrence complète : chaque participant y est obligatoire, "
+                    "donc sa FK est NOT NULL. Le minimum de la cardinalité indique "
+                    "si l'entité peut ne participer à aucune occurrence ; il ne "
+                    "rend pas cette FK nullable."
+                )
+            else:
+                nullability_rule = (
+                    "Une FK reprend le type de la colonne référencée. Lorsqu'elle "
+                    "migre dans une table d'entité, sa nullabilité est déterminée "
+                    "par la cardinalité minimale conservée par la transformation."
+                )
             return TransformationExplanation(
                 f"column.fk.{column.id}",
                 f"Colonne migrée {column.name}",
                 f"L'identifiant {identifier_name} de {entity.name} a migré dans "
                 f"{table.name} sous le nom {column.name} ({nullability}).",
-                "Une FK reprend le type de la colonne référencée. Sa nullabilité "
-                "est déterminée par la cardinalité minimale conservée par la "
-                "transformation.",
+                nullability_rule,
                 f"Relation {relation.id}, rôle {relation.role or 'non nommé'}, "
                 f"cardinalité ({card})",
             )

@@ -106,6 +106,8 @@ def test_explains_historized_table_and_technical_primary_key() -> None:
     assert "Colonne date_debut" in rendered
     assert "FK vers PILOTE" in rendered
     assert "FK vers EQUIPE" in rendered
+    assert "chaque participant y est obligatoire" in rendered
+    assert "il ne rend pas cette FK nullable" in rendered
 
 
 def test_explains_many_to_many_composite_key_without_calling_it_technical() -> None:

@@ -686,16 +686,17 @@ class McdToMldTransformer:
         for relation in relations:
             source_entity = model.entities[relation.entity_id]
             referenced_table = entity_tables[source_entity.id]
-            nullable = (
-                self._required_cardinality(relation).minimum is CardinalityMinimum.ZERO
-            )
+            # Une ligne de cette table représente une occurrence complète de
+            # l'association : chaque participant doit donc être renseigné. Le
+            # minimum de la branche décrit si une entité peut ne participer à
+            # aucune occurrence ; il ne rend pas la FK de l'occurrence nullable.
             column_ids, referenced_column_ids = self._migrate_primary_key(
                 table,
                 referenced_table,
                 source_entity,
                 association,
                 relation,
-                nullable=nullable,
+                nullable=False,
                 used_names=used_names,
             )
             table.foreign_keys.append(

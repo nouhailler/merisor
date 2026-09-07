@@ -74,6 +74,10 @@ Une association non-N:N matérialisée :
 4. conserve tous ses attributs ;
 5. n'invente ni date ni unicité entre les FK.
 
+Toutes les FK participantes sont `NOT NULL`. La cardinalité minimale d'une
+branche porte sur la participation de l'entité au jeu d'occurrences ; elle ne
+permet pas une ligne d'association sans participant.
+
 Priorité conceptuelle : `FORCE_TABLE`, puis historisation en `AUTO`, puis règle
 classique. `is_historized + FORCE_FK` est une erreur explicite.
 

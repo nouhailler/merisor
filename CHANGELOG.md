@@ -4,6 +4,14 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
+### Corrigé
+
+- les FK participantes d'une association matérialisée sont désormais toutes
+  `NOT NULL` : une cardinalité minimale `0` autorise l'absence d'occurrence pour
+  l'entité, mais jamais une occurrence d'association sans participant ;
+- les explications pédagogiques MCD → MLD distinguent maintenant cette règle
+  de la nullabilité d'une FK migrée dans une table d'entité.
+
 ### Documentation
 
 - retrait du README des captures des anciennes interfaces MCD, attributs, MLD,

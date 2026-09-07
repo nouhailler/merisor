@@ -652,7 +652,9 @@ def test_historized_one_to_many_auto_creates_independent_table() -> None:
         "date_fin",
         "role",
     ]
-    assert table.column("id_alpha").nullable is True
+    # Le minimum 0 autorise ALPHA à ne participer à aucune occurrence ; une
+    # occurrence LIER existante doit néanmoins toujours référencer son ALPHA.
+    assert table.column("id_alpha").nullable is False
     assert table.column("id_beta").nullable is False
     assert {foreign_key.source_cardinality for foreign_key in table.foreign_keys} == {
         ("0", "N"),
