@@ -57,7 +57,7 @@ def test_sql_workspace_generates_searches_copies_and_exports(
     workspace.close()
 
 
-def test_sql_workspace_blocks_invalid_mld(qapp: QApplication) -> None:  # type: ignore[no-untyped-def]
+def test_sql_workspace_blocks_invalid_mld(qapp: QApplication) -> None:
     workspace = SQLWorkspace()
 
     assert not workspace.set_model(sql_model(primary_key=False), "Invalide")

@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from merisor.domain import ModelQualityReport
+from merisor.domain import ModelQualityReport, QualityFinding, QualityFindingKind
 
 
 class QualityReportDialog(QDialog):
@@ -42,7 +42,7 @@ class QualityReportDialog(QDialog):
         self.overall_progress = QProgressBar()
         self.overall_progress.setRange(0, 100)
         self.overall_progress.setValue(report.overall_score)
-        self.overall_progress.setFormat("Score global : %v %")
+        self.overall_progress.setFormat("Indicateur de qualité : %v / 100")
         self.overall_progress.setMinimumHeight(28)
         color = (
             "#18794e"
@@ -57,13 +57,26 @@ class QualityReportDialog(QDialog):
         )
         layout.addWidget(self.overall_progress)
 
-        explanation = QLabel(
-            "Analyse locale déterministe : les suggestions sont des indices, pas des "
-            "erreurs MERISE. Chaque déduction est explicitée et aucune modification "
-            "n'est appliquée automatiquement."
+        self.disclaimer_label = QLabel(
+            "⚠ Indicateur heuristique, pas une certification. Le score aide à orienter "
+            "la relecture ; il ne prouve ni la justesse métier ni la normalisation du "
+            "modèle."
         )
-        explanation.setWordWrap(True)
-        layout.addWidget(explanation)
+        self.disclaimer_label.setWordWrap(True)
+        self.disclaimer_label.setStyleSheet(
+            "background: #fff4ce; color: #5c4400; border: 1px solid #d6b656; "
+            "border-radius: 4px; padding: 8px; font-weight: bold;"
+        )
+        self.disclaimer_label.setToolTip(report.score_explanation)
+        layout.addWidget(self.disclaimer_label)
+
+        self.summary_label = QLabel(
+            f"❌ {len(report.errors)} erreur(s) structurelle(s)   ·   "
+            f"⚠ {len(report.risks)} risque(s)   ·   "
+            f"💡 {len(report.suggestions)} suggestion(s)"
+        )
+        self.summary_label.setWordWrap(True)
+        layout.addWidget(self.summary_label)
 
         tabs = QTabWidget()
         self.score_tree = self._score_tree(report)
@@ -71,19 +84,9 @@ class QualityReportDialog(QDialog):
         tabs.addTab(self.score_tree, "Scores détaillés")
         tabs.addTab(
             self.findings_tree,
-            f"Suggestions ({len(report.findings)})",
+            f"Constats ({len(report.all_findings)})",
         )
         layout.addWidget(tabs, 1)
-
-        if report.validation_report.errors:
-            validation_note = QLabel(
-                f"❌ {len(report.validation_report.errors)} erreur(s) structurelle(s) "
-                "réduisent également le score. Utilisez « Valider le MCD » pour les "
-                "examiner."
-            )
-            validation_note.setWordWrap(True)
-            validation_note.setStyleSheet("color: #b42318; font-weight: bold;")
-            layout.addWidget(validation_note)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(self.reject)
@@ -129,24 +132,61 @@ class QualityReportDialog(QDialog):
     @staticmethod
     def _findings_tree(report: ModelQualityReport) -> QTreeWidget:
         tree = QTreeWidget()
-        tree.setHeaderLabels(["Catégorie", "Confiance", "Observation", "Suggestion"])
+        tree.setHeaderLabels(["Nature / catégorie", "Confiance", "Constat", "Action"])
         tree.setAlternatingRowColors(True)
-        tree.setRootIsDecorated(False)
-        tree.setColumnWidth(0, 175)
+        tree.setRootIsDecorated(True)
+        tree.setColumnWidth(0, 210)
         tree.setColumnWidth(1, 100)
-        tree.setColumnWidth(2, 390)
+        tree.setColumnWidth(2, 360)
         tree.header().setStretchLastSection(True)
-        for finding in report.findings:
-            suggested = finding.suggested_value or "À vérifier"
-            item = QTreeWidgetItem(
-                [
-                    finding.category.label,
-                    finding.confidence.label,
-                    finding.message,
-                    suggested,
-                ]
-            )
-            item.setToolTip(2, f"{finding.rationale}\nCode : {finding.code}")
-            item.setData(0, Qt.ItemDataRole.UserRole, finding.element_ids)
-            tree.addTopLevelItem(item)
+        groups = (
+            (
+                QualityFindingKind.ERROR,
+                "❌ Erreurs structurelles",
+                report.errors,
+                "À corriger avant les transformations bloquantes",
+            ),
+            (
+                QualityFindingKind.RISK,
+                "⚠ Risques à examiner",
+                report.risks,
+                "À confirmer selon le contexte métier",
+            ),
+            (
+                QualityFindingKind.SUGGESTION,
+                "💡 Suggestions possibles",
+                report.suggestions,
+                "Améliorations facultatives à valider humainement",
+            ),
+        )
+        for kind, label, findings, explanation in groups:
+            root = QTreeWidgetItem([f"{label} ({len(findings)})", "", explanation, ""])
+            root.setData(0, Qt.ItemDataRole.UserRole, kind.value)
+            tree.addTopLevelItem(root)
+            for finding in findings:
+                root.addChild(QualityReportDialog._finding_item(finding))
+        tree.expandAll()
         return tree
+
+    @staticmethod
+    def _finding_item(finding: QualityFinding) -> QTreeWidgetItem:
+        suggested = finding.suggested_value or (
+            "Corriger dans le MCD"
+            if finding.kind is QualityFindingKind.ERROR
+            else "À vérifier"
+        )
+        item = QTreeWidgetItem(
+            [
+                finding.category.label,
+                finding.confidence.label,
+                finding.message,
+                suggested,
+            ]
+        )
+        item.setToolTip(
+            2,
+            f"{finding.rationale}\nCode : {finding.code}\n"
+            f"Nature : {finding.kind.label}",
+        )
+        item.setData(0, Qt.ItemDataRole.UserRole, finding.element_ids)
+        return item

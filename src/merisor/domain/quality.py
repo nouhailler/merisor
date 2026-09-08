@@ -21,6 +21,7 @@ from merisor.domain.validation import (
 
 
 class QualityCategory(str, Enum):
+    VALIDATION = "validation"
     TYPE_SUGGESTION = "type_suggestion"
     UNIQUENESS = "uniqueness"
     SIMILAR_ENTITY = "similar_entity"
@@ -43,6 +44,22 @@ class QualityConfidence(str, Enum):
             QualityConfidence.HIGH: "Élevée",
             QualityConfidence.MEDIUM: "Moyenne",
             QualityConfidence.LOW: "Faible",
+        }[self]
+
+
+class QualityFindingKind(str, Enum):
+    """Nature d'une observation, sans confondre certitude et heuristique."""
+
+    ERROR = "error"
+    RISK = "risk"
+    SUGGESTION = "suggestion"
+
+    @property
+    def label(self) -> str:
+        return {
+            QualityFindingKind.ERROR: "Erreur",
+            QualityFindingKind.RISK: "Risque",
+            QualityFindingKind.SUGGESTION: "Suggestion",
         }[self]
 
 
@@ -74,6 +91,7 @@ DIMENSION_WEIGHTS = {
 }
 
 CATEGORY_DIMENSIONS = {
+    QualityCategory.VALIDATION: QualityDimension.STRUCTURE,
     QualityCategory.TYPE_SUGGESTION: QualityDimension.TYPING,
     QualityCategory.UNIQUENESS: QualityDimension.SEMANTICS,
     QualityCategory.SIMILAR_ENTITY: QualityDimension.SEMANTICS,
@@ -82,6 +100,7 @@ CATEGORY_DIMENSIONS = {
 }
 
 CATEGORY_LABELS = {
+    QualityCategory.VALIDATION: "Validation structurelle",
     QualityCategory.TYPE_SUGGESTION: "Typage suggéré",
     QualityCategory.UNIQUENESS: "Unicité suggérée",
     QualityCategory.SIMILAR_ENTITY: "Entités similaires",
@@ -98,12 +117,14 @@ class QualityFinding:
     rationale: str
     confidence: QualityConfidence
     element_ids: tuple[str, ...]
+    kind: QualityFindingKind = QualityFindingKind.RISK
     suggested_value: str | None = None
     penalty: int = 5
+    dimension_override: QualityDimension | None = None
 
     @property
     def dimension(self) -> QualityDimension:
-        return CATEGORY_DIMENSIONS[self.category]
+        return self.dimension_override or CATEGORY_DIMENSIONS[self.category]
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +142,53 @@ class ModelQualityReport:
     dimensions: tuple[QualityDimensionScore, ...]
     findings: tuple[QualityFinding, ...]
     validation_report: ValidationReport
+
+    @property
+    def validation_findings(self) -> tuple[QualityFinding, ...]:
+        return tuple(
+            _validation_finding(issue) for issue in self.validation_report.issues
+        )
+
+    @property
+    def all_findings(self) -> tuple[QualityFinding, ...]:
+        return (*self.validation_findings, *self.findings)
+
+    @property
+    def errors(self) -> tuple[QualityFinding, ...]:
+        return tuple(
+            finding
+            for finding in self.all_findings
+            if finding.kind is QualityFindingKind.ERROR
+        )
+
+    @property
+    def risks(self) -> tuple[QualityFinding, ...]:
+        return tuple(
+            finding
+            for finding in self.all_findings
+            if finding.kind is QualityFindingKind.RISK
+        )
+
+    @property
+    def suggestions(self) -> tuple[QualityFinding, ...]:
+        return tuple(
+            finding
+            for finding in self.all_findings
+            if finding.kind is QualityFindingKind.SUGGESTION
+        )
+
+    @property
+    def score_is_heuristic(self) -> bool:
+        return True
+
+    @property
+    def score_explanation(self) -> str:
+        return (
+            "Indicateur heuristique pondéré sur six dimensions. Les erreurs de "
+            "validation et les signaux locaux produisent des déductions plafonnées "
+            "par dimension. Ce score aide à relire le modèle ; il ne certifie ni "
+            "sa justesse métier ni sa normalisation."
+        )
 
     def dimension(self, dimension: QualityDimension) -> QualityDimensionScore:
         return next(item for item in self.dimensions if item.dimension is dimension)
@@ -204,6 +272,7 @@ def _type_findings(model: MCDModel) -> list[QualityFinding]:
                     rationale=f"Le nom de l'attribut évoque {meaning}.",
                     confidence=confidence,
                     element_ids=(owner.id, attribute.id),
+                    kind=QualityFindingKind.SUGGESTION,
                     suggested_value=expected.label,
                     penalty=8 if confidence is QualityConfidence.HIGH else 5,
                 )
@@ -241,6 +310,7 @@ def _uniqueness_findings(model: MCDModel) -> list[QualityFinding]:
                     ),
                     confidence=confidence,
                     element_ids=(owner.id, attribute.id),
+                    kind=QualityFindingKind.SUGGESTION,
                     suggested_value="UNIQUE",
                     penalty=4 if confidence is QualityConfidence.HIGH else 2,
                 )
@@ -395,6 +465,64 @@ def _naming_findings(model: MCDModel) -> list[QualityFinding]:
                     penalty=3,
                 )
             )
+    ambiguous_attribute_names = {"champ", "data", "donnee", "info", "valeur"}
+    for owner in _owners(model):
+        for attribute in owner.attributes:
+            if (
+                attribute.identifier
+                or _normalized(attribute.name) not in ambiguous_attribute_names
+            ):
+                continue
+            findings.append(
+                QualityFinding(
+                    code="quality.naming.ambiguous_attribute",
+                    category=QualityCategory.NAMING,
+                    message=(
+                        f"{owner.name}.{attribute.name} possède un nom potentiellement "
+                        "ambigu hors de son contexte."
+                    ),
+                    rationale=(
+                        "Un nom plus précis facilite la lecture du modèle, de sa "
+                        "documentation et des exports."
+                    ),
+                    confidence=QualityConfidence.LOW,
+                    element_ids=(owner.id, attribute.id),
+                    kind=QualityFindingKind.RISK,
+                    suggested_value="Préciser le rôle métier de l'attribut",
+                    penalty=1,
+                )
+            )
+    generic_association_names = {
+        "associer",
+        "association",
+        "avoir",
+        "concerner",
+        "gerer",
+        "lier",
+        "posseder",
+        "relation",
+    }
+    for association in model.associations.values():
+        if _normalized(association.name) not in generic_association_names:
+            continue
+        findings.append(
+            QualityFinding(
+                code="quality.naming.generic_association",
+                category=QualityCategory.NAMING,
+                message=(
+                    f"L'association {association.name} possède un nom très générique."
+                ),
+                rationale=(
+                    "Un verbe métier précis exprime mieux la nature du lien entre "
+                    "les entités."
+                ),
+                confidence=QualityConfidence.MEDIUM,
+                element_ids=(association.id,),
+                kind=QualityFindingKind.RISK,
+                suggested_value="Choisir un verbe métier plus précis",
+                penalty=3,
+            )
+        )
     return findings
 
 
@@ -531,6 +659,29 @@ def _validation_dimension(issue: ValidationIssue) -> QualityDimension:
     return QualityDimension.STRUCTURE
 
 
+def _validation_finding(issue: ValidationIssue) -> QualityFinding:
+    kind = (
+        QualityFindingKind.ERROR
+        if issue.severity is ValidationSeverity.ERROR
+        else QualityFindingKind.RISK
+    )
+    return QualityFinding(
+        code=issue.code,
+        category=QualityCategory.VALIDATION,
+        message=issue.message,
+        rationale=(
+            "Règle structurelle déterministe du validateur MCD."
+            if kind is QualityFindingKind.ERROR
+            else "Avertissement déterministe produit par le validateur MCD."
+        ),
+        confidence=QualityConfidence.HIGH,
+        element_ids=(issue.element_id,) if issue.element_id else (),
+        kind=kind,
+        penalty=20 if kind is QualityFindingKind.ERROR else 7,
+        dimension_override=_validation_dimension(issue),
+    )
+
+
 def analyze_model_quality(
     model: MCDModel,
     validation_report: ValidationReport | None = None,
@@ -571,7 +722,10 @@ def analyze_model_quality(
             label=DIMENSION_LABELS[dimension],
             weight=DIMENSION_WEIGHTS[dimension],
             score=max(0, 100 - sum(item[0] for item in deductions[dimension])),
-            deductions=tuple(item[1] for item in deductions[dimension]),
+            deductions=tuple(
+                f"-{penalty} points — {message}"
+                for penalty, message in deductions[dimension]
+            ),
         )
         for dimension in QualityDimension
     )

@@ -11,6 +11,11 @@ Le hub **✨ Assistant MERISOR** regroupe les usages existants :
 - normalisation ;
 - explication du MLD.
 
+La carte de conception ouvre le véritable assistant de modélisation. Son
+indicateur **Décrire → Comprendre → Questions métier → Proposition →
+Justification → Validation humaine** rend l'avancement explicite. Les raisons
+métier sont consultables dans l'onglet **Pourquoi ?** avant l'import.
+
 ## Parcours de confiance
 
 Les opérations génératives suivent : demande → proposition → prévisualisation →

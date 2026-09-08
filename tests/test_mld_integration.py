@@ -183,7 +183,9 @@ def test_mld_view_displays_copies_and_exports_text(qapp, tmp_path) -> None:  # t
     assert view.provenance_tree.topLevelItemCount() == len(model.tables)
     sources: list[str] = []
     view.source_requested.connect(sources.append)
-    view.provenance_tree.setCurrentItem(view.provenance_tree.topLevelItem(0))
+    first_provenance = view.provenance_tree.topLevelItem(0)
+    assert first_provenance is not None
+    view.provenance_tree.setCurrentItem(first_provenance)
     view.show_source_button.click()
     assert sources
 

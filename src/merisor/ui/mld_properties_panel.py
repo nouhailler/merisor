@@ -21,6 +21,7 @@ class MLDPropertiesPanel(QWidget):
     """Affiche la structure de la table MLD sélectionnée dans le graphe."""
 
     why_requested = Signal(object)
+    trace_requested = Signal(object, object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -57,6 +58,7 @@ class MLDPropertiesPanel(QWidget):
         self.columns.setAlternatingRowColors(True)
         self.columns.header().setStretchLastSection(False)
         self.columns.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.columns.itemSelectionChanged.connect(self._column_selection_changed)
         layout.addWidget(self.columns, 1)
 
         self.foreign_keys = QLabel("—")
@@ -66,9 +68,10 @@ class MLDPropertiesPanel(QWidget):
         )
         layout.addWidget(QLabel("Clés étrangères"))
         layout.addWidget(self.foreign_keys)
-        self.why_button = QPushButton("ⓘ Pourquoi ?")
+        self.why_button = QPushButton("ⓘ Pourquoi ? / Traçabilité")
         self.why_button.setToolTip(
-            "Expliquer les règles MERISE qui ont produit cette table MLD"
+            "Suivre cette table du MCD jusqu'au SQL ; sélectionnez une colonne "
+            "pour obtenir sa traçabilité précise"
         )
         self.why_button.setEnabled(False)
         self.why_button.clicked.connect(self._request_explanation)
@@ -118,6 +121,7 @@ class MLDPropertiesPanel(QWidget):
                     else "—",
                 ]
             )
+            item.setData(0, Qt.ItemDataRole.UserRole, column.id)
             self.columns.addTopLevelItem(item)
         fk_lines = []
         for foreign_key in table.foreign_keys:
@@ -129,7 +133,23 @@ class MLDPropertiesPanel(QWidget):
 
     def _request_explanation(self) -> None:
         if self._table is not None and not self._stale:
+            selected = self.columns.selectedItems()
+            column_id = (
+                selected[0].data(0, Qt.ItemDataRole.UserRole) if selected else None
+            )
+            self.trace_requested.emit(self._table, column_id)
+            # Signal historique conservé pour les intégrations existantes.
             self.why_requested.emit(self._table)
+
+    def _column_selection_changed(self) -> None:
+        if self._stale:
+            return
+        selected = self.columns.selectedItems()
+        self.why_button.setToolTip(
+            "Suivre la colonne sélectionnée du MCD jusqu'au SQL"
+            if selected
+            else "Suivre cette table du MCD jusqu'au SQL"
+        )
 
     def set_stale(self, stale: bool) -> None:
         """Désactive les explications si le MLD ne correspond plus au MCD."""
@@ -139,5 +159,5 @@ class MLDPropertiesPanel(QWidget):
         self.why_button.setToolTip(
             "Régénérez le MLD avant de demander une explication."
             if stale
-            else "Expliquer les règles MERISE qui ont produit cette table MLD"
+            else "Suivre cette table ou la colonne sélectionnée du MCD jusqu'au SQL"
         )

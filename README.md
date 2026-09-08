@@ -94,17 +94,19 @@ captures à jour, les raccourcis et les décisions de conception.
   copier/coller, domaines, minimap, recherche et disposition automatique ;
 - **interface guidée** : accueil, workflow permanent, thèmes clair/sombre,
   validation intégrée, recherche globale `Ctrl+Shift+F` et palette `Ctrl+K` ;
-- **contrôles** : validation MERISE, qualité, normalisation 1NF/2NF/3NF,
-  comparaison de versions et analyse d'impact ;
-- **MLD explicable** : PK/FK composées, provenance, associations historisées et
-  bouton **ⓘ Pourquoi ?** ;
+- **contrôles** : validation MERISE, qualité séparée en erreurs, risques et
+  suggestions, score heuristique explicable, normalisation 1NF/2NF/3NF,
+  scénarios métier fonctionnels, comparaison de versions et analyse d'impact ;
+- **MLD explicable et traçable** : origine MCD, règle de transformation,
+  conséquence MLD et extrait SQL accessibles avec **ⓘ Pourquoi ?** ;
 - **SQL multi-dialecte** : PostgreSQL, SQLite, MariaDB/MySQL, aperçu et export ;
 - **imports** : JSON V1/V2, DDL et schémas statiques PWA/IndexedDB, avec une
   [archive de démonstration prête à tester](examples/indexeddb-demo-pwa.zip) ;
 - **exports** : PNG, SVG, PDF, Mermaid, Graphviz, documentation Markdown/HTML/PDF,
   données de test et requêtes SQL simples ;
-- **IA facultative** : génération, conversation et réparation avec validation
-  locale, normalisation prudente des réponses et confirmation humaine ;
+- **IA facultative** : assistant de modélisation guidé, génération et
+  réparation avec validation locale, normalisation prudente des réponses et
+  confirmation humaine ;
 - **historique** : opérations importantes annulables avec Annuler/Rétablir.
 
 Le logo MERISOR est utilisé de manière cohérente dans la fenêtre principale,

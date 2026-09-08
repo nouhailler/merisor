@@ -114,6 +114,14 @@ composées ou techniques, colonnes natives/migrées, FK et nullabilité,
 contraintes UNIQUE/CHECK, historisation, n-aires et ISA. Aucune IA n'intervient
 et le format JSON reste inchangé.
 
+Le bouton devient également le point d'entrée du mode **Traçabilité**. Une
+table, ou une colonne sélectionnée dans le panneau MLD, est suivie à travers
+trois niveaux structurés : origine MCD, règle et conséquence MLD, puis extrait
+SQL recalculé pour PostgreSQL, SQLite ou MariaDB/MySQL. Le service
+**ModelTraceabilityService** exploite exclusivement les IDs de provenance du
+MLD et les dialectes SQL ; il ne fait appel ni à l'IA ni à une analyse du texte
+SQL. La fonction reste désactivée dès que le MLD est obsolète.
+
 Le reverse-engineering de fichier est déjà disponible via **Fichier → Importer
 SQL / DDL** et suit `SQL → MLD → MCD`. Il comprend les contraintes FK inline ou
 ajoutées par `ALTER TABLE`, les PK composées, UNIQUE, CHECK et index. Les tables
@@ -247,9 +255,35 @@ couche non bloquante et explicable, sans appel IA :
 - détection d'entités similaires ;
 - cohérence des conventions de nommage ;
 - mauvaises odeurs de normalisation ;
-- score global et six scores détaillés, avec confiance et justification.
+- trois natures explicitement séparées : erreur structurelle, risque à examiner
+  et suggestion facultative ;
+- indicateur global sur 100 et six dimensions détaillées, avec confiance,
+  justification et déductions chiffrées ;
+- avertissement permanent : le score est heuristique et ne certifie jamais la
+  justesse métier ou la normalisation du modèle.
 
 Une propriété déjà marquée `unique` n'est plus signalée comme suggestion.
+Le modèle de rapport expose `errors`, `risks` et `suggestions`; l'interface les
+présente dans trois groupes distincts. La documentation utilisateur se trouve
+dans `docs/user/QUALITE.md`.
+
+## Scénarios métier déjà terminés
+
+La commande **Modèle → Tester un scénario métier…** (`Ctrl+Shift+T`) permet de
+décrire un usage et une liste d'attentes fonctionnelles sans modifier le MCD.
+`BusinessScenarioAnalyzer`, indépendant de Qt, fournit :
+
+- le chemin métier déterministe entre les concepts reconnus ;
+- la vérification des cardinalités maximales demandant plusieurs occurrences ;
+- la vérification des attributs explicitement attendus ;
+- trois statuts distincts : `SATISFIED`, `RISK` et `UNVERIFIABLE` ;
+- un rapport copiable qui rappelle les limites de la preuve structurelle.
+
+Les règles temporelles comme la disponibilité à une date ou l'absence de
+chevauchement sont volontairement classées **non vérifiables** : le moteur ne
+les déduit pas de quelques attributs de date. Cette première version repose sur
+les noms explicitement présents dans le scénario et reste locale, sans IA ni
+persistance des scénarios. Voir `docs/user/SCENARIOS_METIER.md`.
 
 ## Assistant de normalisation déjà terminé
 
@@ -361,9 +395,9 @@ graphique/différentiel/JSON. Seule une confirmation explicite remplace le MCD,
 via `ReplaceModelStateCommand`; toute la réparation est donc annulable en une
 commande. Fermer la fenêtre ne modifie rien.
 
-## Assistant MERISE conversationnel terminé
+## Assistant de modélisation MERISE terminé
 
-La commande **Modèle → Assistant MERISE conversationnel** (`Ctrl+Alt+M`)
+La commande **Modèle → Assistant de modélisation conversationnel** (`Ctrl+Alt+M`)
 transforme la génération ponctuelle en assistant de conception itératif.
 
 ### Objectif utilisateur
@@ -454,6 +488,16 @@ Les étapes 1 à 9 sont terminées : modèle `DesignSession`, enveloppe JSON
 stricte, premier tour, concepts/hypothèses/questions, réponses structurées,
 patchs contrôlés, validation à chaque tour, aperçu graphique et différentiel,
 puis import confirmé en une commande annulable.
+
+Le parcours rend maintenant visibles six étapes : **Décrire**, **Comprendre**,
+**Questions métier**, **Proposition**, **Justification** et **Validation
+humaine**. Les réponses OpenRouter peuvent fournir des
+`DesignJustification(target_id, target_label, decision, explanation)` reliées
+aux éléments du brouillon. Elles sont cumulées tant que leurs cibles existent,
+affichées sous **Pourquoi ?** pendant la conversation et reprises dans l'aperçu
+final. Le champ reste optionnel à la lecture pour préserver la compatibilité
+avec l'ancien prompt, mais le nouveau prompt le demande pour toute création ou
+modification d'entité, d'association ou de relation.
 
 La sauvegarde et la reprise locale d'une session conversationnelle (ancienne
 étape 10) restent facultatives et ne sont pas encore implémentées. Fermer la

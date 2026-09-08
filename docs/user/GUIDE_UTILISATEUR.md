@@ -52,14 +52,19 @@ Voir [Créer et éditer un MCD](MCD.md).
 Le menu **Modèle** propose :
 
 - validation structurelle MERISE ;
-- score de qualité explicable ;
+- analyse de qualité séparant erreurs structurelles, risques et suggestions ;
+- indicateur heuristique explicable sur 100, qui ne constitue jamais une
+  certification du modèle ;
 - analyse d'impact ;
+- tests fonctionnels par scénarios métier ;
 - comparaison avec une autre version JSON ;
 - assistant de normalisation 1NF/2NF/3NF ;
 - analyse et réparation facultative avec l'IA.
 
 Les analyses ne changent pas le modèle. Une correction ne s'applique qu'après
 une action et, lorsqu'elle est proposée par l'IA, après un aperçu explicite.
+Voir [Analyser la qualité d'un MCD](QUALITE.md).
+Voir aussi [Tester le MCD avec des scénarios métier](SCENARIOS_METIER.md).
 
 ## Produire le MLD et le SQL
 

@@ -12,6 +12,7 @@ from merisor.persistence import JsonDiagramRepository
 from .design_session import (
     ConceptKind,
     DesignAssistantResponse,
+    DesignJustification,
     DesignQuestion,
     DesignSession,
     DesignSessionError,
@@ -41,6 +42,20 @@ Format racine exact :
     }
   ],
   "assumptions": ["Les emprunts rendus sont conservés."],
+  "justifications": [
+    {
+      "target_id":"entity.livre",
+      "target_label":"Entité LIVRE",
+      "decision":"Créer une entité",
+      "explanation":"Un livre possède une identité et des propriétés propres."
+    },
+    {
+      "target_id":"relation.livre_ecrire",
+      "target_label":"Cardinalité LIVRE — ECRIRE (0,N)",
+      "decision":"Autoriser plusieurs auteurs",
+      "explanation":"La réponse métier indique qu'un livre peut être coécrit."
+    }
+  ],
   "draft_patch": {
     "entities_to_add": [],
     "entities_to_update": [],
@@ -90,8 +105,13 @@ Règles :
   l'identification ou le choix entité/association ;
 - ne pose pas de question cosmétique et regroupe les questions importantes ;
 - n'invente pas une décision métier silencieusement : rends-la dans assumptions ;
+- justifie chaque entité, association et relation créée ou modifiée ; une
+  justification contient target_id, target_label, decision et explanation ;
+- une justification de cardinalité explique le sens du minimum et du maximum,
+  et s'appuie sur une réponse utilisateur ou une hypothèse affichée ;
 - ready_for_preview vaut true seulement lorsque le brouillon est suffisamment
-  cohérent et que les questions structurantes sont résolues ;
+  cohérent, que les questions structurantes sont résolues et que les éléments
+  proposés sont justifiés ;
 - confidence est un nombre entre 0 et 1 ; kind vaut entity, association ou attribute.
 """
 
@@ -184,9 +204,10 @@ class ConversationalDesignService:
             "draft_patch",
             "ready_for_preview",
         }
-        if set(payload) != expected:
+        allowed = expected | {"justifications"}
+        if not expected.issubset(payload) or not set(payload).issubset(allowed):
             missing = expected - set(payload)
-            unknown = set(payload) - expected
+            unknown = set(payload) - allowed
             details = []
             if missing:
                 details.append("manquants : " + ", ".join(sorted(missing)))
@@ -204,6 +225,7 @@ class ConversationalDesignService:
         questions = cls._questions(payload.get("questions"))
         assumptions = cls._text_list(payload.get("assumptions"), "assumptions")
         patch = cls.parse_patch(payload.get("draft_patch"))
+        justifications = cls._justifications(payload.get("justifications", []))
         ready = payload.get("ready_for_preview")
         if not isinstance(ready, bool):
             raise DesignSessionError("ready_for_preview doit être booléen.")
@@ -214,7 +236,31 @@ class ConversationalDesignService:
             assumptions,
             patch,
             ready,
+            justifications,
         )
+
+    @classmethod
+    def _justifications(cls, raw: Any) -> tuple[DesignJustification, ...]:
+        if not isinstance(raw, list):
+            raise DesignSessionError("justifications doit être une liste.")
+        result: list[DesignJustification] = []
+        for item in raw:
+            if not isinstance(item, dict) or set(item) != {
+                "target_id",
+                "target_label",
+                "decision",
+                "explanation",
+            }:
+                raise DesignSessionError("Une justification IA est mal formée.")
+            result.append(
+                DesignJustification(
+                    cls._nonempty_text(item, "target_id"),
+                    cls._nonempty_text(item, "target_label"),
+                    cls._nonempty_text(item, "decision"),
+                    cls._nonempty_text(item, "explanation"),
+                )
+            )
+        return tuple(result)
 
     @classmethod
     def _concepts(cls, raw: Any) -> tuple[DetectedConcept, ...]:

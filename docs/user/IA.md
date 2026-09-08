@@ -25,11 +25,23 @@ l'import** remplace le document, en une commande annulable.
 
 ![Aperçu IA](../images/ai-preview.png)
 
-## Assistant conversationnel
+## Assistant de modélisation
 
-L'assistant détecte des concepts, affiche ses hypothèses et pose des questions
-sur les cardinalités ou l'historisation. Il modifie uniquement un brouillon
-isolé via des patchs structurés. Chaque révision est validée avant l'aperçu.
+**Modèle → Assistant de modélisation conversationnel…** propose un parcours en
+six étapes clairement affichées :
+
+1. **Décrire** le besoin métier en langage courant ;
+2. **Comprendre** les concepts candidats détectés ;
+3. répondre aux **questions métier** qui influencent réellement la structure ;
+4. examiner la **proposition** MCD dans un brouillon isolé ;
+5. consulter **Pourquoi ?** pour chaque entité, association ou cardinalité
+   proposée ;
+6. effectuer la **validation humaine**, puis confirmer éventuellement l'import.
+
+Les hypothèses et niveaux de confiance restent visibles. Les justifications
+indiquent l'élément concerné, la décision prise et la raison métier utilisée.
+L'assistant ne modifie que son brouillon via des patchs structurés et chaque
+révision est validée avant l'aperçu. Fermer la fenêtre abandonne le brouillon.
 
 ## Analyse et réparation
 

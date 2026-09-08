@@ -22,6 +22,20 @@ class ConceptKind(str, Enum):
     ATTRIBUTE = "attribute"
 
 
+class DesignStage(str, Enum):
+    """Étapes visibles du parcours de conception assistée."""
+
+    DESCRIBE = "Décrire"
+    UNDERSTAND = "Comprendre"
+    QUESTIONS = "Questions métier"
+    PROPOSAL = "Proposition"
+    JUSTIFICATION = "Justification"
+    CONFIRMATION = "Validation humaine"
+
+
+DESIGN_STAGES = tuple(DesignStage)
+
+
 @dataclass(frozen=True, slots=True)
 class DetectedConcept:
     name: str
@@ -35,6 +49,16 @@ class DesignQuestion:
     text: str
     choices: tuple[str, ...] = ()
     impact: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class DesignJustification:
+    """Raison métier donnée pour un élément ou une décision du brouillon."""
+
+    target_id: str
+    target_label: str
+    decision: str
+    explanation: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +96,7 @@ class DesignAssistantResponse:
     assumptions: tuple[str, ...]
     draft_patch: DraftPatch
     ready_for_preview: bool
+    justifications: tuple[DesignJustification, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +162,8 @@ class DesignSession:
     pending_questions: list[DesignQuestion] = field(default_factory=list)
     answered_questions: dict[str, str] = field(default_factory=dict)
     detected_concepts: list[DetectedConcept] = field(default_factory=list)
+    justifications: list[DesignJustification] = field(default_factory=list)
+    touched_element_ids: set[str] = field(default_factory=set)
     revisions: list[DraftRevision] = field(default_factory=list)
     ready_for_preview: bool = False
 
@@ -155,6 +182,26 @@ class DesignSession:
                 self.assumptions.append(assumption)
         self.pending_questions = list(step.response.questions)
         self.detected_concepts = list(step.response.detected_concepts)
+        merged = {(item.target_id, item.decision): item for item in self.justifications}
+        merged.update(
+            {
+                (item.target_id, item.decision): item
+                for item in step.response.justifications
+            }
+        )
+        active_ids = self._draft_element_ids(step.draft_model)
+        for additions in step.response.draft_patch.additions.values():
+            self.touched_element_ids.update(
+                item["id"] for item in additions if isinstance(item.get("id"), str)
+            )
+        for updates in step.response.draft_patch.updates.values():
+            self.touched_element_ids.update(
+                item["id"] for item in updates if isinstance(item.get("id"), str)
+            )
+        self.touched_element_ids.intersection_update(active_ids)
+        self.justifications = [
+            item for item in merged.values() if item.target_id in active_ids
+        ]
         self.ready_for_preview = step.response.ready_for_preview
         self._append_revision(step.patch_summary, step.report, step.draft_json)
 
@@ -197,8 +244,31 @@ class DesignSession:
         if self.turns:
             self.turns.pop()
         self.pending_questions.clear()
+        self.justifications.clear()
+        self.touched_element_ids.clear()
         self.ready_for_preview = False
         return True
+
+    @property
+    def stage(self) -> DesignStage:
+        """Retourne l'étape utilisateur active, indépendamment de l'écran Qt."""
+
+        if not self.turns:
+            return DesignStage.DESCRIBE
+        if self.pending_questions:
+            return DesignStage.QUESTIONS
+        if not self.current_draft.entities:
+            return DesignStage.UNDERSTAND
+        if not self.ready_for_preview:
+            return DesignStage.PROPOSAL
+        if self.missing_justification_ids:
+            return DesignStage.JUSTIFICATION
+        return DesignStage.CONFIRMATION
+
+    @property
+    def missing_justification_ids(self) -> tuple[str, ...]:
+        justified = {item.target_id for item in self.justifications}
+        return tuple(sorted(self.touched_element_ids - justified))
 
     def current_json(self) -> str:
         return (
@@ -224,6 +294,21 @@ class DesignSession:
                 summary,
             )
         )
+
+    @staticmethod
+    def _draft_element_ids(model: MCDModel) -> set[str]:
+        result = {
+            *model.entities,
+            *model.associations,
+            *model.relations,
+            *model.inheritances,
+            *model.functional_dependencies,
+        }
+        for entity in model.entities.values():
+            result.update(attribute.id for attribute in entity.attributes)
+        for association in model.associations.values():
+            result.update(attribute.id for attribute in association.attributes)
+        return result
 
 
 class DraftPatchApplier:

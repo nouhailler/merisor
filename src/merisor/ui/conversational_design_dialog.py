@@ -24,7 +24,9 @@ from PySide6.QtWidgets import (
 )
 
 from merisor.application import (
+    DESIGN_STAGES,
     ConversationalDesignService,
+    DesignJustification,
     DesignSession,
     DesignSessionError,
     DesignStep,
@@ -87,6 +89,7 @@ class DesignDraftPreviewDialog(QDialog):
         title: str = "Aperçu du brouillon conversationnel",
         allow_import: bool = True,
         confirm_label: str = "Confirmer l'import",
+        justifications: tuple[DesignJustification, ...] = (),
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
@@ -130,6 +133,18 @@ class DesignDraftPreviewDialog(QDialog):
         json_view.setReadOnly(True)
         json_view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         tabs.addTab(json_view, "JSON")
+
+        if justifications:
+            reasons = QTreeWidget()
+            reasons.setHeaderLabels(["Élément", "Décision", "Pourquoi ?"])
+            for item in justifications:
+                QTreeWidgetItem(
+                    reasons,
+                    [item.target_label, item.decision, item.explanation],
+                )
+            reasons.resizeColumnToContents(0)
+            reasons.resizeColumnToContents(1)
+            tabs.addTab(reasons, "Pourquoi ?")
         layout.addWidget(tabs, 1)
 
         validation = QPlainTextEdit()
@@ -180,7 +195,7 @@ class ConversationalDesignDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Assistant MERISE conversationnel")
+        self.setWindowTitle("Assistant de modélisation MERISE")
         self.resize(1180, 760)
         self.store = OpenRouterKeyStore()
         self.service = ConversationalDesignService()
@@ -201,6 +216,7 @@ class ConversationalDesignDialog(QDialog):
         )
         header.setWordWrap(True)
         root.addWidget(header)
+        root.addWidget(self._workflow_header())
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self._conversation_panel())
@@ -231,6 +247,19 @@ class ConversationalDesignDialog(QDialog):
         footer.addWidget(close_button)
         root.addLayout(footer)
         self._refresh()
+
+    def _workflow_header(self) -> QWidget:
+        panel = QWidget()
+        layout = QHBoxLayout(panel)
+        layout.setContentsMargins(0, 4, 0, 8)
+        self.workflow_stage_labels: list[QLabel] = []
+        for index, stage in enumerate(DESIGN_STAGES, start=1):
+            label = QLabel(f"○ {index}. {stage.value}")
+            label.setProperty("role", "caption")
+            self.workflow_stage_labels.append(label)
+            layout.addWidget(label)
+        layout.addStretch(1)
+        return panel
 
     def _conversation_panel(self) -> QWidget:
         panel = QWidget()
@@ -286,6 +315,13 @@ class ConversationalDesignDialog(QDialog):
         self.assumptions_list = QListWidget()
         assumptions_layout.addWidget(self.assumptions_list)
         tabs.addTab(assumptions, "Hypothèses")
+
+        reasons = QWidget()
+        reasons_layout = QVBoxLayout(reasons)
+        self.justifications_tree = QTreeWidget()
+        self.justifications_tree.setHeaderLabels(["Élément", "Décision", "Pourquoi ?"])
+        reasons_layout.addWidget(self.justifications_tree)
+        tabs.addTab(reasons, "Pourquoi ?")
 
         draft = QWidget()
         draft_layout = QVBoxLayout(draft)
@@ -435,6 +471,7 @@ class ConversationalDesignDialog(QDialog):
             self.session.current_json(),
             report,
             self,
+            justifications=tuple(self.session.justifications),
         )
         if preview.exec() == QDialog.DialogCode.Accepted and preview.import_confirmed:
             self.imported_model = copy.deepcopy(self.session.current_draft)
@@ -460,6 +497,7 @@ class ConversationalDesignDialog(QDialog):
             self.conversation.verticalScrollBar().maximum()
         )
         self._refresh_questions()
+        self._refresh_workflow()
         self.concepts_tree.clear()
         for concept in self.session.detected_concepts:
             QTreeWidgetItem(
@@ -468,9 +506,34 @@ class ConversationalDesignDialog(QDialog):
             )
         self.assumptions_list.clear()
         self.assumptions_list.addItems(self.session.assumptions)
+        self.justifications_tree.clear()
+        for justification in self.session.justifications:
+            QTreeWidgetItem(
+                self.justifications_tree,
+                [
+                    justification.target_label,
+                    justification.decision,
+                    justification.explanation,
+                ],
+            )
+        self.justifications_tree.resizeColumnToContents(0)
+        self.justifications_tree.resizeColumnToContents(1)
         self._refresh_draft()
         self.rewind_button.setEnabled(len(self.session.revisions) > 1)
         self.preview_button.setEnabled(self._can_preview())
+
+    def _refresh_workflow(self) -> None:
+        current_index = DESIGN_STAGES.index(self.session.stage)
+        for index, (stage, label) in enumerate(
+            zip(DESIGN_STAGES, self.workflow_stage_labels, strict=True)
+        ):
+            marker = (
+                "✓" if index < current_index else "●" if index == current_index else "○"
+            )
+            label.setText(f"{marker} {index + 1}. {stage.value}")
+            label.setProperty("active", index == current_index)
+            label.style().unpolish(label)
+            label.style().polish(label)
 
     def _refresh_questions(self) -> None:
         self.questions_tree.clear()
@@ -511,13 +574,18 @@ class ConversationalDesignDialog(QDialog):
         self.draft_tree.expandAll()
         revision = self.session.revisions[-1]
         self.revision_label.setText(f"Révision {revision.number} — {revision.summary}")
-        self.validation_text.setPlainText(
-            "\n".join(
-                f"{'ERREUR' if issue in revision.report.errors else 'AVERTISSEMENT'} — "
-                f"{issue.message}"
-                for issue in revision.report.issues
+        validation_lines = [
+            f"{'ERREUR' if issue in revision.report.errors else 'AVERTISSEMENT'} — "
+            f"{issue.message}"
+            for issue in revision.report.issues
+        ]
+        if self.session.missing_justification_ids:
+            validation_lines.append(
+                "JUSTIFICATION ATTENDUE — "
+                + ", ".join(self.session.missing_justification_ids)
             )
-            or "Aucun problème détecté."
+        self.validation_text.setPlainText(
+            "\n".join(validation_lines) or "Aucun problème détecté."
         )
 
     def _can_preview(self) -> bool:
@@ -526,6 +594,7 @@ class ConversationalDesignDialog(QDialog):
             self.session.ready_for_preview
             and bool(self.session.current_draft.entities)
             and not report.errors
+            and not self.session.missing_justification_ids
         )
 
     def reject(self) -> None:

@@ -17,6 +17,15 @@ from merisor.application.ai_repair_service import (
     AiRepairService,
     RepairConfidence,
 )
+from merisor.application.business_scenarios import (
+    BusinessScenario,
+    BusinessScenarioAnalyzer,
+    BusinessScenarioReport,
+    ScenarioCheck,
+    ScenarioCheckStatus,
+    ScenarioPathElement,
+    parse_scenario,
+)
 from merisor.application.controller import DiagramController, MLDGenerationBlocked
 from merisor.application.conversational_design_service import (
     CONVERSATIONAL_SYSTEM_PROMPT,
@@ -28,11 +37,14 @@ from merisor.application.ddl_importer import (
     SQLDDLImporter,
 )
 from merisor.application.design_session import (
+    DESIGN_STAGES,
     ConceptKind,
     DesignAssistantResponse,
+    DesignJustification,
     DesignQuestion,
     DesignSession,
     DesignSessionError,
+    DesignStage,
     DesignStep,
     DetectedConcept,
     DraftPatch,
@@ -122,6 +134,10 @@ from merisor.application.test_data_generator import (
     TestDataGenerator,
     TestDataIssue,
 )
+from merisor.application.traceability import (
+    ModelTraceabilityService,
+    TraceabilityReport,
+)
 from merisor.application.transformation_explainer import (
     MldTransformationExplainer,
     TransformationExplanation,
@@ -137,6 +153,7 @@ from merisor.application.version_comparator import (
 
 __all__ = [
     "CONVERSATIONAL_SYSTEM_PROMPT",
+    "DESIGN_STAGES",
     "DOCUMENTATION_PAGES",
     "GLOBAL_SCOPE_ID",
     "AiDependencySuggestion",
@@ -149,6 +166,9 @@ __all__ = [
     "AiRepairProposal",
     "AiRepairReport",
     "AiRepairService",
+    "BusinessScenario",
+    "BusinessScenarioAnalyzer",
+    "BusinessScenarioReport",
     "ChangeImpact",
     "ChangeKind",
     "ConceptKind",
@@ -156,9 +176,11 @@ __all__ = [
     "DDLImportError",
     "DDLImportResult",
     "DesignAssistantResponse",
+    "DesignJustification",
     "DesignQuestion",
     "DesignSession",
     "DesignSessionError",
+    "DesignStage",
     "DesignStep",
     "DetectedConcept",
     "DiagramController",
@@ -191,6 +213,7 @@ __all__ = [
     "ModelDocumentationGenerator",
     "ModelExplorer",
     "ModelImpactAnalyzer",
+    "ModelTraceabilityService",
     "ModelVersionComparator",
     "MySQLDialect",
     "OpenRouterClient",
@@ -216,6 +239,9 @@ __all__ = [
     "SQLValidationReport",
     "SQLValidationSeverity",
     "SQLiteDialect",
+    "ScenarioCheck",
+    "ScenarioCheckStatus",
+    "ScenarioPathElement",
     "SourceEvidence",
     "SubmodelResolver",
     "SubmodelScope",
@@ -223,12 +249,14 @@ __all__ = [
     "TestDataGenerationResult",
     "TestDataGenerator",
     "TestDataIssue",
+    "TraceabilityReport",
     "TransformationExplanation",
     "TransformationExplanationReport",
     "VersionChange",
     "VersionComparison",
     "compare_models",
     "mcd_logical_fingerprint",
+    "parse_scenario",
     "render_mld_text",
     "sql_dialect",
 ]

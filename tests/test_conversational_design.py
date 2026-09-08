@@ -6,12 +6,13 @@ from typing import Any
 
 import pytest
 from PySide6.QtCore import QPointF
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox, QTabWidget
 
 from merisor.application import (
     ConversationalDesignService,
     DesignSession,
     DesignSessionError,
+    DesignStage,
     DiagramController,
     compare_models,
 )
@@ -57,6 +58,14 @@ def response_payload(**changes: Any) -> dict[str, Any]:
             }
         ],
         "assumptions": ["Un client possède une seule adresse électronique."],
+        "justifications": [
+            {
+                "target_id": "entity.client",
+                "target_label": "Entité CLIENT",
+                "decision": "Créer une entité",
+                "explanation": "Le client possède une identité propre.",
+            }
+        ],
         "draft_patch": empty_patch(),
         "ready_for_preview": False,
     }
@@ -111,6 +120,8 @@ def test_conversation_applies_strict_patch_without_mutating_source() -> None:
     assert len(session.revisions) == 2
     assert session.current_draft is not step.draft_model
     assert session.pending_questions[0].id == "client_email"
+    assert session.justifications[0].target_id == "entity.client"
+    assert session.stage is DesignStage.QUESTIONS
 
 
 def test_session_records_answers_and_can_rewind() -> None:
@@ -144,6 +155,14 @@ def test_service_rejects_unknown_updates_and_non_strict_answers() -> None:
         ConversationalDesignService().interpret(session, json.dumps(invalid))
 
 
+def test_service_rejects_malformed_justification() -> None:
+    session = DesignSession()
+    payload = response_payload(justifications=[{"target_id": "entity.client"}])
+
+    with pytest.raises(DesignSessionError, match="justification IA"):
+        ConversationalDesignService().interpret(session, json.dumps(payload))
+
+
 def test_validation_prevents_ready_preview_when_draft_has_errors() -> None:
     session = DesignSession()
     patch = empty_patch()
@@ -175,6 +194,28 @@ def test_unanswered_questions_prevent_ready_preview() -> None:
     assert step.report.is_valid
     assert step.response.questions
     assert not step.response.ready_for_preview
+
+
+def test_touched_elements_require_a_justification_before_confirmation() -> None:
+    session = DesignSession()
+    patch = empty_patch()
+    patch["entities_to_add"] = [client_entity_payload()]
+    step = ConversationalDesignService().interpret(
+        session,
+        json.dumps(
+            response_payload(
+                draft_patch=patch,
+                questions=[],
+                justifications=[],
+                ready_for_preview=True,
+            )
+        ),
+    )
+
+    session.accept_step("Créer les clients", step)
+
+    assert session.missing_justification_ids == ("entity.client",)
+    assert session.stage is DesignStage.JUSTIFICATION
 
 
 def test_model_difference_reports_logical_changes() -> None:
@@ -245,6 +286,10 @@ def test_conversational_dialog_keeps_current_model_isolated(qapp) -> None:  # ty
         "entity.client",
     }
     assert dialog.preview_button.isEnabled()
+    assert dialog.session.stage is DesignStage.CONFIRMATION
+    assert dialog.justifications_tree.topLevelItemCount() == 1
+    assert "Validation humaine" in dialog.workflow_stage_labels[-1].text()
+    assert dialog.workflow_stage_labels[-1].text().startswith("●")
     dialog.close()
 
 
@@ -262,7 +307,13 @@ def test_preview_requires_explicit_confirmation(qapp, monkeypatch) -> None:  # t
         draft,
         DesignSession(current_draft=draft).current_json(),
         validate_mcd(draft),
+        justifications=ConversationalDesignService._justifications(
+            response_payload()["justifications"]
+        ),
     )
+    tabs = dialog.findChild(QTabWidget)
+    assert tabs is not None
+    assert "Pourquoi ?" in [tabs.tabText(index) for index in range(tabs.count())]
     monkeypatch.setattr(
         QMessageBox,
         "question",

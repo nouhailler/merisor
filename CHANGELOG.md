@@ -4,6 +4,36 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ## [Non publié]
 
+### Ajouté
+
+- commande **Modèle → Tester un scénario métier…** et interface de saisie des
+  attentes fonctionnelles, avec rapport copiable et sans mutation du MCD ;
+- moteur déterministe `BusinessScenarioAnalyzer` reconstruisant le chemin
+  métier et vérifiant les cardinalités multiples ainsi que les attributs
+  explicitement demandés ;
+- statuts séparés **Satisfait**, **Risque** et **Non vérifiable**, notamment
+  pour empêcher qu'une disponibilité temporelle soit prétendue prouvée par la
+  seule présence de dates ;
+- documentation pédagogique des scénarios et de leurs limites d'interprétation ;
+- analyseur de qualité restructuré en trois niveaux non interchangeables :
+  **Erreur** structurelle, **Risque** heuristique et **Suggestion** facultative ;
+- rapport regroupé par nature, déductions chiffrées par dimension et mention
+  permanente indiquant que le score sur 100 n'est pas une certification ;
+- détection prudente des noms d'attributs ambigus et des noms d'associations
+  trop génériques, avec confiance et justification ;
+- page de documentation dédiée aux usages et limites de l'indicateur qualité ;
+- mode **Traçabilité MCD → MLD → SQL** depuis les propriétés MLD, ciblable sur
+  une table ou une colonne, avec origine, cardinalités, conséquence et extrait
+  PostgreSQL, SQLite ou MariaDB/MySQL ;
+- navigation hiérarchique entre les trois niveaux et copie du rapport complet,
+  sans IA ni analyse approximative du texte SQL ;
+- orchestration de l'assistant de modélisation en six étapes visibles, de la
+  description métier à la validation humaine ;
+- justifications IA structurées par élément et décision, affichées dans un
+  onglet **Pourquoi ?** pendant la conversation et dans l'aperçu final ;
+- état métier `DesignStage`, indépendant de Qt, permettant à l'interface de
+  représenter l'avancement sans faire de la vue une source de vérité.
+
 ### Corrigé
 
 - les FK participantes d'une association matérialisée sont désormais toutes

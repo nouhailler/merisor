@@ -55,6 +55,7 @@ from merisor.domain.quality import (
     QualityDimension,
     QualityDimensionScore,
     QualityFinding,
+    QualityFindingKind,
     analyze_model_quality,
 )
 from merisor.domain.validation import (
@@ -106,6 +107,7 @@ __all__ = [
     "QualityDimension",
     "QualityDimensionScore",
     "QualityFinding",
+    "QualityFindingKind",
     "Relation",
     "SubmodelView",
     "SubmodelViewKind",

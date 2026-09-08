@@ -59,6 +59,7 @@ from merisor.ui.application_shell import (
     WorkflowState,
     WorkflowStep,
 )
+from merisor.ui.business_scenario_dialog import BusinessScenarioDialog
 from merisor.ui.canvas import DiagramScene, DiagramView, MiniMapView, ToolMode
 from merisor.ui.command_palette import CommandPalette, GlobalSearchDialog
 from merisor.ui.conversational_design_dialog import ConversationalDesignDialog
@@ -84,6 +85,7 @@ from merisor.ui.start_center import StartCenter
 from merisor.ui.submodel_dialog import SubmodelManagerDialog
 from merisor.ui.test_data_dialog import TestDataDialog
 from merisor.ui.theme import ThemeManager, ThemeMode
+from merisor.ui.traceability_dialog import TraceabilityDialog
 from merisor.ui.transformation_explanation_dialog import (
     TransformationExplanationDialog,
 )
@@ -251,6 +253,8 @@ class MainWindow(QMainWindow):
         self.compare_version_action = QAction("Comparer avec une version…", self)
         self.compare_version_action.setShortcut(QKeySequence("Ctrl+Alt+C"))
         self.quality_action = QAction("Analyser la qualité du modèle…", self)
+        self.business_scenario_action = QAction("Tester un scénario métier…", self)
+        self.business_scenario_action.setShortcut(QKeySequence("Ctrl+Shift+T"))
         self.ai_repair_action = QAction("✨ Analyser avec l'IA…", self)
         self.impact_analysis_action = QAction("Analyser l'impact…", self)
         self.impact_analysis_action.setShortcut(QKeySequence("Ctrl+Alt+I"))
@@ -270,7 +274,7 @@ class MainWindow(QMainWindow):
         self.generate_query_action.setEnabled(False)
         self.generate_ai_mcd_action = QAction("Générer un MCD avec l'IA…", self)
         self.conversational_assistant_action = QAction(
-            "Assistant MERISE conversationnel…", self
+            "Assistant de modélisation conversationnel…", self
         )
         self.conversational_assistant_action.setShortcut(QKeySequence("Ctrl+Alt+M"))
         self.auto_layout_action = QAction("Réorganiser automatiquement le MCD", self)
@@ -383,6 +387,7 @@ class MainWindow(QMainWindow):
         model_menu.addAction(self.validate_action)
         model_menu.addAction(self.compare_version_action)
         model_menu.addAction(self.quality_action)
+        model_menu.addAction(self.business_scenario_action)
         model_menu.addAction(self.ai_repair_action)
         model_menu.addAction(self.impact_analysis_action)
         model_menu.addAction(self.normalization_action)
@@ -577,6 +582,7 @@ class MainWindow(QMainWindow):
         self.validate_action.triggered.connect(self.show_validation)
         self.compare_version_action.triggered.connect(self.compare_with_version)
         self.quality_action.triggered.connect(self.show_quality_report)
+        self.business_scenario_action.triggered.connect(self.show_business_scenarios)
         self.ai_repair_action.triggered.connect(self.show_ai_repair)
         self.impact_analysis_action.triggered.connect(self.show_impact_analysis)
         self.normalization_action.triggered.connect(self.show_normalization_assistant)
@@ -623,7 +629,7 @@ class MainWindow(QMainWindow):
         self.mld_view.graphics_view.table_selected.connect(
             self.mld_properties_panel.display
         )
-        self.mld_properties_panel.why_requested.connect(self.show_mld_explanation)
+        self.mld_properties_panel.trace_requested.connect(self.show_mld_traceability)
         self.view.zoom_changed.connect(
             lambda factor: self.statusBar().showMessage(
                 f"Zoom : {factor * 100:.0f} %", 1800
@@ -975,6 +981,9 @@ class MainWindow(QMainWindow):
         dialog = QualityReportDialog(self.controller.analyze_quality(), self)
         dialog.exec()
 
+    def show_business_scenarios(self, _checked: bool = False) -> None:
+        BusinessScenarioDialog(self.controller.model, self).exec()
+
     def show_ai_repair(self, _checked: bool = False) -> None:
         dialog = AiRepairDialog(self.controller.model, self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
@@ -1012,6 +1021,7 @@ class MainWindow(QMainWindow):
             self.relation_action,
             self.validate_action,
             self.quality_action,
+            self.business_scenario_action,
             self.generate_mld_action,
             self.generate_sql_action,
             self.export_visual_action,
@@ -1117,6 +1127,23 @@ class MainWindow(QMainWindow):
             self.controller.model, model, table
         )
         TransformationExplanationDialog(report, self).exec()
+
+    def show_mld_traceability(self, table: object, column_id: object) -> None:
+        model = self.controller.mld_model
+        if (
+            model is None
+            or self.controller.mld_is_stale
+            or not isinstance(table, MLDTable)
+        ):
+            return
+        selected_column_id = column_id if isinstance(column_id, str) else None
+        TraceabilityDialog(
+            self.controller.model,
+            model,
+            table,
+            selected_column_id,
+            self,
+        ).exec()
 
     def _update_sql_action(self) -> None:
         mld_available = (

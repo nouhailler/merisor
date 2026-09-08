@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from merisor.domain import (
+    Association,
     Attribute,
     Entity,
     MCDModel,
@@ -10,6 +11,7 @@ from merisor.domain import (
     MLDDataTypeName,
     QualityCategory,
     QualityDimension,
+    QualityFindingKind,
     analyze_model_quality,
 )
 from merisor.persistence import JsonDiagramRepository
@@ -180,8 +182,63 @@ def test_quality_action_and_report_are_available_in_the_main_window(qapp) -> Non
     assert window.quality_action.shortcut().toString() == "Ctrl+Shift+Q"
     assert dialog.overall_progress.value() == report.overall_score
     assert dialog.score_tree.topLevelItemCount() == 6
+    assert dialog.findings_tree.topLevelItemCount() == 3
+    assert "pas une certification" in dialog.disclaimer_label.text()
 
     dialog.close()
     window.controller.undo_stack.setClean()
     window.close()
     qapp.processEvents()
+
+
+def test_report_separates_errors_risks_and_suggestions() -> None:
+    model = MCDModel()
+    entity = Entity("CLIENT", attributes=[Attribute("email"), Attribute("valeur")])
+    model.add_entity(entity)
+
+    report = analyze_model_quality(model)
+
+    assert any(item.code == "entity.identifier_missing" for item in report.errors)
+    assert any(
+        item.code == "quality.naming.ambiguous_attribute" for item in report.risks
+    )
+    assert any(
+        item.code == "quality.attribute.uniqueness_suggestion"
+        for item in report.suggestions
+    )
+    assert all(item.kind is QualityFindingKind.ERROR for item in report.errors)
+    assert all(item.kind is QualityFindingKind.RISK for item in report.risks)
+    assert all(
+        item.kind is QualityFindingKind.SUGGESTION for item in report.suggestions
+    )
+
+
+def test_score_is_explicitly_heuristic_and_deductions_are_quantified() -> None:
+    model = MCDModel()
+    add_entity(model, "CLIENT", "date_naissance")
+
+    report = analyze_model_quality(model)
+
+    assert report.score_is_heuristic
+    assert "ne certifie" in report.score_explanation
+    assert any(
+        deduction.startswith("-") and "points" in deduction
+        for dimension in report.dimensions
+        for deduction in dimension.deductions
+    )
+
+
+def test_generic_association_name_is_a_risk_not_an_error() -> None:
+    model = MCDModel()
+    add_entity(model, "CLIENT", "nom")
+    model.add_association(Association("GERER"))
+
+    report = analyze_model_quality(model)
+    generic = next(
+        item
+        for item in report.risks
+        if item.code == "quality.naming.generic_association"
+    )
+
+    assert generic.kind is QualityFindingKind.RISK
+    assert generic not in report.errors

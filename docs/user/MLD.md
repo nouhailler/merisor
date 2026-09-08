@@ -26,9 +26,9 @@ Le modèle logique contient :
 La vue graphique permet sélection, zoom et recentrage. Le panneau de propriétés
 détaille la table sélectionnée. La vue textuelle peut être copiée ou exportée.
 
-## « ⓘ Pourquoi ? »
+## « ⓘ Pourquoi ? / Traçabilité »
 
-Le bouton explique sans IA :
+Le bouton explique sans IA une table entière ou la colonne sélectionnée :
 
 - pourquoi une table existe ;
 - comment sa PK a été déterminée ;
@@ -38,12 +38,14 @@ Le bouton explique sans IA :
 - les règles d'historisation, de n-aire ou d'ISA.
 
 L'explication est fondée sur les identifiants de provenance réellement produits
-par le transformateur.
+par le transformateur. La nouvelle vue suit ensuite cette origine jusqu'à
+l'extrait SQL PostgreSQL, SQLite ou MariaDB/MySQL correspondant. Consultez le
+[guide de traçabilité](TRACABILITE.md).
 
 ## État obsolète
 
 Une modification logique du MCD rend le MLD obsolète. La génération SQL et
-**ⓘ Pourquoi ?** sont alors désactivés jusqu'à régénération. Un déplacement
+**ⓘ Pourquoi ? / Traçabilité** sont alors désactivés jusqu'à régénération. Un déplacement
 graphique seul ne change pas l'empreinte logique.
 
 ## Étape suivante

@@ -34,7 +34,8 @@ aucun module Qt.
 `DiagramController` orchestre le document et la scène. Les commandes Qt Undo
 encapsulent les changements. Les services indépendants couvrent notamment :
 
-- `McdToMldTransformer` et `MldTransformationExplainer` ;
+- McdToMldTransformer, MldTransformationExplainer et
+  ModelTraceabilityService ;
 - `SQLGenerator` et ses dialectes ;
 - reverse engineering DDL/PWA ;
 - exploration, impact, comparaison et documentation ;
@@ -59,12 +60,17 @@ MCDModel
   ├── validate_mcd
   ├── McdToMldTransformer → MLDModel
   │                            ├── vues MLD
+  │                            ├── traçabilité MCD → MLD → SQL
   │                            └── SQLGenerator → texte SQL
   └── ModelDocumentationGenerator → Markdown/HTML/PDF
 ```
 
 Le générateur SQL ne reçoit aucun `MCDModel`. La position graphique est exclue
 de l'empreinte logique.
+
+La traçabilité reçoit simultanément le MCD source et son MLD à jour. Elle suit
+les identifiants de provenance déjà produits par le transformateur, puis rend
+un extrait avec le dialecte SQL sélectionné. Elle ne modifie aucun modèle.
 
 ## Événements d'état
 
