@@ -81,6 +81,9 @@ merisor = ["assets/*.png"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "sql_runtime: exécute le SQL généré sur un véritable moteur de base de données",
+]
 
 [tool.ruff]
 target-version = "py310"

@@ -11,6 +11,7 @@ from typing import Any
 from merisor.domain import (
     Association,
     Attribute,
+    BusinessTerm,
     Cardinality,
     DiagramError,
     Entity,
@@ -59,6 +60,7 @@ class JsonDiagramRepository:
             return {
                 "id": node.id,
                 "name": node.name,
+                "description": node.description,
                 "position": {"x": node.position.x, "y": node.position.y},
                 "attributes": [
                     attribute_data(attribute) for attribute in node.attributes
@@ -155,6 +157,17 @@ class JsonDiagramRepository:
                     model.submodel_views.values(), key=lambda item: item.id
                 )
             ],
+            "business_terms": [
+                {
+                    "id": term.id,
+                    "name": term.name,
+                    "definition": term.definition,
+                    "synonyms": list(term.synonyms),
+                }
+                for term in sorted(
+                    model.business_terms.values(), key=lambda item: item.id
+                )
+            ],
         }
 
     def from_dict(self, data: Any) -> MCDModel:
@@ -182,6 +195,7 @@ class JsonDiagramRepository:
                         id=self._required_id(item, "id"),
                         name=self._required_text(item, "name"),
                         position=self._position(item),
+                        description=self._optional_text(item, "description"),
                     )
                 )
             for raw in self._required_list(data, "associations"):
@@ -191,6 +205,7 @@ class JsonDiagramRepository:
                         id=self._required_id(item, "id"),
                         name=self._required_text(item, "name"),
                         position=self._position(item),
+                        description=self._optional_text(item, "description"),
                     )
                 )
             for raw in self._required_list(data, "relations"):
@@ -207,6 +222,7 @@ class JsonDiagramRepository:
             self._load_inheritances(model, data)
             self._load_functional_dependencies(model, data)
             self._load_submodels(model, data)
+            self._load_business_terms(model, data)
         except DiagramError as error:
             raise PersistenceError(f"Diagramme V0.1 incohérent : {error}") from error
         return model
@@ -222,6 +238,7 @@ class JsonDiagramRepository:
                         name=self._required_text(item, "name"),
                         position=self._position(item),
                         attributes=self._attributes(item),
+                        description=self._optional_text(item, "description"),
                     )
                 )
             for raw in self._required_list(data, "associations"):
@@ -234,6 +251,7 @@ class JsonDiagramRepository:
                         attributes=self._attributes(item),
                         is_historized=self._is_historized(item),
                         materialization_strategy=self._materialization_strategy(item),
+                        description=self._optional_text(item, "description"),
                     )
                 )
             for raw in self._required_list(data, "relations"):
@@ -250,6 +268,7 @@ class JsonDiagramRepository:
             self._load_inheritances(model, data)
             self._load_functional_dependencies(model, data)
             self._load_submodels(model, data)
+            self._load_business_terms(model, data)
         except DiagramError as error:
             raise PersistenceError(f"Diagramme V0.2 incohérent : {error}") from error
         return model
@@ -364,6 +383,25 @@ class JsonDiagramRepository:
                     kind=kind,
                     domain_ids=domain_ids,
                     node_ids=node_ids,
+                )
+            )
+
+    def _load_business_terms(self, model: MCDModel, data: dict[str, Any]) -> None:
+        raw_terms = data.get("business_terms", [])
+        if not isinstance(raw_terms, list):
+            raise PersistenceError("Le champ 'business_terms' doit être une liste.")
+        for raw in raw_terms:
+            item = self._required_object(raw, "terme métier")
+            synonyms = tuple(
+                self._required_text({"value": value}, "value")
+                for value in self._required_list(item, "synonyms")
+            )
+            model.add_business_term(
+                BusinessTerm(
+                    id=self._required_id(item, "id"),
+                    name=self._required_text(item, "name"),
+                    definition=self._optional_text(item, "definition"),
+                    synonyms=synonyms,
                 )
             )
 

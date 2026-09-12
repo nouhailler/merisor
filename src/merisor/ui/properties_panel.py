@@ -263,7 +263,9 @@ class PropertiesPanel(QWidget):
         self.attribute_impact_summary = QLabel("—")
         self.attribute_impact_summary.setWordWrap(True)
         attribute_type_form.addRow("Impact", self.attribute_impact_summary)
-        self.analyze_attribute_impact_button = QPushButton("Analyser l'impact…")
+        self.analyze_attribute_impact_button = QPushButton(
+            "Et si je supprimais cet attribut…"
+        )
         attribute_type_form.addRow(self.analyze_attribute_impact_button)
         self.attribute_type_group.setEnabled(False)
         layout.addWidget(self.attribute_type_group)

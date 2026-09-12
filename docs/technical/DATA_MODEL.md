@@ -12,7 +12,8 @@ MCDModel
 ├── inheritances: Inheritance[]
 ├── functional_dependencies: FunctionalDependency[]
 ├── domains: ModelDomain[]
-└── submodel_views: SubmodelView[]
+├── submodel_views: SubmodelView[]
+└── business_terms: BusinessTerm[]
 ```
 
 Tous les objets et attributs possèdent un ID interne unique, indépendant du
@@ -20,9 +21,10 @@ nom affiché.
 
 ## Nœuds
 
-`Entity` : nom, position, attributs et identifiants calculés.
+`Entity` : nom, description, position, attributs et identifiants calculés.
 
-`Association` ajoute `is_historized` et `materialization_strategy`.
+`Association` ajoute une description, `is_historized` et
+`materialization_strategy`.
 
 `Attribute` contient le type logique facultatif, nullabilité, défaut, UNIQUE,
 commentaire, auto-incrémentation et CHECK.
@@ -43,6 +45,9 @@ déterminants/dépendants, avec origine `USER` ou `AI`.
 `ModelDomain` regroupe des IDs de nœuds avec appartenance multiple possible.
 `SubmodelView` compose domaines et nœuds explicites dans une vue `BUSINESS` ou
 `TECHNICAL`.
+
+`BusinessTerm` porte un nom, une définition et une collection de synonymes. Il
+alimente le dictionnaire sans imposer une correspondance technique implicite.
 
 ## MLDModel
 

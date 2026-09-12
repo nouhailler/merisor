@@ -90,13 +90,17 @@ captures à jour, les raccourcis et les décisions de conception.
 
 - **MCD graphique** : entités, associations, attributs complets, identifiants
   composés, cardinalités, réflexives, n-aires et héritages ISA ;
+- **dictionnaire de données** : descriptions, fiches d'attributs, définitions
+  métier et synonymes persistés puis repris dans la documentation ;
 - **canvas productif** : grille, guides, alignement, sélection multiple,
   copier/coller, domaines, minimap, recherche et disposition automatique ;
 - **interface guidée** : accueil, workflow permanent, thèmes clair/sombre,
   validation intégrée, recherche globale `Ctrl+Shift+F` et palette `Ctrl+K` ;
 - **contrôles** : validation MERISE, qualité séparée en erreurs, risques et
   suggestions, score heuristique explicable, normalisation 1NF/2NF/3NF,
-  scénarios métier fonctionnels, comparaison de versions et analyse d'impact ;
+  scénarios métier fonctionnels, **mode étudiant** avec barème explicable,
+  comparaison de versions et mode **Et si… ?** avant suppression avec
+  confirmation explicite ;
 - **MLD explicable et traçable** : origine MCD, règle de transformation,
   conséquence MLD et extrait SQL accessibles avec **ⓘ Pourquoi ?** ;
 - **SQL multi-dialecte** : PostgreSQL, SQLite, MariaDB/MySQL, aperçu et export ;
@@ -227,6 +231,11 @@ ruff check .
 mypy
 QT_QPA_PLATFORM=offscreen pytest
 ```
+
+La CI exécute en plus les scripts générés sur de véritables moteurs temporaires
+SQLite, PostgreSQL 16 et MariaDB 11. Elle vérifie les tables, PK/FK, insertions
+valides et le rejet des références inexistantes. Consultez le
+[guide des tests](docs/development/TESTS.md#exécution-réelle-du-sql-généré).
 
 Lisez [CONTRIBUTING.md](docs/development/CONTRIBUTING.md) et ouvrez une
 [issue](https://github.com/nouhailler/merisor/issues) pour discuter d'une

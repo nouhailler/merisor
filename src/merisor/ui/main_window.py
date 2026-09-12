@@ -63,6 +63,7 @@ from merisor.ui.business_scenario_dialog import BusinessScenarioDialog
 from merisor.ui.canvas import DiagramScene, DiagramView, MiniMapView, ToolMode
 from merisor.ui.command_palette import CommandPalette, GlobalSearchDialog
 from merisor.ui.conversational_design_dialog import ConversationalDesignDialog
+from merisor.ui.data_dictionary_dialog import DataDictionaryDialog
 from merisor.ui.ddl_import_dialog import DDLImportPreviewDialog
 from merisor.ui.diagram_exporter import DiagramExportError, DiagramVisualExporter
 from merisor.ui.documentation_dialog import DocumentationCenter
@@ -70,7 +71,6 @@ from merisor.ui.documentation_exporter import (
     DocumentationExportError,
     DocumentationFileExporter,
 )
-from merisor.ui.impact_analysis_dialog import ImpactAnalysisDialog
 from merisor.ui.mld_properties_panel import MLDPropertiesPanel
 from merisor.ui.mld_view import MLDView
 from merisor.ui.model_explorer_dialog import ModelExplorerDialog
@@ -82,6 +82,7 @@ from merisor.ui.quality_dialog import QualityReportDialog
 from merisor.ui.query_generator_dialog import QueryGeneratorDialog
 from merisor.ui.sql_workspace import SQLWorkspace
 from merisor.ui.start_center import StartCenter
+from merisor.ui.student_mode_dialog import StudentModeDialog
 from merisor.ui.submodel_dialog import SubmodelManagerDialog
 from merisor.ui.test_data_dialog import TestDataDialog
 from merisor.ui.theme import ThemeManager, ThemeMode
@@ -91,6 +92,7 @@ from merisor.ui.transformation_explanation_dialog import (
 )
 from merisor.ui.validation_center import ValidationCenter
 from merisor.ui.version_comparison_dialog import VersionComparisonDialog
+from merisor.ui.what_if_dialog import WhatIfImpactDialog
 
 
 class MainWindow(QMainWindow):
@@ -250,13 +252,17 @@ class MainWindow(QMainWindow):
 
         self.validate_action = QAction("Valider le MCD…", self)
         self.validate_action.setShortcut(QKeySequence("Ctrl+Shift+V"))
+        self.data_dictionary_action = QAction("Dictionnaire de données…", self)
+        self.data_dictionary_action.setShortcut(QKeySequence("Ctrl+Alt+G"))
         self.compare_version_action = QAction("Comparer avec une version…", self)
         self.compare_version_action.setShortcut(QKeySequence("Ctrl+Alt+C"))
         self.quality_action = QAction("Analyser la qualité du modèle…", self)
         self.business_scenario_action = QAction("Tester un scénario métier…", self)
         self.business_scenario_action.setShortcut(QKeySequence("Ctrl+Shift+T"))
+        self.student_mode_action = QAction("🎓 Mode étudiant…", self)
+        self.student_mode_action.setShortcut(QKeySequence("Ctrl+Alt+U"))
         self.ai_repair_action = QAction("✨ Analyser avec l'IA…", self)
-        self.impact_analysis_action = QAction("Analyser l'impact…", self)
+        self.impact_analysis_action = QAction("Et si… ? Analyser un changement…", self)
         self.impact_analysis_action.setShortcut(QKeySequence("Ctrl+Alt+I"))
         self.quality_action.setShortcut(QKeySequence("Ctrl+Shift+Q"))
         self.normalization_action = QAction("Assistant de normalisation…", self)
@@ -385,8 +391,10 @@ class MainWindow(QMainWindow):
 
         model_menu = self.menuBar().addMenu("Modèle")
         model_menu.addAction(self.validate_action)
+        model_menu.addAction(self.data_dictionary_action)
         model_menu.addAction(self.compare_version_action)
         model_menu.addAction(self.quality_action)
+        model_menu.addAction(self.student_mode_action)
         model_menu.addAction(self.business_scenario_action)
         model_menu.addAction(self.ai_repair_action)
         model_menu.addAction(self.impact_analysis_action)
@@ -580,8 +588,10 @@ class MainWindow(QMainWindow):
         self.global_search_action.triggered.connect(self.show_global_search)
         self.command_palette_action.triggered.connect(self.show_command_palette)
         self.validate_action.triggered.connect(self.show_validation)
+        self.data_dictionary_action.triggered.connect(self.show_data_dictionary)
         self.compare_version_action.triggered.connect(self.compare_with_version)
         self.quality_action.triggered.connect(self.show_quality_report)
+        self.student_mode_action.triggered.connect(self.show_student_mode)
         self.business_scenario_action.triggered.connect(self.show_business_scenarios)
         self.ai_repair_action.triggered.connect(self.show_ai_repair)
         self.impact_analysis_action.triggered.connect(self.show_impact_analysis)
@@ -981,6 +991,15 @@ class MainWindow(QMainWindow):
         dialog = QualityReportDialog(self.controller.analyze_quality(), self)
         dialog.exec()
 
+    def show_data_dictionary(self, _checked: bool = False) -> None:
+        dialog = DataDictionaryDialog(self.controller.model, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self.controller.apply_data_dictionary_model(dialog.working_model)
+
+    def show_student_mode(self, _checked: bool = False) -> None:
+        StudentModeDialog(self.controller.model, self).exec()
+
     def show_business_scenarios(self, _checked: bool = False) -> None:
         BusinessScenarioDialog(self.controller.model, self).exec()
 
@@ -1001,7 +1020,11 @@ class MainWindow(QMainWindow):
             elements = self.controller.selected_elements()
             if len(elements) == 1:
                 selected_id = elements[0].id
-        ImpactAnalysisDialog(self.controller.model, selected_id, self).exec()
+        dialog = WhatIfImpactDialog(self.controller.model, selected_id, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or dialog.target_id is None:
+            return
+        self.controller.delete_element(dialog.target_id)
+        self.workspace_tabs.setCurrentWidget(self.view)
 
     def show_model_explorer(self, _checked: bool = False) -> None:
         ModelExplorerDialog(self.controller.model, self).exec()
@@ -1020,8 +1043,11 @@ class MainWindow(QMainWindow):
             self.association_action,
             self.relation_action,
             self.validate_action,
+            self.data_dictionary_action,
             self.quality_action,
+            self.student_mode_action,
             self.business_scenario_action,
+            self.impact_analysis_action,
             self.generate_mld_action,
             self.generate_sql_action,
             self.export_visual_action,

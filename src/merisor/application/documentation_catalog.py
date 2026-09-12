@@ -35,6 +35,12 @@ DOCUMENTATION_PAGES = (
         "user-guide", "Guide utilisateur", "Utilisateur", "user/GUIDE_UTILISATEUR.md"
     ),
     DocumentationPage("mcd", "Créer un MCD", "Utilisateur", "user/MCD.md"),
+    DocumentationPage(
+        "data-dictionary",
+        "Dictionnaire de données",
+        "Utilisateur",
+        "user/DICTIONNAIRE_DONNEES.md",
+    ),
     DocumentationPage("mld", "Comprendre le MLD", "Utilisateur", "user/MLD.md"),
     DocumentationPage(
         "quality",
@@ -49,10 +55,22 @@ DOCUMENTATION_PAGES = (
         "user/SCENARIOS_METIER.md",
     ),
     DocumentationPage(
+        "student-mode",
+        "Mode étudiant",
+        "Utilisateur",
+        "user/MODE_ETUDIANT.md",
+    ),
+    DocumentationPage(
         "traceability",
         "Traçabilité MCD → MLD → SQL",
         "Utilisateur",
         "user/TRACABILITE.md",
+    ),
+    DocumentationPage(
+        "what-if",
+        "Et si… ? Analyser un changement",
+        "Utilisateur",
+        "user/ET_SI.md",
     ),
     DocumentationPage("sql", "Générer du SQL", "Utilisateur", "user/SQL.md"),
     DocumentationPage("ai", "Fonctions IA", "Utilisateur", "user/IA.md"),

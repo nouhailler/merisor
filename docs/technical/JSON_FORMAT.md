@@ -13,7 +13,8 @@
   "inheritances": [],
   "functional_dependencies": [],
   "domains": [],
-  "submodel_views": []
+  "submodel_views": [],
+  "business_terms": []
 }
 ```
 
@@ -25,6 +26,7 @@
 {
   "id": "entity_client",
   "name": "CLIENT",
+  "description": "Personne ou organisation possédant un compte",
   "position": {"x": 100, "y": 80},
   "attributes": []
 }
@@ -67,6 +69,20 @@ Elle reprend les champs d'un nœud et ajoute :
 
 Les stratégies autorisées sont `AUTO`, `FORCE_TABLE`, `FORCE_FK`. Une valeur
 absente devient `false` et `AUTO`.
+
+## Glossaire métier
+
+```json
+{
+  "id": "term_client",
+  "name": "Client",
+  "definition": "Personne ou organisation utilisant le service",
+  "synonyms": ["acheteur", "utilisateur"]
+}
+```
+
+`business_terms` est facultatif. Les noms sont uniques sans tenir compte de la
+casse ; les synonymes ne sont jamais transformés automatiquement en règles SQL.
 
 ## Relation et cardinalité
 
@@ -136,7 +152,7 @@ Tous les attributs doivent appartenir au propriétaire. Origine : `USER` ou `AI`
 
 - V1 conserve noms, positions, entités, associations et relations ;
 - champs V2 absents : valeurs par défaut documentées ci-dessus ;
-- tableaux fonctionnels/domaines/vues absents : collections vides ;
+- tableaux fonctionnels/domaines/vues/glossaire absents : collections vides ;
 - relation sans `role` : chaîne vide ;
 - le chargement ne réécrit jamais le fichier ; l'enregistrement explicite
   produit un V2 complet.

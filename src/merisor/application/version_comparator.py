@@ -10,7 +10,14 @@ from merisor.application.mld_transformer import (
     McdToMldTransformer,
     MLDTransformationError,
 )
-from merisor.domain import Association, Attribute, Entity, MCDModel, MLDModel
+from merisor.domain import (
+    Association,
+    Attribute,
+    BusinessTerm,
+    Entity,
+    MCDModel,
+    MLDModel,
+)
 
 
 class ChangeKind(str, Enum):
@@ -151,6 +158,11 @@ class ModelVersionComparator:
         )
         changes.extend(self._compare_relations(reference, current))
         changes.extend(self._compare_inheritances(reference, current))
+        changes.extend(
+            self._compare_business_terms(
+                reference.business_terms, current.business_terms
+            )
+        )
 
         enriched = tuple(
             self._with_impact(
@@ -226,6 +238,17 @@ class ModelVersionComparator:
                         source_ids,
                     )
                 )
+            if before_node.description != after_node.description:
+                changes.append(
+                    VersionChange(
+                        ChangeKind.MODIFIED,
+                        "description",
+                        label,
+                        before_node.description or "—",
+                        after_node.description or "—",
+                        source_ids,
+                    )
+                )
             if isinstance(before_node, Association) and isinstance(
                 after_node, Association
             ):
@@ -261,6 +284,58 @@ class ModelVersionComparator:
                     frozenset((node_id,)),
                 )
             )
+        return changes
+
+    @staticmethod
+    def _compare_business_terms(
+        old: dict[str, BusinessTerm], new: dict[str, BusinessTerm]
+    ) -> list[VersionChange]:
+        changes: list[VersionChange] = []
+        for term_id in old.keys() - new.keys():
+            term = old[term_id]
+            changes.append(
+                VersionChange(
+                    ChangeKind.REMOVED,
+                    "terme métier",
+                    term.name,
+                    before=term.definition or term.name,
+                    source_ids=frozenset((term.id,)),
+                )
+            )
+        for term_id in new.keys() - old.keys():
+            term = new[term_id]
+            changes.append(
+                VersionChange(
+                    ChangeKind.ADDED,
+                    "terme métier",
+                    term.name,
+                    after=term.definition or term.name,
+                    source_ids=frozenset((term.id,)),
+                )
+            )
+        for term_id in old.keys() & new.keys():
+            before, after = old[term_id], new[term_id]
+            values = (
+                ("nom du terme", before.name, after.name),
+                ("définition", before.definition or "—", after.definition or "—"),
+                (
+                    "synonymes",
+                    ", ".join(before.synonyms) or "—",
+                    ", ".join(after.synonyms) or "—",
+                ),
+            )
+            for category, old_value, new_value in values:
+                if old_value != new_value:
+                    changes.append(
+                        VersionChange(
+                            ChangeKind.MODIFIED,
+                            category,
+                            after.name or before.name,
+                            old_value,
+                            new_value,
+                            frozenset((term_id,)),
+                        )
+                    )
         return changes
 
     @staticmethod

@@ -311,14 +311,15 @@ class ModelImpactAnalyzer:
             for column in table.columns:
                 if column.source_attribute_id in attribute_ids:
                     touched.setdefault(table.id, set()).add(column.id)
-                    if table.id not in owner_table_ids:
-                        references.append(
-                            ImpactReference(
-                                "Colonne MLD",
-                                f"{table.name}.{column.name}",
-                                "colonne dérivée de l'attribut source",
-                            )
+                    references.append(
+                        ImpactReference(
+                            "Colonne MLD",
+                            f"{table.name}.{column.name}",
+                            "colonne dérivée de l'attribut source"
+                            if table.id not in owner_table_ids
+                            else "colonne directe issue de l'attribut source",
                         )
+                    )
 
         for table in mld.tables:
             local_ids = touched.get(table.id, set())

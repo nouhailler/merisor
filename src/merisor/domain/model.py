@@ -182,6 +182,7 @@ class Entity:
     position: Position = field(default_factory=Position)
     id: str = field(default_factory=_new_id)
     attributes: list[Attribute] = field(default_factory=list)
+    description: str = ""
 
     def __post_init__(self) -> None:
         _validate_internal_id(self.id, "l'entité")
@@ -190,6 +191,9 @@ class Entity:
             isinstance(attribute, Attribute) for attribute in self.attributes
         ):
             raise DiagramError("Les attributs d'une entité doivent être des Attribute.")
+        if not isinstance(self.description, str):
+            raise DiagramError("La description d'une entité doit être textuelle.")
+        self.description = self.description.strip()
 
     @property
     def identifier_attributes(self) -> list[Attribute]:
@@ -206,6 +210,7 @@ class Association:
     attributes: list[Attribute] = field(default_factory=list)
     is_historized: bool = False
     materialization_strategy: MaterializationStrategy = MaterializationStrategy.AUTO
+    description: str = ""
 
     def __init__(
         self,
@@ -217,12 +222,14 @@ class Association:
         materialization_strategy: MaterializationStrategy | str = (
             MaterializationStrategy.AUTO
         ),
+        description: str = "",
     ) -> None:
         self.name = name
         self.position = position
         self.id = _new_id() if id is None else id
         self.attributes = [] if attributes is None else attributes
         self.is_historized = is_historized
+        self.description = description
         try:
             self.materialization_strategy = MaterializationStrategy(
                 materialization_strategy
@@ -245,6 +252,9 @@ class Association:
             )
         if not isinstance(self.is_historized, bool):
             raise DiagramError("Le statut d'historisation doit être booléen.")
+        if not isinstance(self.description, str):
+            raise DiagramError("La description d'une association doit être textuelle.")
+        self.description = self.description.strip()
 
     @property
     def identifier_attributes(self) -> list[Attribute]:
@@ -439,6 +449,49 @@ class SubmodelView:
             _validate_internal_id(node_id, "l'objet de la vue")
 
 
+@dataclass(slots=True, init=False)
+class BusinessTerm:
+    """Terme du glossaire métier, indépendant des noms techniques du MCD."""
+
+    name: str
+    definition: str
+    synonyms: tuple[str, ...]
+    id: str
+
+    def __init__(
+        self,
+        name: str,
+        definition: str = "",
+        synonyms: Iterable[str] = (),
+        id: str | None = None,
+    ) -> None:
+        self.name = name
+        self.definition = definition
+        self.synonyms = tuple(synonyms)
+        self.id = _new_id() if id is None else id
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        _validate_internal_id(self.id, "ce terme métier")
+        _validate_name_type(self.name, "ce terme métier")
+        if not isinstance(self.definition, str):
+            raise DiagramError("La définition d'un terme métier doit être textuelle.")
+        if not all(isinstance(synonym, str) for synonym in self.synonyms):
+            raise DiagramError("Les synonymes d'un terme doivent être textuels.")
+        self.name = self.name.strip()
+        self.definition = self.definition.strip()
+        self.synonyms = tuple(
+            dict.fromkeys(
+                synonym.strip()
+                for synonym in self.synonyms
+                if synonym.strip()
+                and synonym.strip().casefold() != self.name.casefold()
+            )
+        )
+        if not self.name:
+            raise DiagramError("Le nom d'un terme métier est obligatoire.")
+
+
 Node = Entity | Association
 
 
@@ -453,6 +506,7 @@ class MCDModel:
         self.functional_dependencies: dict[str, FunctionalDependency] = {}
         self.domains: dict[str, ModelDomain] = {}
         self.submodel_views: dict[str, SubmodelView] = {}
+        self.business_terms: dict[str, BusinessTerm] = {}
 
     def _all_ids(self) -> set[str]:
         attribute_ids = {
@@ -472,6 +526,7 @@ class MCDModel:
             | set(self.functional_dependencies)
             | set(self.domains)
             | set(self.submodel_views)
+            | set(self.business_terms)
             | attribute_ids
         )
 
@@ -670,6 +725,33 @@ class MCDModel:
                 f"Le domaine référence un objet inconnu : {sorted(unknown)[0]}"
             )
         self.domains[domain.id] = domain
+
+    def add_business_term(self, term: BusinessTerm) -> None:
+        self._ensure_available_ids([term.id])
+        if any(
+            item.name.casefold() == term.name.casefold()
+            for item in self.business_terms.values()
+        ):
+            raise DiagramError(f"Terme métier déjà présent : {term.name}")
+        self.business_terms[term.id] = term
+
+    def replace_business_term(self, term_id: str, replacement: BusinessTerm) -> None:
+        if term_id not in self.business_terms:
+            raise DiagramError(f"Terme métier inconnu : {term_id}")
+        if replacement.id != term_id:
+            raise DiagramError("L'identifiant d'un terme métier ne peut pas changer.")
+        if any(
+            item.id != term_id and item.name.casefold() == replacement.name.casefold()
+            for item in self.business_terms.values()
+        ):
+            raise DiagramError(f"Terme métier déjà présent : {replacement.name}")
+        self.business_terms[term_id] = replacement
+
+    def remove_business_term(self, term_id: str) -> BusinessTerm:
+        try:
+            return self.business_terms.pop(term_id)
+        except KeyError as error:
+            raise DiagramError(f"Terme métier inconnu : {term_id}") from error
 
     def add_submodel_view(self, view: SubmodelView) -> None:
         self._ensure_available_ids([view.id])

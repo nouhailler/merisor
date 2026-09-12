@@ -230,17 +230,26 @@ concernée : associations MCD, tables MLD, FK et index SQL touchés. Un MCD
 incomplet reste comparable ; seul le chiffrage MLD/SQL indisponible est alors
 signalé comme tel.
 
-## Analyse d'impact terminée
+## Analyse d'impact interactive « Et si… ? » terminée
 
-La commande **Modèle → Analyser l'impact** (`Ctrl+Alt+I`) et le bouton présent
-dans les propriétés d'un attribut utilisent `ModelImpactAnalyzer`, indépendant
-de Qt. Le panneau affiche aussi un résumé immédiat pour l'attribut sélectionné.
+La commande **Modèle → Et si… ? Analyser un changement…** (`Ctrl+Alt+I`) et le
+bouton présent dans les propriétés d'un attribut ouvrent une simulation de
+suppression. `WhatIfAnalyzer`, indépendant de Qt, travaille sur une copie
+profonde : fermer ou annuler le dialogue ne modifie jamais le document.
 
-Le moteur suit les relations MCD, dépendances fonctionnelles, colonnes MLD
-migrées, PK/FK, UNIQUE, CHECK et index en utilisant les identifiants de
-provenance. Les attributs portant le même nom dans d'autres objets sont affichés
-séparément comme correspondances potentielles : ils ne sont jamais présentés
-comme des dépendances certaines sans référence structurelle.
+Le rapport regroupe les effets par couches MCD, MLD, SQL, documentation,
+données de test et requêtes. Le moteur suit relations, dépendances
+fonctionnelles, colonnes directes ou migrées, PK/FK, UNIQUE, CHECK et index au
+moyen des identifiants de provenance. Les correspondances de nom et les
+livrables générés mais non persistés sont marqués **À confirmer** : MERISOR
+n'invente ni usage ni compteur qu'il ne peut pas établir.
+
+La copie simulée passe dans le validateur MCD afin d'isoler les nouvelles
+erreurs que créerait le changement. **Continuer et supprimer** applique ensuite
+une seule commande annulable ; **Annuler** laisse le modèle intact. La première
+version interactive prend volontairement en charge la suppression d'une
+entité, d'une association ou d'un attribut. Les simulations de renommage et de
+changement de type restent une extension future.
 
 Si le MCD est incomplet, l'analyse MCD reste disponible et le rapport explique
 que les impacts MLD/SQL n'ont pas pu être calculés.
@@ -284,6 +293,58 @@ chevauchement sont volontairement classées **non vérifiables** : le moteur ne
 les déduit pas de quelques attributs de date. Cette première version repose sur
 les noms explicitement présents dans le scénario et reste locale, sans IA ni
 persistance des scénarios. Voir `docs/user/SCENARIOS_METIER.md`.
+
+## Mode étudiant déjà terminé
+
+La commande **Modèle → 🎓 Mode étudiant…** (`Ctrl+Alt+U`) propose un exercice
+guidé et évalue le MCD courant sans le modifier. Le domaine
+`StudentExerciseEvaluator` sépare l'énoncé, les hypothèses, le barème et le
+rapport de l'interface Qt. Le premier exercice de référence couvre CLIENT,
+COMMANDE et PRODUIT.
+
+Chaque entité, identifiant, association et branche de cardinalité constitue un
+critère explicite avec un état `PASSED` ou `NEEDS_WORK`, un constat et une
+réponse **Pourquoi ?**. Le score est le rapport des critères acquis ; il ne doit
+jamais être présenté comme une certification ou une vérité métier. Les minima
+ambigus de l'énoncé sont donc annoncés dans les hypothèses avant l'évaluation.
+
+Le catalogue `STUDENT_EXERCISES` permet d'ajouter d'autres exercices sans
+modifier l'évaluateur. Une évolution pourra proposer un éditeur d'exercices ou
+des parcours progressifs, tout en conservant un corrigé déterministe et sans
+dépendance obligatoire à l'IA. Voir `docs/user/MODE_ETUDIANT.md`.
+
+## Dictionnaire de données déjà terminé
+
+La commande **Modèle → Dictionnaire de données…** (`Ctrl+Alt+G`) édite une
+copie du MCD puis applique la confirmation via `ReplaceModelStateCommand`. Les
+entités et associations portent une `description`; les attributs utilisent
+leur `comment` existant comme définition. `MCDModel.business_terms` contient
+des `BusinessTerm` avec nom, définition et synonymes.
+
+`DataDictionaryService` construit une projection déterministe et indépendante
+de Qt avec type logique, rôle identifiant/métier, nullabilité et unicité. Le
+générateur de documentation Markdown/HTML inclut descriptions et glossaire, et
+le schéma de génération IA sait proposer ces champs. Le SQL et les données de
+test ne déduisent encore aucune règle depuis une définition textuelle : ce sera
+une intégration future explicite, jamais une inférence silencieuse.
+
+Le JSON reste en version 2 : `description` sur les nœuds et le tableau racine
+`business_terms` sont optionnels au chargement. Leur absence produit des textes
+vides et un glossaire vide. Voir `docs/user/DICTIONNAIRE_DONNEES.md`.
+
+## Exécution SQL réelle en CI déjà terminée
+
+Le workflow `.github/workflows/sql-runtime.yml` complète les tests textuels du
+générateur. Il démarre PostgreSQL 16 et MariaDB 11 comme services temporaires ;
+SQLite est exécuté en mémoire. Le test `tests/integration/test_sql_runtime.py`
+parcourt réellement **MCD → MLD → SQL**, crée le schéma MotoGP, inspecte ses
+tables et FK, insère des lignes valides puis vérifie le rejet d'une FK absente.
+
+Cette infrastructure appartient uniquement aux tests : l'application ne
+contient toujours aucun pilote de base, n'ouvre aucune connexion et n'exécute
+jamais le SQL de l'utilisateur. Les moteurs externes sont ignorés localement si
+leur configuration est absente, mais `MERISOR_REQUIRE_EXTERNAL_SQL=1` interdit
+ces skips en CI. Voir `docs/development/TESTS.md`.
 
 ## Assistant de normalisation déjà terminé
 

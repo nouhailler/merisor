@@ -538,6 +538,24 @@ class DiagramController(QObject):
         if not snapshot.empty:
             self.undo_stack.push(DeleteItemsCommand(self, snapshot))
 
+    def delete_element(self, element_id: str) -> None:
+        """Supprime un objet ciblé comme une unique opération annulable."""
+
+        owners: Iterable[Entity | Association] = (
+            *self.model.entities.values(),
+            *self.model.associations.values(),
+        )
+        for owner in owners:
+            if any(attribute.id == element_id for attribute in owner.attributes):
+                self.remove_attribute(owner.id, element_id)
+                self.message.emit(f"Attribut supprimé de {owner.name}.")
+                return
+        snapshot = self._snapshot_for_deletion({element_id})
+        if snapshot.empty:
+            raise DiagramError(f"Élément inconnu : {element_id}")
+        self.undo_stack.push(DeleteItemsCommand(self, snapshot))
+        self.message.emit("Suppression appliquée après analyse d'impact.")
+
     def selected_node_ids(self) -> set[str]:
         return {
             item.element_id
@@ -856,6 +874,21 @@ class DiagramController(QObject):
         )
         self.message.emit(
             "Améliorations IA appliquées ; utilisez Annuler pour les retirer."
+        )
+
+    def apply_data_dictionary_model(self, model: MCDModel) -> None:
+        """Applique les fiches métier confirmées comme une commande annulable."""
+
+        self.undo_stack.push(
+            ReplaceModelStateCommand(
+                self,
+                self.model,
+                copy.deepcopy(model),
+                "Modifier le dictionnaire de données",
+            )
+        )
+        self.message.emit(
+            "Dictionnaire de données enregistré ; utilisez Annuler pour revenir."
         )
 
     def load_transient_model(self, model: MCDModel) -> None:

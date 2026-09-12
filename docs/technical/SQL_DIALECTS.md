@@ -46,3 +46,14 @@ un commentaire documentaire car il n'offre pas de métadonnée équivalente.
 Le générateur ordonne le graphe des tables. Les cycles peuvent demander une
 seconde phase `ALTER TABLE` lorsque le dialecte la permet. Les limitations de
 SQLite sont signalées plutôt que masquées.
+
+## Compatibilité vérifiée sur les moteurs
+
+Les tests unitaires contrôlent le rendu exact de chaque dialecte. Un workflow
+d'intégration distinct exécute également le schéma MotoGP généré sur SQLite,
+PostgreSQL 16 et MariaDB 11. Il inspecte les tables et clés étrangères, puis
+vérifie avec de vraies insertions que l'intégrité référentielle est active.
+
+Les versions indiquent les moteurs de référence de la CI, pas une restriction
+artificielle du générateur. Cette exécution est réservée aux bases éphémères de
+test et n'ajoute aucune connexion à l'application MERISOR.

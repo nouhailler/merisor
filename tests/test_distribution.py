@@ -58,3 +58,15 @@ def test_quality_workflow_enforces_formatter_linter_typing_and_tests() -> None:
     assert "ruff check ." in workflow
     assert "run: mypy" in workflow
     assert "run: pytest -q" in workflow
+
+
+def test_sql_runtime_workflow_uses_three_real_database_engines() -> None:
+    workflow = (PROJECT_ROOT / ".github/workflows/sql-runtime.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "image: postgres:16" in workflow
+    assert "image: mariadb:11" in workflow
+    assert "postgresql-client mariadb-client" in workflow
+    assert 'MERISOR_REQUIRE_EXTERNAL_SQL: "1"' in workflow
+    assert "run: pytest -q -m sql_runtime" in workflow

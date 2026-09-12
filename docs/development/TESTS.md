@@ -26,6 +26,41 @@ pytest -k historized
 - **distribution** : icônes, README, workflows et scripts de packaging ;
 - **IA** : parsing strict et services simulés, sans appel réseau réel.
 
+## Exécution réelle du SQL généré
+
+Le marqueur `sql_runtime` couvre la chaîne **MCD → MLD → SQL → moteur réel**.
+SQLite s'exécute toujours en mémoire :
+
+```bash
+pytest -q -m sql_runtime
+```
+
+Sans configuration supplémentaire, les essais PostgreSQL et MariaDB sont
+ignorés localement. Le workflow GitHub Actions `sql-runtime.yml` démarre des
+services éphémères PostgreSQL 16 et MariaDB 11, installe leurs clients, puis :
+
+1. exécute intégralement chaque schéma généré ;
+2. vérifie la présence des tables et des deux FK MotoGP ;
+3. insère des données valides ;
+4. confirme qu'une référence inexistante est réellement rejetée.
+
+Pour reproduire ces tests avec des moteurs locaux, renseignez :
+
+```bash
+export MERISOR_POSTGRES_DSN='postgresql://merisor:merisor@127.0.0.1:5432/merisor'
+export MERISOR_MARIADB_HOST='127.0.0.1'
+export MERISOR_MARIADB_PORT='3306'
+export MERISOR_MARIADB_DATABASE='merisor'
+export MERISOR_MARIADB_USER='merisor'
+export MERISOR_MARIADB_PASSWORD='merisor'
+pytest -q -m sql_runtime
+```
+
+Utilisez exclusivement des bases temporaires et vides : ces tests créent les
+tables `PILOTE`, `EQUIPE` et `ENGAGER`. La variable
+`MERISOR_REQUIRE_EXTERNAL_SQL=1`, utilisée en CI, transforme toute absence de
+client ou de configuration en échec au lieu d'un test ignoré.
+
 ## Écrire un test métier
 
 Préférez un test sans Qt pour toute règle MERISE. Construisez un petit

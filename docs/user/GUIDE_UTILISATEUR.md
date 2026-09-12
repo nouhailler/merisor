@@ -55,8 +55,10 @@ Le menu **Modèle** propose :
 - analyse de qualité séparant erreurs structurelles, risques et suggestions ;
 - indicateur heuristique explicable sur 100, qui ne constitue jamais une
   certification du modèle ;
-- analyse d'impact ;
+- analyse interactive **Et si… ?** avant suppression, avec impacts MCD, MLD,
+  SQL et livrables dérivés ;
 - tests fonctionnels par scénarios métier ;
+- mode étudiant avec énoncé, barème, score et explication de chaque critère ;
 - comparaison avec une autre version JSON ;
 - assistant de normalisation 1NF/2NF/3NF ;
 - analyse et réparation facultative avec l'IA.
@@ -65,6 +67,18 @@ Les analyses ne changent pas le modèle. Une correction ne s'applique qu'après
 une action et, lorsqu'elle est proposée par l'IA, après un aperçu explicite.
 Voir [Analyser la qualité d'un MCD](QUALITE.md).
 Voir aussi [Tester le MCD avec des scénarios métier](SCENARIOS_METIER.md).
+Pour suivre un exercice corrigé, consultez [Mode étudiant](MODE_ETUDIANT.md).
+Pour anticiper une suppression, consultez
+[Simuler un changement avec « Et si… ? »](ET_SI.md).
+
+## Documenter les données métier
+
+**Modèle → Dictionnaire de données…** (`Ctrl+Alt+G`) permet de définir la
+description des entités et associations, le commentaire des attributs et un
+glossaire de termes métier avec synonymes. L'application travaille sur une
+copie et applique l'ensemble après confirmation ; l'opération reste annulable.
+
+Voir [Dictionnaire de données](DICTIONNAIRE_DONNEES.md).
 
 ## Produire le MLD et le SQL
 

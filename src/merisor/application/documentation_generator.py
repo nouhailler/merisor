@@ -101,6 +101,23 @@ class ModelDocumentationGenerator:
         for association in self._associations(model):
             lines.extend(self._markdown_association(model, association))
 
+        if model.business_terms:
+            lines.extend(("### Glossaire métier", ""))
+            for term in sorted(
+                model.business_terms.values(), key=lambda item: item.name.casefold()
+            ):
+                lines.extend(
+                    (
+                        f"#### {term.name}",
+                        "",
+                        term.definition or "*Définition non renseignée.*",
+                        "",
+                        "Synonymes : "
+                        + (", ".join(term.synonyms) if term.synonyms else "—"),
+                        "",
+                    )
+                )
+
         if model.inheritances:
             lines.extend(("### Héritages ISA", ""))
             for inheritance in sorted(
@@ -143,7 +160,7 @@ class ModelDocumentationGenerator:
         lines = [
             f"#### {entity.name}",
             "",
-            "Description : *non renseignée dans le MCD.*",
+            "Description : " + (entity.description or "*non renseignée dans le MCD.*"),
             "",
         ]
         lines.extend(self._markdown_attribute_table(entity.attributes))
@@ -154,6 +171,9 @@ class ModelDocumentationGenerator:
     ) -> list[str]:
         lines = [
             f"#### {association.name}",
+            "",
+            "Description : "
+            + (association.description or "*non renseignée dans le MCD.*"),
             "",
             f"- Historisée : **{'oui' if association.is_historized else 'non'}**",
             f"- Matérialisation : `{association.materialization_strategy.value}`",
@@ -261,7 +281,7 @@ class ModelDocumentationGenerator:
         lines = [
             "```yaml",
             f"{entity.name}:",
-            "  description: non renseignée",
+            f"  description: {entity.description or 'non renseignée'}",
             "  attributs:",
         ]
         for attribute in entity.attributes:
@@ -343,7 +363,7 @@ class ModelDocumentationGenerator:
             parts.extend(
                 (
                     f'<section class="card"><h4>{html.escape(entity.name)}</h4>',
-                    "<p><em>Description non renseignée dans le MCD.</em></p>",
+                    f"<p>{html.escape(entity.description) if entity.description else '<em>Description non renseignée dans le MCD.</em>'}</p>",
                     self._html_attributes(entity.attributes),
                     "</section>",
                 )
@@ -352,6 +372,7 @@ class ModelDocumentationGenerator:
         for association in self._associations(model):
             parts.append(
                 f'<section class="card"><h4>{html.escape(association.name)}</h4>'
+                f"<p>{html.escape(association.description) if association.description else '<em>Description non renseignée dans le MCD.</em>'}</p>"
                 f"<p>Historisée : {'oui' if association.is_historized else 'non'} — "
                 "Matérialisation : "
                 f"{html.escape(association.materialization_strategy.value)}</p><ul>"
@@ -371,6 +392,18 @@ class ModelDocumentationGenerator:
             if association.attributes:
                 parts.append(self._html_attributes(association.attributes))
             parts.append("</section>")
+
+        if model.business_terms:
+            parts.append("<h3>Glossaire métier</h3>")
+            for term in sorted(
+                model.business_terms.values(), key=lambda item: item.name.casefold()
+            ):
+                synonyms = ", ".join(term.synonyms) or "—"
+                parts.append(
+                    f'<section class="card"><h4>{html.escape(term.name)}</h4>'
+                    f"<p>{html.escape(term.definition) or '<em>Définition non renseignée.</em>'}</p>"
+                    f"<p>Synonymes : {html.escape(synonyms)}</p></section>"
+                )
 
         parts.append("<h2>Modèle logique</h2>")
         if mld is None:

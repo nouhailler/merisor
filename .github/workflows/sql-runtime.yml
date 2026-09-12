@@ -1,0 +1,70 @@
+name: SQL runtime integration
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  execute-generated-sql:
+    name: Execute SQL on SQLite, PostgreSQL and MariaDB
+    runs-on: ubuntu-22.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: merisor
+          POSTGRES_USER: merisor
+          POSTGRES_PASSWORD: merisor
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U merisor -d merisor"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_DATABASE: merisor
+          MARIADB_USER: merisor
+          MARIADB_PASSWORD: merisor
+          MARIADB_ROOT_PASSWORD: root-for-ci-only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install database clients and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client mariadb-client libegl1
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+      - name: Execute generated schemas on real database engines
+        env:
+          QT_QPA_PLATFORM: offscreen
+          MERISOR_REQUIRE_EXTERNAL_SQL: "1"
+          MERISOR_POSTGRES_DSN: postgresql://merisor:merisor@127.0.0.1:5432/merisor
+          MERISOR_MARIADB_HOST: 127.0.0.1
+          MERISOR_MARIADB_PORT: "3306"
+          MERISOR_MARIADB_DATABASE: merisor
+          MERISOR_MARIADB_USER: merisor
+          MERISOR_MARIADB_PASSWORD: merisor
+        run: pytest -q -m sql_runtime

@@ -6,6 +6,40 @@ Toutes les évolutions importantes de MERISOR sont documentées dans ce fichier.
 
 ### Ajouté
 
+- dictionnaire de données accessible par **Modèle → Dictionnaire de données…**
+  (`Ctrl+Alt+G`), édité sur une copie puis appliqué comme opération annulable ;
+- descriptions métier pour les entités et associations, commentaires
+  d'attributs réutilisés comme définitions, et glossaire `BusinessTerm` avec
+  synonymes ;
+- persistance JSON V2 rétrocompatible des champs `description` et
+  `business_terms`, sans changement du numéro de format ;
+- projection `DataDictionaryService` indépendante de Qt, consommation par la
+  documentation Markdown/HTML et schéma transmis au générateur IA ;
+- comparaison de versions étendue aux descriptions, définitions et synonymes ;
+- commande **Modèle → 🎓 Mode étudiant…** (`Ctrl+Alt+U`) proposant un exercice
+  MERISE évalué directement sur le MCD courant, sans modification du modèle ;
+- barème déterministe vérifiant entités, identifiants, associations et
+  cardinalités, avec score, états **Acquis**/**À revoir** et explication
+  **Pourquoi ?** pour chaque critère ;
+- affichage préalable des hypothèses pédagogiques et rappel que le résultat
+  mesure un barème déclaré plutôt qu'une vérité métier universelle ;
+- mode interactif **Modèle → Et si… ? Analyser un changement…** simulant une
+  suppression avant toute mutation du document ;
+- rapport d'impact par couches MCD, MLD, SQL, documentation, données de test et
+  requêtes, avec séparation explicite des dépendances certaines et des
+  livrables non persistés à régénérer ;
+- détection des nouvelles erreurs structurelles sur une copie du MCD, puis
+  choix humain **Annuler** ou **Continuer et supprimer** ; la suppression
+  confirmée reste annulable avec l'historique standard ;
+- traçage des colonnes MLD directement issues d'un attribut, en complément des
+  colonnes migrées déjà suivies par l'analyseur d'impact ;
+- workflow d'intégration SQL démarrant PostgreSQL 16 et MariaDB 11 dans des
+  services CI temporaires, avec SQLite exécuté en mémoire ;
+- tests réels de la chaîne MCD → MLD → SQL : création du schéma MotoGP,
+  inspection des tables et FK, insertion valide et rejet d'une référence
+  inexistante sur les trois dialectes ;
+- marqueur pytest `sql_runtime`, mode CI strict empêchant les skips silencieux
+  et documentation de la reproduction avec des moteurs locaux ;
 - commande **Modèle → Tester un scénario métier…** et interface de saisie des
   attentes fonctionnelles, avec rapport copiable et sans mutation du MCD ;
 - moteur déterministe `BusinessScenarioAnalyzer` reconstruisant le chemin

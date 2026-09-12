@@ -18,6 +18,7 @@ Le format obligatoire est MERISOR JSON version 2 :
     {
       "id": "entity_x",
       "name": "NOM",
+      "description": "Définition métier concise",
       "position": {"x": 100, "y": 100},
       "attributes": [
         {
@@ -39,6 +40,7 @@ Le format obligatoire est MERISOR JSON version 2 :
     {
       "id": "association_x",
       "name": "ASSOCIER",
+      "description": "Fait métier représenté",
       "position": {"x": 300, "y": 250},
       "attributes": [],
       "is_historized": false,
@@ -61,12 +63,21 @@ Le format obligatoire est MERISOR JSON version 2 :
       "child_entity_ids": ["entity_child"],
       "strategy": "JOINED"
     }
+  ],
+  "business_terms": [
+    {
+      "id": "term_x",
+      "name": "Client",
+      "definition": "Personne ou organisation possédant un compte",
+      "synonyms": ["acheteur", "utilisateur"]
+    }
   ]
 }
 
 Règles obligatoires :
 - chaque identifiant interne est une chaîne non vide et unique dans le document ;
 - chaque entité possède un nom et au moins un attribut identifier=true ;
+- description documente le sens métier d'une entité ou association sans répéter son nom ;
 - data_type peut être null pour le mode automatique, sinon c'est un objet ;
 - les noms de types autorisés sont INTEGER, BIGINT, DECIMAL, FLOAT, BOOLEAN,
   VARCHAR, TEXT, DATE, TIME, DATETIME et TIMESTAMP ;
@@ -89,6 +100,8 @@ Règles obligatoires :
   PARENT_ONLY, CHILDREN_ONLY ou JOINED (mère + filles avec PK/FK) ;
 - is_historized est un booléen explicite et n'est jamais déduit d'une date ;
 - materialization_strategy vaut AUTO, FORCE_TABLE ou FORCE_FK ;
+- business_terms est une liste optionnelle ; chaque terme possède un id unique,
+  un nom, une définition et une liste de synonymes textuels ;
 - n'utilise FORCE_FK que pour une association compatible et jamais avec is_historized=true ;
 - répartis les positions afin de rendre le diagramme lisible ;
 - n'ajoute aucune syntaxe SQL, aucun MLD et aucun commentaire hors JSON.
